@@ -27,13 +27,46 @@ export interface TextElement extends BaseElement {
 
 export type PageElement = ImageElement | TextElement;
 
+// ─── Layouts ─────────────────────────────────────────────────────────────────
+
+export interface LayoutSlot {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface LayoutTemplate {
+  id: string;
+  name: string;
+  slots: LayoutSlot[];
+}
+
+// ─── Page & Project ──────────────────────────────────────────────────────────
+
 export interface Page {
   id: string;
   elements: PageElement[];
   background: string;
+  layoutId?: string; // ID of the applied layout template
 }
 
 export interface Project {
   meta: { name: string; version: string };
   pages: Page[];
+}
+
+// ─── File System Access API types ────────────────────────────────────────────
+
+export interface FileSystemWritableFileStream extends WritableStream {
+  write(data: Blob | BufferSource | string | Record<string, unknown>): Promise<void>;
+  seek(position: number): Promise<void>;
+  truncate(size: number): Promise<void>;
+}
+
+export interface FileSystemFileHandleExt {
+  kind: 'file';
+  name: string;
+  getFile(): Promise<File>;
+  createWritable(): Promise<FileSystemWritableFileStream>;
 }

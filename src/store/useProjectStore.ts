@@ -1,7 +1,8 @@
 import { create } from 'zustand';
 import { v4 as uuidv4 } from 'uuid';
-import type { Project, Page, PageElement, ImageElement, TextElement } from '../types';
-import { saveProject, loadProject } from '../utils/fileIO';
+import type { Project, Page, PageElement, ImageElement, TextElement, FileSystemFileHandleExt } from '../types';
+import { saveProject, saveProjectAs, loadProject, showOpenDialog } from '../utils/fileIO';
+import { getLayoutById } from '../utils/layouts';
 
 function createEmptyPage(): Page {
   return {
@@ -23,6 +24,7 @@ interface ProjectState {
   currentPageIndex: number;
   assetBlobs: Record<string, Blob>;
   selectedElementId: string | null;
+  fileHandle: FileSystemFileHandleExt | null;
 
   // Getters
   currentPage: () => Page | undefined;
@@ -47,9 +49,14 @@ interface ProjectState {
   addImageFromFile: (file: File) => Promise<void>;
   addTextElement: () => void;
 
+  // Layout
+  applyLayout: (layoutId: string) => void;
+
   // File I/O
   saveCurrentProject: () => Promise<void>;
-  loadFromFile: (file: File) => Promise<void>;
+  saveCurrentProjectAs: () => Promise<void>;
+  openProject: () => Promise<void>;
+  loadFromFile: (file: File, handle?: FileSystemFileHandleExt | null) => Promise<void>;
 }
 
 const useProjectStore = create<ProjectState>((set, get) => ({
@@ -57,6 +64,7 @@ const useProjectStore = create<ProjectState>((set, get) => ({
   currentPageIndex: 0,
   assetBlobs: {},
   selectedElementId: null,
+  fileHandle: null,
 
   currentPage: () => {
     const { project, currentPageIndex } = get();
@@ -76,6 +84,7 @@ const useProjectStore = create<ProjectState>((set, get) => ({
       currentPageIndex: 0,
       assetBlobs: {},
       selectedElementId: null,
+      fileHandle: null,
     }),
 
   setCurrentPageIndex: (index) => set({ currentPageIndex: index, selectedElementId: null }),
@@ -95,7 +104,7 @@ const useProjectStore = create<ProjectState>((set, get) => ({
 
   removePage: (index) =>
     set((state) => {
-      if (state.project.pages.length <= 1) return state; // keep at least 1 page
+      if (state.project.pages.length <= 1) return state;
       const newPages = state.project.pages.filter((_, i) => i !== index);
       const newIndex = Math.min(state.currentPageIndex, newPages.length - 1);
       return {
@@ -124,7 +133,7 @@ const useProjectStore = create<ProjectState>((set, get) => ({
       const pages = [...state.project.pages];
       const page = { ...pages[state.currentPageIndex] };
       page.elements = page.elements.map((el) =>
-        el.id === elementId ? { ...el, ...changes } as PageElement : el,
+        el.id === elementId ? ({ ...el, ...changes } as PageElement) : el,
       );
       pages[state.currentPageIndex] = page;
       return { project: { ...state.project, pages } };
@@ -145,14 +154,51 @@ const useProjectStore = create<ProjectState>((set, get) => ({
 
   setSelectedElementId: (id) => set({ selectedElementId: id }),
 
+  // --- Layout ---
+
+  applyLayout: (layoutId) =>
+    set((state) => {
+      const layout = getLayoutById(layoutId);
+      if (!layout) return state;
+
+      const pages = [...state.project.pages];
+      const page = { ...pages[state.currentPageIndex] };
+
+      // Gather image elements (preserve order)
+      const images = page.elements.filter((el): el is ImageElement => el.type === 'image');
+      const others = page.elements.filter((el) => el.type !== 'image');
+
+      // Assign images to layout slots
+      const updatedImages = images.map((img, i) => {
+        if (i >= layout.slots.length) return img; // no slot → keep position
+        const slot = layout.slots[i];
+        return {
+          ...img,
+          x: Math.round(slot.x),
+          y: Math.round(slot.y),
+          width: Math.round(slot.width),
+          height: Math.round(slot.height),
+          rotation: 0,
+        };
+      });
+
+      page.elements = [...others, ...updatedImages];
+      page.layoutId = layoutId;
+      pages[state.currentPageIndex] = page;
+
+      return {
+        project: { ...state.project, pages },
+        selectedElementId: null,
+      };
+    }),
+
   // --- Convenience: add image from file picker ---
 
   addImageFromFile: async (file) => {
     const id = uuidv4();
     const assetPath = `assets/${id}_${file.name}`;
-    const blob = file.slice(); // copy blob
+    const blob = file.slice();
 
-    // Read image dimensions
     const dimensions = await new Promise<{ w: number; h: number }>((resolve) => {
       const url = URL.createObjectURL(blob);
       const img = new window.Image();
@@ -161,13 +207,12 @@ const useProjectStore = create<ProjectState>((set, get) => ({
         URL.revokeObjectURL(url);
       };
       img.onerror = () => {
-        resolve({ w: 300, h: 200 }); // fallback
+        resolve({ w: 300, h: 200 });
         URL.revokeObjectURL(url);
       };
       img.src = url;
     });
 
-    // Scale down if larger than canvas
     const maxW = 600;
     const maxH = 450;
     let { w, h } = dimensions;
@@ -193,8 +238,6 @@ const useProjectStore = create<ProjectState>((set, get) => ({
     get().addElement(element);
   },
 
-  // --- Convenience: add text element ---
-
   addTextElement: () => {
     const element: TextElement = {
       id: uuidv4(),
@@ -214,13 +257,44 @@ const useProjectStore = create<ProjectState>((set, get) => ({
   // --- File I/O ---
 
   saveCurrentProject: async () => {
-    const { project, assetBlobs } = get();
-    await saveProject(project, assetBlobs);
+    const { project, assetBlobs, fileHandle } = get();
+    const newHandle = await saveProject(project, assetBlobs, fileHandle);
+    if (newHandle && newHandle !== fileHandle) {
+      set({ fileHandle: newHandle });
+    }
   },
 
-  loadFromFile: async (file) => {
+  saveCurrentProjectAs: async () => {
+    const { project, assetBlobs } = get();
+    const newHandle = await saveProjectAs(project, assetBlobs);
+    if (newHandle) {
+      set({ fileHandle: newHandle });
+    }
+  },
+
+  openProject: async () => {
+    const result = await showOpenDialog();
+    if (result) {
+      const { project, assetBlobs } = await loadProject(result.file);
+      set({
+        project,
+        assetBlobs,
+        currentPageIndex: 0,
+        selectedElementId: null,
+        fileHandle: result.handle,
+      });
+    }
+  },
+
+  loadFromFile: async (file, handle) => {
     const { project, assetBlobs } = await loadProject(file);
-    set({ project, assetBlobs, currentPageIndex: 0, selectedElementId: null });
+    set({
+      project,
+      assetBlobs,
+      currentPageIndex: 0,
+      selectedElementId: null,
+      fileHandle: handle ?? null,
+    });
   },
 }));
 

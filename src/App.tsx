@@ -2,37 +2,56 @@ import { useRef, useEffect } from 'react';
 import './index.css';
 import EditorCanvas from './components/canvas/EditorCanvas';
 import useProjectStore from './store/useProjectStore';
+import { LAYOUT_TEMPLATES } from './utils/layouts';
 
 function App() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
 
   const saveCurrentProject = useProjectStore((s) => s.saveCurrentProject);
+  const saveCurrentProjectAs = useProjectStore((s) => s.saveCurrentProjectAs);
+  const openProject = useProjectStore((s) => s.openProject);
   const loadFromFile = useProjectStore((s) => s.loadFromFile);
   const resetProject = useProjectStore((s) => s.resetProject);
   const projectName = useProjectStore((s) => s.project.meta.name);
+  const fileHandle = useProjectStore((s) => s.fileHandle);
 
   const addImageFromFile = useProjectStore((s) => s.addImageFromFile);
   const addTextElement = useProjectStore((s) => s.addTextElement);
   const removeElement = useProjectStore((s) => s.removeElement);
   const selectedElementId = useProjectStore((s) => s.selectedElementId);
+  const applyLayout = useProjectStore((s) => s.applyLayout);
 
   const pages = useProjectStore((s) => s.project.pages);
   const currentPageIndex = useProjectStore((s) => s.currentPageIndex);
+  const currentLayoutId = useProjectStore(
+    (s) => s.project.pages[s.currentPageIndex]?.layoutId,
+  );
   const setCurrentPageIndex = useProjectStore((s) => s.setCurrentPageIndex);
   const addPage = useProjectStore((s) => s.addPage);
   const removePage = useProjectStore((s) => s.removePage);
 
+  const hasFileSystemAccess = 'showOpenFilePicker' in window;
+
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement).tagName;
       if (e.key === 'Delete' || e.key === 'Backspace') {
-        // Don't delete when typing in an input
-        if ((e.target as HTMLElement).tagName === 'INPUT') return;
+        if (tag === 'INPUT' || tag === 'SELECT') return;
         const id = useProjectStore.getState().selectedElementId;
         if (id) {
           e.preventDefault();
           removeElement(id);
+        }
+      }
+      // Ctrl+S / Ctrl+Shift+S
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        if (e.shiftKey) {
+          useProjectStore.getState().saveCurrentProjectAs();
+        } else {
+          useProjectStore.getState().saveCurrentProject();
         }
       }
     };
@@ -40,7 +59,18 @@ function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [removeElement]);
 
-  const handleOpen = () => fileInputRef.current?.click();
+  const handleOpen = async () => {
+    if (hasFileSystemAccess) {
+      try {
+        await openProject();
+      } catch (err) {
+        console.error('Fehler beim Öffnen:', err);
+        alert(`Fehler beim Öffnen: ${err instanceof Error ? err.message : err}`);
+      }
+    } else {
+      fileInputRef.current?.click();
+    }
+  };
 
   const handleFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -63,6 +93,15 @@ function App() {
     }
   };
 
+  const handleSaveAs = async () => {
+    try {
+      await saveCurrentProjectAs();
+    } catch (err) {
+      console.error('Fehler beim Speichern:', err);
+      alert(`Fehler beim Speichern: ${err instanceof Error ? err.message : err}`);
+    }
+  };
+
   const handleAddImage = () => imageInputRef.current?.click();
 
   const handleImageSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -74,6 +113,11 @@ function App() {
       console.error('Fehler beim Hinzufügen:', err);
     }
     e.target.value = '';
+  };
+
+  const handleLayoutChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const layoutId = e.target.value;
+    if (layoutId) applyLayout(layoutId);
   };
 
   const btnBase =
@@ -88,15 +132,21 @@ function App() {
     <div className="flex flex-col w-screen h-screen">
       {/* Toolbar */}
       <div className="flex items-center gap-3 px-4 py-2 bg-[#1a1a1a] border-b border-[#333] shrink-0 flex-wrap">
-        {/* Project name */}
-        <span className="text-sm text-neutral-400 font-medium select-none">
+        {/* Project name + file indicator */}
+        <span className="text-sm text-neutral-400 font-medium select-none" title={fileHandle?.name}>
           {projectName}
+          {fileHandle && (
+            <span className="text-neutral-600 ml-1 text-xs">({fileHandle.name})</span>
+          )}
         </span>
         <div className="w-px h-5 bg-[#444]" />
 
         {/* File actions */}
-        <button onClick={handleSave} className={btnPrimary}>
+        <button onClick={handleSave} className={btnPrimary} title="Ctrl+S">
           Speichern
+        </button>
+        <button onClick={handleSaveAs} className={btnSecondary} title="Ctrl+Shift+S">
+          Speichern unter
         </button>
         <button onClick={handleOpen} className={btnSecondary}>
           Öffnen
@@ -123,6 +173,24 @@ function App() {
             Löschen
           </button>
         )}
+
+        <div className="w-px h-5 bg-[#444]" />
+
+        {/* Layout selector */}
+        <select
+          value={currentLayoutId ?? ''}
+          onChange={handleLayoutChange}
+          className="px-2 py-1.5 text-sm rounded bg-neutral-700 text-white border border-neutral-600 cursor-pointer"
+        >
+          <option value="" disabled>
+            Layout wählen…
+          </option>
+          {LAYOUT_TEMPLATES.map((l) => (
+            <option key={l.id} value={l.id}>
+              {l.name} ({l.slots.length})
+            </option>
+          ))}
+        </select>
 
         <div className="w-px h-5 bg-[#444]" />
 
