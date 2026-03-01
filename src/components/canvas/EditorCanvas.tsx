@@ -31,6 +31,7 @@ function SlotComponent({
 }) {
   const [image, setImage] = useState<HTMLImageElement | null>(null);
   const [naturalSize, setNaturalSize] = useState<{ w: number; h: number } | null>(null);
+  const [showResolutionHint, setShowResolutionHint] = useState(false);
 
   useEffect(() => {
     if (!assignment?.assetPath) {
@@ -241,27 +242,58 @@ function SlotComponent({
         const effectiveNatH = hasCrop ? (assignment!.cropH ?? naturalSize.h) : naturalSize.h;
         const ratio = Math.min(effectiveNatW / slot.width, effectiveNatH / slot.height);
         if (ratio >= 1) return null;
+        const qualityPercent = Math.max(1, Math.round(ratio * 100));
+        const tooltipX = Math.max(slot.x + 6, slot.x + slot.width - 220);
         return (
-          <Group listening={false}>
-            {/* Warning triangle background */}
-            <Rect
-              x={slot.x + slot.width - 30}
-              y={slot.y + 4}
-              width={26}
-              height={20}
-              fill="rgba(0,0,0,0.55)"
-              cornerRadius={4}
-            />
-            <Text
-              x={slot.x + slot.width - 30}
-              y={slot.y + 5}
-              width={26}
-              text="⚠"
-              fontSize={14}
-              fill="#fbbf24"
-              align="center"
-            />
-          </Group>
+          <>
+            <Group
+              onMouseEnter={() => setShowResolutionHint(true)}
+              onMouseLeave={() => setShowResolutionHint(false)}
+              onTap={() => setShowResolutionHint((v) => !v)}
+            >
+              <Rect
+                x={slot.x + slot.width - 30}
+                y={slot.y + 4}
+                width={26}
+                height={20}
+                fill="rgba(0,0,0,0.55)"
+                cornerRadius={4}
+              />
+              <Text
+                x={slot.x + slot.width - 30}
+                y={slot.y + 5}
+                width={26}
+                text="⚠"
+                fontSize={14}
+                fill="#fbbf24"
+                align="center"
+              />
+            </Group>
+
+            {showResolutionHint && (
+              <Group listening={false}>
+                <Rect
+                  x={tooltipX}
+                  y={slot.y + 28}
+                  width={214}
+                  height={46}
+                  fill="rgba(10,10,10,0.88)"
+                  stroke="#525252"
+                  strokeWidth={1}
+                  cornerRadius={8}
+                />
+                <Text
+                  x={tooltipX + 10}
+                  y={slot.y + 34}
+                  width={194}
+                  text={`Niedrige Auflösung – kann pixelig wirken\nCa. ${qualityPercent}% der empfohlenen Größe`}
+                  fontSize={11}
+                  lineHeight={1.25}
+                  fill="#e5e5e5"
+                />
+              </Group>
+            )}
+          </>
         );
       })()}
 
@@ -555,6 +587,13 @@ function EditorCanvas() {
   const isCover = currentPage?.isCover;
   const coverTitle = currentPage?.coverTitle ?? '';
   const coverSubtitle = currentPage?.coverSubtitle ?? '';
+  const showCoverSubtitle = currentPage?.showCoverSubtitle ?? true;
+  const coverTitleFontSize = currentPage?.coverTitleFontSize ?? 48;
+  const coverTitleFontFamily = currentPage?.coverTitleFontFamily ?? 'Arial';
+  const coverTitleColor = currentPage?.coverTitleColor ?? '#ffffff';
+  const coverSubtitleFontSize = currentPage?.coverSubtitleFontSize ?? 24;
+  const coverSubtitleFontFamily = currentPage?.coverSubtitleFontFamily ?? 'Arial';
+  const coverSubtitleColor = currentPage?.coverSubtitleColor ?? '#ffffffcc';
 
   // ─── Inline editing state ────────────────────────────────────────────────
   const [inlineEdit, setInlineEdit] = useState<{
@@ -673,14 +712,14 @@ function EditorCanvas() {
         x: 0,
         y: isTitle ? CANVAS_H * 0.35 : CANVAS_H * 0.35 + 60,
         width: CANVAS_W,
-        fontSize: isTitle ? 48 : 24,
-        fontFamily: 'Arial',
-        color: isTitle ? '#ffffff' : '#ffffffcc',
+        fontSize: isTitle ? coverTitleFontSize : coverSubtitleFontSize,
+        fontFamily: isTitle ? coverTitleFontFamily : coverSubtitleFontFamily,
+        color: isTitle ? coverTitleColor : coverSubtitleColor,
         align: 'center',
         fontStyle: isTitle ? 'bold' : undefined,
       });
     },
-    [coverTitle, coverSubtitle, snapshot],
+    [coverTitle, coverSubtitle, coverTitleFontSize, coverSubtitleFontSize, coverTitleFontFamily, coverSubtitleFontFamily, coverTitleColor, coverSubtitleColor, snapshot],
   );
 
   const commitInlineEdit = useCallback(() => {
@@ -822,10 +861,10 @@ function EditorCanvas() {
                   y={CANVAS_H * 0.35}
                   width={CANVAS_W}
                   text={coverTitle || 'Titel'}
-                  fontSize={48}
-                  fontFamily="Arial"
+                  fontSize={coverTitleFontSize}
+                  fontFamily={coverTitleFontFamily}
                   fontStyle="bold"
-                  fill="#ffffff"
+                  fill={coverTitleColor}
                   shadowColor="#000000"
                   shadowBlur={8}
                   shadowOpacity={0.7}
@@ -834,22 +873,24 @@ function EditorCanvas() {
                   onDblClick={() => startCoverEdit('coverTitle')}
                   onDblTap={() => startCoverEdit('coverTitle')}
                 />
-                <Text
-                  x={0}
-                  y={CANVAS_H * 0.35 + 60}
-                  width={CANVAS_W}
-                  text={coverSubtitle || 'Untertitel'}
-                  fontSize={24}
-                  fontFamily="Arial"
-                  fill="#ffffffcc"
-                  shadowColor="#000000"
-                  shadowBlur={6}
-                  shadowOpacity={0.5}
-                  align="center"
-                  listening={true}
-                  onDblClick={() => startCoverEdit('coverSubtitle')}
-                  onDblTap={() => startCoverEdit('coverSubtitle')}
-                />
+                {showCoverSubtitle && (
+                  <Text
+                    x={0}
+                    y={CANVAS_H * 0.35 + 60}
+                    width={CANVAS_W}
+                    text={coverSubtitle || 'Untertitel'}
+                    fontSize={coverSubtitleFontSize}
+                    fontFamily={coverSubtitleFontFamily}
+                    fill={coverSubtitleColor}
+                    shadowColor="#000000"
+                    shadowBlur={6}
+                    shadowOpacity={0.5}
+                    align="center"
+                    listening={true}
+                    onDblClick={() => startCoverEdit('coverSubtitle')}
+                    onDblTap={() => startCoverEdit('coverSubtitle')}
+                  />
+                )}
               </>
             )}
 

@@ -69,6 +69,15 @@ export interface Page {
   isCover?: boolean;
   coverTitle?: string;
   coverSubtitle?: string;
+  showCoverSubtitle?: boolean;
+  coverTitleFontSize?: number;
+  coverTitleFontFamily?: string;
+  coverTitleColor?: string;
+  coverSubtitleFontSize?: number;
+  coverSubtitleFontFamily?: string;
+  coverSubtitleColor?: string;
+  chapterTitle?: string;
+  subchapterTitle?: string;
 }
 
 export interface Project {

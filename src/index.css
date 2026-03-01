@@ -13,3 +13,39 @@ body {
 #root {
   min-height: 100vh;
 }
+
+/* ─── Editor UI Themes (canvas content intentionally untouched) ─────────── */
+.editor-ui[data-ui-theme='light'] {
+  background: #eef2f7 !important;
+  color: #0f172a !important;
+}
+
+.editor-ui[data-ui-theme='light'] .editor-topbar,
+.editor-ui[data-ui-theme='light'] .editor-context-bar,
+.editor-ui[data-ui-theme='light'] .editor-dropdown {
+  background: #ffffff !important;
+  border-color: #d8dee9 !important;
+  color: #0f172a !important;
+}
+
+.editor-ui[data-ui-theme='light'] .editor-surface-control {
+  background: #f8fafc !important;
+  border-color: #d8dee9 !important;
+  color: #1e293b !important;
+}
+
+.editor-ui[data-ui-theme='light'] .editor-surface-control:hover {
+  background: #f1f5f9 !important;
+  color: #0f172a !important;
+}
+
+.editor-ui[data-ui-theme='light'] .editor-input {
+  background: #f8fafc !important;
+  border-color: #d8dee9 !important;
+  color: #0f172a !important;
+}
+
+.editor-ui[data-ui-theme='light'] .editor-input::placeholder {
+  color: #64748b !important;
+}
+

@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState, useCallback } from 'react';
+import { useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import './index.css';
 import EditorCanvas from './components/canvas/EditorCanvas';
 import LayoutPicker from './components/LayoutPicker';
@@ -9,6 +9,7 @@ import { exportAsPdf, exportCurrentPageAsPng, exportCurrentPageAsJpeg, PDF_COMPR
 import type { PdfCompressionLevel } from './utils/exportProject';
 
 const FONTS = ['Arial', 'Times New Roman', 'Georgia', 'Verdana', 'Courier New', 'Trebuchet MS', 'Impact', 'Comic Sans MS'];
+type UiTheme = 'dark' | 'light';
 
 function App() {
   const showEditor = useProjectStore((s) => s.showEditor);
@@ -31,7 +32,7 @@ function MenuButton({
     <button
       onClick={onClick}
       data-menu
-      className={`px-3 py-1.5 text-sm rounded-lg border transition-all duration-150 cursor-pointer select-none ${
+      className={`editor-surface-control px-3 py-1 text-[13px] rounded-lg border transition-all duration-150 cursor-pointer select-none ${
         isOpen
           ? 'bg-neutral-800 border-neutral-600 text-white shadow-sm'
           : 'bg-transparent border-transparent text-neutral-300 hover:bg-neutral-800/80 hover:border-neutral-700 hover:text-white'
@@ -59,7 +60,7 @@ function MenuItem({
     <button
       onClick={onClick}
       disabled={disabled}
-      className={`w-full text-left px-3 py-2 text-sm flex justify-between items-center rounded-md transition-colors cursor-pointer select-none
+      className={`editor-surface-control w-full text-left px-3 py-2 text-sm flex justify-between items-center rounded-md transition-colors cursor-pointer select-none
                   ${disabled ? 'text-neutral-600 cursor-not-allowed' : danger ? 'text-red-300 hover:bg-red-500/15' : 'text-neutral-200 hover:bg-neutral-700 hover:text-white'}`}
     >
       <span>{label}</span>
@@ -75,6 +76,15 @@ function MenuDivider() {
 // ─── Editor ──────────────────────────────────────────────────────────────────
 
 function Editor() {
+    const [uiTheme, setUiTheme] = useState<UiTheme>(() => {
+      const saved = localStorage.getItem('layox_uiTheme');
+      return saved === 'light' ? 'light' : 'dark';
+    });
+
+    useEffect(() => {
+      localStorage.setItem('layox_uiTheme', uiTheme);
+    }, [uiTheme]);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
 
@@ -86,7 +96,6 @@ function Editor() {
   const resetProject = useProjectStore((s) => s.resetProject);
   const setProjectName = useProjectStore((s) => s.setProjectName);
   const projectName = useProjectStore((s) => s.project.meta.name);
-  const fileHandle = useProjectStore((s) => s.fileHandle);
   const snapshot = useProjectStore((s) => s.snapshot);
   const undo = useProjectStore((s) => s.undo);
   const redo = useProjectStore((s) => s.redo);
@@ -109,6 +118,11 @@ function Editor() {
   const setDefaultLayoutPadding = useProjectStore((s) => s.setDefaultLayoutPadding);
   const setDefaultLayoutGap = useProjectStore((s) => s.setDefaultLayoutGap);
   const applyLayoutDefaultsToAllPages = useProjectStore((s) => s.applyLayoutDefaultsToAllPages);
+  const setCoverSubtitleVisible = useProjectStore((s) => s.setCoverSubtitleVisible);
+  const setCoverTitleStyle = useProjectStore((s) => s.setCoverTitleStyle);
+  const setCoverSubtitleStyle = useProjectStore((s) => s.setCoverSubtitleStyle);
+  const setCurrentPageChapterTitle = useProjectStore((s) => s.setCurrentPageChapterTitle);
+  const setCurrentPageSubchapterTitle = useProjectStore((s) => s.setCurrentPageSubchapterTitle);
   const setCoverTitle = useProjectStore((s) => s.setCoverTitle);
   const setCoverSubtitle = useProjectStore((s) => s.setCoverSubtitle);
   const addCoverPage = useProjectStore((s) => s.addCoverPage);
@@ -147,6 +161,33 @@ function Editor() {
   );
   const currentCoverSubtitle = useProjectStore(
     (s) => s.project.pages[s.currentPageIndex]?.coverSubtitle ?? '',
+  );
+  const currentCoverTitleFontSize = useProjectStore(
+    (s) => s.project.pages[s.currentPageIndex]?.coverTitleFontSize ?? 48,
+  );
+  const currentCoverTitleFontFamily = useProjectStore(
+    (s) => s.project.pages[s.currentPageIndex]?.coverTitleFontFamily ?? 'Arial',
+  );
+  const currentCoverTitleColor = useProjectStore(
+    (s) => s.project.pages[s.currentPageIndex]?.coverTitleColor ?? '#ffffff',
+  );
+  const currentCoverSubtitleFontSize = useProjectStore(
+    (s) => s.project.pages[s.currentPageIndex]?.coverSubtitleFontSize ?? 24,
+  );
+  const currentCoverSubtitleFontFamily = useProjectStore(
+    (s) => s.project.pages[s.currentPageIndex]?.coverSubtitleFontFamily ?? 'Arial',
+  );
+  const currentCoverSubtitleColor = useProjectStore(
+    (s) => s.project.pages[s.currentPageIndex]?.coverSubtitleColor ?? '#ffffffcc',
+  );
+  const currentShowCoverSubtitle = useProjectStore(
+    (s) => s.project.pages[s.currentPageIndex]?.showCoverSubtitle ?? true,
+  );
+  const currentChapterTitle = useProjectStore(
+    (s) => s.project.pages[s.currentPageIndex]?.chapterTitle ?? '',
+  );
+  const currentSubchapterTitle = useProjectStore(
+    (s) => s.project.pages[s.currentPageIndex]?.subchapterTitle ?? '',
   );
   const hasCoverPage = useProjectStore(
     (s) => s.project.pages[0]?.isCover ?? false,
@@ -435,7 +476,7 @@ function Editor() {
   const btnPageNav =
     'min-w-8 h-8 px-2 flex items-center justify-center rounded-lg border text-sm transition-all cursor-pointer select-none';
   const btnIcon =
-    'w-8 h-8 flex items-center justify-center rounded-lg border text-base transition-all cursor-pointer select-none disabled:opacity-35 disabled:cursor-not-allowed';
+    'w-7 h-7 flex items-center justify-center rounded-lg border text-sm transition-all cursor-pointer select-none disabled:opacity-35 disabled:cursor-not-allowed';
 
   const getVisiblePageItems = useCallback((total: number, current: number): Array<number | 'ellipsis-left' | 'ellipsis-right'> => {
     if (total <= 9) return Array.from({ length: total }, (_, i) => i);
@@ -463,10 +504,36 @@ function Editor() {
 
   const pageItems = getVisiblePageItems(pages.length, currentPageIndex);
 
+  const chapterJumpTargets = useMemo(() => {
+    const seen = new Set<string>();
+    return pages
+      .map((page, index) => {
+        if (page.isCover) {
+          const coverLabel = (page.coverTitle ?? '').trim();
+          return {
+            pageIndex: index,
+            label: coverLabel ? `Deckblatt • ${coverLabel}` : 'Deckblatt',
+          };
+        }
+
+        const chapter = (page.chapterTitle ?? '').trim();
+        const subchapter = (page.subchapterTitle ?? '').trim();
+        if (!chapter && !subchapter) return null;
+        const key = `${chapter}__${subchapter}`;
+        if (seen.has(key)) return null;
+        seen.add(key);
+        const label = chapter && subchapter
+          ? `${chapter} • ${subchapter}`
+          : chapter || `Unterkapitel: ${subchapter}`;
+        return { pageIndex: index, label };
+      })
+      .filter((item): item is { pageIndex: number; label: string } => item !== null);
+  }, [pages]);
+
   return (
-    <div className="relative isolate flex flex-col w-screen h-screen bg-neutral-950 text-neutral-100">
+    <div className="editor-ui relative isolate flex flex-col w-screen h-screen bg-neutral-950 text-neutral-100" data-ui-theme={uiTheme}>
       {/* ─── Menu Bar ─── */}
-      <div className="relative z-40 flex items-center gap-1.5 px-3 py-2 bg-neutral-900/95 border border-neutral-800 rounded-xl shadow-lg mx-4 mt-4 shrink-0 backdrop-blur-sm">
+      <div className="editor-topbar relative z-40 flex items-center gap-1.5 px-3 py-1.5 bg-neutral-900/95 border border-neutral-800 rounded-xl shadow-lg mx-4 mt-4 shrink-0 backdrop-blur-sm">
         {/* Project name */}
         <div className="flex items-center gap-2 mr-1 min-w-0">
           <input
@@ -474,14 +541,11 @@ function Editor() {
             value={projectName}
             onChange={(e) => setProjectName(e.target.value)}
             onFocus={() => snapshot()}
-            className="text-sm text-neutral-300 font-medium bg-neutral-900 border border-neutral-700 rounded-lg
-                       outline-none focus:text-white focus:border-blue-500 w-44 py-1 px-2
+            className="editor-input text-sm text-neutral-300 font-medium bg-neutral-900 border border-neutral-700 rounded-lg
+                       outline-none focus:text-white focus:border-blue-500 w-44 py-0.5 px-2
                        hover:border-neutral-500 transition-colors"
             title="Projektname bearbeiten"
           />
-          {fileHandle && (
-            <span className="text-neutral-500 text-xs select-none truncate max-w-36" title={fileHandle.name}>({fileHandle.name})</span>
-          )}
         </div>
 
         <div className="w-px h-5 bg-neutral-700/80" />
@@ -490,13 +554,21 @@ function Editor() {
         <button onClick={handleUndo} disabled={!canUndo} className={`${btnIcon} border-neutral-700 bg-neutral-900 text-neutral-300 hover:bg-neutral-800`} title="Rückgängig (Ctrl+Z)">↩</button>
         <button onClick={handleRedo} disabled={!canRedo} className={`${btnIcon} border-neutral-700 bg-neutral-900 text-neutral-300 hover:bg-neutral-800`} title="Wiederherstellen (Ctrl+Y)">↪</button>
 
+        <button
+          onClick={() => setUiTheme((t) => (t === 'dark' ? 'light' : 'dark'))}
+          className={`${btnIcon} editor-surface-control border-neutral-700 bg-neutral-900 text-neutral-300 hover:bg-neutral-800`}
+          title={uiTheme === 'dark' ? 'Light Mode aktivieren' : 'Dark Mode aktivieren'}
+        >
+          {uiTheme === 'dark' ? '☀' : '🌙'}
+        </button>
+
         <div className="w-px h-5 bg-neutral-700/80" />
 
         {/* ── Datei menu ── */}
         <div className="relative" data-menu>
           <MenuButton label="Datei" isOpen={openMenu === 'datei'} onClick={() => toggleMenu('datei')} />
           {openMenu === 'datei' && (
-            <div className="absolute top-full left-0 mt-2 min-w-[230px] bg-neutral-900 border border-neutral-700 rounded-xl shadow-2xl z-[90] p-1">
+            <div className="editor-dropdown absolute top-full left-0 mt-2 min-w-[230px] bg-neutral-900 border border-neutral-700 rounded-xl shadow-2xl z-[90] p-1">
               <MenuItem label="Neues Projekt" shortcut="Ctrl+N" onClick={handleNewProject} />
               <MenuItem label="Öffnen" shortcut="Ctrl+O" onClick={handleOpen} />
               <MenuDivider />
@@ -520,7 +592,7 @@ function Editor() {
                   <select
                     value={autoSaveInterval}
                     onChange={(e) => setAutoSaveInterval(parseInt(e.target.value, 10))}
-                    className="px-2 py-1 text-xs rounded-md bg-neutral-800 text-white border border-neutral-600"
+                    className="editor-input px-2 py-1 text-xs rounded-md bg-neutral-800 text-white border border-neutral-600"
                   >
                     <option value={10}>10s</option>
                     <option value={30}>30s</option>
@@ -540,7 +612,7 @@ function Editor() {
         <div className="relative" data-menu>
           <MenuButton label="Bearbeiten" isOpen={openMenu === 'bearbeiten'} onClick={() => toggleMenu('bearbeiten')} />
           {openMenu === 'bearbeiten' && (
-            <div className="absolute top-full left-0 mt-2 min-w-[230px] bg-neutral-900 border border-neutral-700 rounded-xl shadow-2xl z-[90] p-1">
+            <div className="editor-dropdown absolute top-full left-0 mt-2 min-w-[230px] bg-neutral-900 border border-neutral-700 rounded-xl shadow-2xl z-[90] p-1">
               <MenuItem label="Rückgängig" shortcut="Ctrl+Z" onClick={handleUndo} disabled={!canUndo} />
               <MenuItem label="Wiederherstellen" shortcut="Ctrl+Y" onClick={handleRedo} disabled={!canRedo} />
               <MenuDivider />
@@ -560,7 +632,7 @@ function Editor() {
         <div className="relative" data-menu>
           <MenuButton label="Layout" isOpen={openMenu === 'layout'} onClick={() => toggleMenu('layout')} />
           {openMenu === 'layout' && (
-            <div className="absolute top-full left-0 mt-2 bg-neutral-900 border border-neutral-700 rounded-xl shadow-2xl z-[90] py-3 px-3 min-w-[280px]">
+            <div className="editor-dropdown absolute top-full left-0 mt-2 bg-neutral-900 border border-neutral-700 rounded-xl shadow-2xl z-[90] py-3 px-3 min-w-[280px]">
               <div className="mb-2">
                 <LayoutPicker currentLayoutId={currentLayoutId} onSelect={(id) => { handleLayoutSelect(id); closeMenu(); }} />
               </div>
@@ -571,7 +643,7 @@ function Editor() {
                     type="number" min={0} max={100} value={currentLayoutPadding}
                     onFocus={() => snapshot()}
                     onChange={(e) => setLayoutPadding(Math.max(0, parseInt(e.target.value) || 0))}
-                    className="w-16 px-2 py-1 text-sm rounded-md bg-neutral-800 text-white border border-neutral-600"
+                    className="editor-input w-16 px-2 py-1 text-sm rounded-md bg-neutral-800 text-white border border-neutral-600"
                   />
                   {showGap && (
                     <>
@@ -580,7 +652,7 @@ function Editor() {
                         type="number" min={0} max={100} value={currentLayoutGap}
                         onFocus={() => snapshot()}
                         onChange={(e) => setLayoutGap(Math.max(0, parseInt(e.target.value) || 0))}
-                        className="w-16 px-2 py-1 text-sm rounded-md bg-neutral-800 text-white border border-neutral-600"
+                        className="editor-input w-16 px-2 py-1 text-sm rounded-md bg-neutral-800 text-white border border-neutral-600"
                       />
                     </>
                   )}
@@ -598,7 +670,7 @@ function Editor() {
                     value={defaultLayoutPadding}
                     onFocus={() => snapshot()}
                     onChange={(e) => setDefaultLayoutPadding(Math.max(0, parseInt(e.target.value) || 0))}
-                    className="w-16 px-2 py-1 text-sm rounded-md bg-neutral-800 text-white border border-neutral-600"
+                    className="editor-input w-16 px-2 py-1 text-sm rounded-md bg-neutral-800 text-white border border-neutral-600"
                   />
                   <label className="text-xs text-neutral-500">Abstand</label>
                   <input
@@ -608,12 +680,12 @@ function Editor() {
                     value={defaultLayoutGap}
                     onFocus={() => snapshot()}
                     onChange={(e) => setDefaultLayoutGap(Math.max(0, parseInt(e.target.value) || 0))}
-                    className="w-16 px-2 py-1 text-sm rounded-md bg-neutral-800 text-white border border-neutral-600"
+                    className="editor-input w-16 px-2 py-1 text-sm rounded-md bg-neutral-800 text-white border border-neutral-600"
                   />
                 </div>
                 <button
                   onClick={() => { snapshot(); applyLayoutDefaultsToAllPages(); }}
-                  className="w-full mt-1 px-2.5 py-1.5 text-xs rounded-md border border-neutral-600 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 transition-colors cursor-pointer select-none"
+                  className="editor-surface-control w-full mt-1 px-2.5 py-1.5 text-xs rounded-md border border-neutral-600 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 transition-colors cursor-pointer select-none"
                   title="Standard-Rand und -Abstand auf alle Seiten anwenden"
                 >
                   Auf alle Seiten anwenden
@@ -623,17 +695,112 @@ function Editor() {
           )}
         </div>
 
+        {/* ── Struktur menu ── */}
+        <div className="relative" data-menu>
+          <MenuButton label="Struktur" isOpen={openMenu === 'struktur'} onClick={() => toggleMenu('struktur')} />
+          {openMenu === 'struktur' && (
+            <div className="editor-dropdown absolute top-full left-0 mt-2 min-w-[290px] bg-neutral-900 border border-neutral-700 rounded-xl shadow-2xl z-[90] p-1">
+              <MenuItem
+                label="Deckblatt hinzufügen"
+                onClick={handleAddCoverPage}
+                disabled={hasCoverPage}
+              />
+
+              <MenuDivider />
+
+              <div className="px-3 py-2 space-y-2">
+                <div className="text-xs text-neutral-400">Aktuelle Seite</div>
+                <input
+                  type="text"
+                  placeholder="Kapitel"
+                  value={currentChapterTitle}
+                  onFocus={() => snapshot()}
+                  onChange={(e) => setCurrentPageChapterTitle(e.target.value)}
+                  className="editor-input w-full px-2 py-1 text-xs rounded-md bg-neutral-800 text-white border border-neutral-600"
+                  title="Kapitel für aktuelle Seite"
+                />
+                <input
+                  type="text"
+                  placeholder="Unterkapitel"
+                  value={currentSubchapterTitle}
+                  onFocus={() => snapshot()}
+                  onChange={(e) => setCurrentPageSubchapterTitle(e.target.value)}
+                  className="editor-input w-full px-2 py-1 text-xs rounded-md bg-neutral-800 text-white border border-neutral-600"
+                  title="Unterkapitel für aktuelle Seite"
+                />
+                {(currentChapterTitle || currentSubchapterTitle) && (
+                  <button
+                    onClick={() => {
+                      snapshot();
+                      setCurrentPageChapterTitle('');
+                      setCurrentPageSubchapterTitle('');
+                    }}
+                    className="editor-surface-control w-full px-2 py-1 text-xs rounded-md border border-neutral-600 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 transition-colors cursor-pointer select-none"
+                  >
+                    Kapitel/Unterkapitel entfernen
+                  </button>
+                )}
+              </div>
+
+              {currentIsCover && (
+                <>
+                  <MenuDivider />
+                  <div className="px-3 py-2">
+                    <label className="text-xs text-neutral-400 flex items-center gap-2 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={currentShowCoverSubtitle}
+                        onChange={(e) => {
+                          snapshot();
+                          setCoverSubtitleVisible(e.target.checked);
+                        }}
+                        className="accent-blue-500"
+                      />
+                      Untertitel auf Deckblatt anzeigen
+                    </label>
+                  </div>
+                </>
+              )}
+
+              {chapterJumpTargets.length > 0 && (
+                <>
+                  <MenuDivider />
+                  <div className="px-3 py-2 space-y-1">
+                    <div className="text-xs text-neutral-400">Kapitel wechseln</div>
+                    <select
+                      value=""
+                      onChange={(e) => {
+                        if (!e.target.value) return;
+                        setCurrentPageIndex(parseInt(e.target.value, 10));
+                        closeMenu();
+                      }}
+                      className="editor-input w-full px-2 py-1 text-xs rounded-md bg-neutral-800 text-white border border-neutral-600"
+                    >
+                      <option value="">Kapitel wählen…</option>
+                      {chapterJumpTargets.map((target) => (
+                        <option key={`${target.pageIndex}-${target.label}`} value={target.pageIndex}>
+                          {target.label} (S. {target.pageIndex + 1})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+
         <div className="w-px h-5 bg-neutral-700/80" />
 
         {/* ── Quick insert buttons (Bild + Text + Deckblatt) ── */}
-        <button onClick={handleAddImage} className="px-3 py-1.5 text-sm rounded-lg border border-neutral-700 bg-neutral-900 text-neutral-200 hover:bg-neutral-800 transition-colors cursor-pointer select-none" title="Bild einfügen">
+        <button onClick={handleAddImage} className="editor-surface-control px-3 py-1 text-sm rounded-lg border border-neutral-700 bg-neutral-900 text-neutral-200 hover:bg-neutral-800 transition-colors cursor-pointer select-none" title="Bild einfügen">
           + Bild
         </button>
-        <button onClick={handleAddText} className="px-3 py-1.5 text-sm rounded-lg border border-neutral-700 bg-neutral-900 text-neutral-200 hover:bg-neutral-800 transition-colors cursor-pointer select-none" title="Text einfügen (Ctrl+T)">
+        <button onClick={handleAddText} className="editor-surface-control px-3 py-1 text-sm rounded-lg border border-neutral-700 bg-neutral-900 text-neutral-200 hover:bg-neutral-800 transition-colors cursor-pointer select-none" title="Text einfügen (Ctrl+T)">
           + Text
         </button>
         {!hasCoverPage && (
-          <button onClick={handleAddCoverPage} className="px-3 py-1.5 text-sm rounded-lg border border-neutral-700 bg-neutral-900 text-neutral-200 hover:bg-neutral-800 transition-colors cursor-pointer select-none" title="Deckblatt hinzufügen">
+          <button onClick={handleAddCoverPage} className="editor-surface-control px-3 py-1 text-sm rounded-lg border border-neutral-700 bg-neutral-900 text-neutral-200 hover:bg-neutral-800 transition-colors cursor-pointer select-none" title="Deckblatt hinzufügen">
             + Deckblatt
           </button>
         )}
@@ -643,6 +810,10 @@ function Editor() {
 
         {/* ── Page navigation (numbers + add/delete) ── */}
         <div className="flex items-center">
+          <div className="mr-2 px-2.5 py-1 rounded-md border border-neutral-700 bg-neutral-900 text-[11px] uppercase tracking-wide text-neutral-400 select-none">
+            Seiten
+          </div>
+
           <div className="flex items-center gap-1">
             {pageItems.map((item) => {
               if (item === 'ellipsis-left' || item === 'ellipsis-right') {
@@ -667,6 +838,10 @@ function Editor() {
               );
             })}
           </div>
+
+          <span className="ml-2 text-xs text-neutral-400 tabular-nums select-none">
+            {currentPageIndex + 1} / {pages.length}
+          </span>
 
           <div className="flex items-center gap-1 ml-3 pl-3 border-l border-neutral-700/80">
             <button
@@ -693,55 +868,124 @@ function Editor() {
         <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageSelected} />
       </div>
 
-      {/* ─── Context bar (text format / cover controls) ─── */}
-      {selectedTextElement && (
-        <div className="relative z-30 flex items-center gap-3 px-4 py-2 bg-neutral-900/95 border border-neutral-800 rounded-xl shadow-lg mx-4 mt-3 shrink-0 text-sm">
-          <label className="text-xs text-neutral-500">Schriftart</label>
-          <select
-            value={selectedTextElement.fontFamily}
-            onChange={(e) => { snapshot(); updateElement(selectedTextElement.id, { fontFamily: e.target.value }); }}
-            className="px-2 py-1 text-sm rounded-md bg-neutral-800 text-white border border-neutral-600"
-          >
-            {FONTS.map((f) => (
-              <option key={f} value={f} style={{ fontFamily: f }}>{f}</option>
-            ))}
-          </select>
-          <label className="text-xs text-neutral-500">Größe</label>
-          <input
-            type="number" min={1} max={200} value={selectedTextElement.fontSize}
-            onFocus={() => snapshot()}
-            onChange={(e) => updateElement(selectedTextElement.id, { fontSize: Math.max(1, parseInt(e.target.value) || 24) })}
-            className="w-16 px-2 py-1 text-sm rounded-md bg-neutral-800 text-white border border-neutral-600"
-          />
-          <label className="text-xs text-neutral-500">Farbe</label>
-          <input
-            type="color" value={selectedTextElement.color}
-            onFocus={() => snapshot()}
-            onChange={(e) => updateElement(selectedTextElement.id, { color: e.target.value })}
-            className="w-8 h-8 rounded-md border border-neutral-600 cursor-pointer p-0.5 bg-neutral-800"
-          />
-        </div>
-      )}
-      {currentIsCover && (
-        <div className="relative z-30 flex items-center gap-3 px-4 py-2 bg-neutral-900/95 border border-neutral-800 rounded-xl shadow-lg mx-4 mt-3 shrink-0 text-sm">
-          <label className="text-xs text-neutral-500">Titel</label>
-          <input
-            type="text" value={currentCoverTitle}
-            onFocus={() => snapshot()}
-            onChange={(e) => setCoverTitle(e.target.value)}
-            className="w-48 px-2 py-1 text-sm rounded-md bg-neutral-800 text-white border border-neutral-600"
-            placeholder="Titel"
-          />
-          <label className="text-xs text-neutral-500">Untertitel</label>
-          <input
-            type="text" value={currentCoverSubtitle}
-            onFocus={() => snapshot()}
-            onChange={(e) => setCoverSubtitle(e.target.value)}
-            className="w-40 px-2 py-1 text-sm rounded-md bg-neutral-800 text-white border border-neutral-600"
-            placeholder="Untertitel"
-          />
-        </div>
-      )}
+      {/* ─── Context bar slot (fixed height to prevent layout shift) ─── */}
+      <div className="relative z-30 mx-4 mt-3 shrink-0 h-[46px]">
+        {selectedTextElement ? (
+          <div className="editor-context-bar h-full flex items-center gap-3 px-4 py-1 bg-neutral-900/95 border border-neutral-800 rounded-xl shadow-lg text-sm">
+            <label className="text-xs text-neutral-500">Schriftart</label>
+            <select
+              value={selectedTextElement.fontFamily}
+              onChange={(e) => { snapshot(); updateElement(selectedTextElement.id, { fontFamily: e.target.value }); }}
+              className="editor-input px-2 py-0.5 text-sm rounded-md bg-neutral-800 text-white border border-neutral-600"
+            >
+              {FONTS.map((f) => (
+                <option key={f} value={f} style={{ fontFamily: f }}>{f}</option>
+              ))}
+            </select>
+            <label className="text-xs text-neutral-500">Größe</label>
+            <input
+              type="number" min={1} max={200} value={selectedTextElement.fontSize}
+              onFocus={() => snapshot()}
+              onChange={(e) => updateElement(selectedTextElement.id, { fontSize: Math.max(1, parseInt(e.target.value) || 24) })}
+              className="editor-input w-16 px-2 py-0.5 text-sm rounded-md bg-neutral-800 text-white border border-neutral-600"
+            />
+            <label className="text-xs text-neutral-500">Farbe</label>
+            <input
+              type="color" value={selectedTextElement.color}
+              onFocus={() => snapshot()}
+              onChange={(e) => updateElement(selectedTextElement.id, { color: e.target.value })}
+              className="w-8 h-8 rounded-md border border-neutral-600 cursor-pointer p-0.5 bg-neutral-800"
+            />
+          </div>
+        ) : currentIsCover ? (
+          <div className="editor-context-bar h-full flex items-center gap-2 px-3 py-1 bg-neutral-900/95 border border-neutral-800 rounded-xl shadow-lg text-sm">
+            <label className="text-[11px] text-neutral-500">Titel</label>
+            <input
+              type="text" value={currentCoverTitle}
+              onFocus={() => snapshot()}
+              onChange={(e) => setCoverTitle(e.target.value)}
+              className="editor-input w-36 px-2 py-0.5 text-xs rounded-md bg-neutral-800 text-white border border-neutral-600"
+              placeholder="Titel"
+            />
+            <select
+              value={currentCoverTitleFontFamily}
+              onChange={(e) => { snapshot(); setCoverTitleStyle({ fontFamily: e.target.value }); }}
+              className="editor-input w-24 px-1.5 py-0.5 text-xs rounded-md bg-neutral-800 text-white border border-neutral-600"
+            >
+              {FONTS.map((f) => (
+                <option key={`cover-title-${f}`} value={f}>{f}</option>
+              ))}
+            </select>
+            <input
+              type="number"
+              min={1}
+              max={300}
+              value={currentCoverTitleFontSize}
+              onFocus={() => snapshot()}
+              onChange={(e) => setCoverTitleStyle({ fontSize: Math.max(1, parseInt(e.target.value) || 48) })}
+              className="editor-input w-14 px-1.5 py-0.5 text-xs rounded-md bg-neutral-800 text-white border border-neutral-600"
+            />
+            <input
+              type="color"
+              value={currentCoverTitleColor}
+              onFocus={() => snapshot()}
+              onChange={(e) => setCoverTitleStyle({ color: e.target.value })}
+              className="w-7 h-7 rounded-md border border-neutral-600 cursor-pointer p-0.5 bg-neutral-800"
+            />
+
+            <label className="text-[11px] text-neutral-400 flex items-center gap-1 ml-1 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={currentShowCoverSubtitle}
+                onChange={(e) => {
+                  snapshot();
+                  setCoverSubtitleVisible(e.target.checked);
+                }}
+                className="accent-blue-500"
+              />
+              Untertitel anzeigen
+            </label>
+
+            {currentShowCoverSubtitle && (
+              <>
+                <label className="text-[11px] text-neutral-500">Untertitel</label>
+                <input
+                  type="text" value={currentCoverSubtitle}
+                  onFocus={() => snapshot()}
+                  onChange={(e) => setCoverSubtitle(e.target.value)}
+                  className="editor-input w-28 px-2 py-0.5 text-xs rounded-md bg-neutral-800 text-white border border-neutral-600"
+                  placeholder="Untertitel"
+                />
+                <select
+                  value={currentCoverSubtitleFontFamily}
+                  onChange={(e) => { snapshot(); setCoverSubtitleStyle({ fontFamily: e.target.value }); }}
+                  className="editor-input w-24 px-1.5 py-0.5 text-xs rounded-md bg-neutral-800 text-white border border-neutral-600"
+                >
+                  {FONTS.map((f) => (
+                    <option key={`cover-sub-${f}`} value={f}>{f}</option>
+                  ))}
+                </select>
+                <input
+                  type="number"
+                  min={1}
+                  max={300}
+                  value={currentCoverSubtitleFontSize}
+                  onFocus={() => snapshot()}
+                  onChange={(e) => setCoverSubtitleStyle({ fontSize: Math.max(1, parseInt(e.target.value) || 24) })}
+                  className="editor-input w-14 px-1.5 py-0.5 text-xs rounded-md bg-neutral-800 text-white border border-neutral-600"
+                />
+                <input
+                  type="color"
+                  value={currentCoverSubtitleColor}
+                  onFocus={() => snapshot()}
+                  onChange={(e) => setCoverSubtitleStyle({ color: e.target.value })}
+                  className="w-7 h-7 rounded-md border border-neutral-600 cursor-pointer p-0.5 bg-neutral-800"
+                />
+              </>
+            )}
+          </div>
+        ) : null}
+      </div>
 
       {/* ─── Canvas area with page arrows on sides ─── */}
       <div className="relative z-0 flex-1 flex items-center justify-center overflow-hidden gap-3 px-4 pb-4 pt-3">
@@ -749,13 +993,14 @@ function Editor() {
         <button
           onClick={goPrevPage}
           disabled={currentPageIndex === 0}
-          className="shrink-0 w-11 h-11 flex items-center justify-center rounded-xl border border-neutral-700
-                     bg-neutral-900 hover:bg-neutral-800 text-neutral-300 disabled:opacity-25
-                     disabled:cursor-not-allowed transition-all cursor-pointer select-none text-2xl leading-none"
+          className="shrink-0 w-11 h-11 flex items-center justify-center rounded-2xl border border-neutral-600
+                     bg-gradient-to-b from-neutral-800 to-neutral-900 hover:from-neutral-700 hover:to-neutral-800 text-neutral-200 disabled:opacity-25
+                     disabled:cursor-not-allowed transition-all shadow-[0_8px_18px_rgba(0,0,0,0.35)] cursor-pointer select-none"
           title="Vorherige Seite (←)"
         >
-          <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="M15 18l-6-6 6-6" />
+          <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M20 12H6" />
+            <path d="M12 18l-6-6 6-6" />
           </svg>
         </button>
 
@@ -777,13 +1022,14 @@ function Editor() {
         ) : (
           <button
             onClick={goNextPage}
-            className="shrink-0 w-11 h-11 flex items-center justify-center rounded-xl border border-neutral-700
-                       bg-neutral-900 hover:bg-neutral-800 text-neutral-300
-                       transition-all cursor-pointer select-none text-2xl leading-none"
+            className="shrink-0 w-11 h-11 flex items-center justify-center rounded-2xl border border-neutral-600
+                       bg-gradient-to-b from-neutral-800 to-neutral-900 hover:from-neutral-700 hover:to-neutral-800 text-neutral-200
+                       transition-all shadow-[0_8px_18px_rgba(0,0,0,0.35)] cursor-pointer select-none"
             title="Nächste Seite (→)"
           >
-            <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M9 18l6-6-6-6" />
+            <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M4 12h14" />
+              <path d="M12 6l6 6-6 6" />
             </svg>
           </button>
         )}
@@ -802,7 +1048,7 @@ function Editor() {
       {/* ─── PDF compression dialog ─── */}
       {showPdfDialog && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60">
-          <div className="bg-neutral-900 border border-neutral-700 rounded-2xl shadow-2xl p-5 w-80">
+          <div className="editor-dropdown bg-neutral-900 border border-neutral-700 rounded-2xl shadow-2xl p-5 w-80">
             <h3 className="text-white font-semibold text-base mb-3">PDF-Kompression</h3>
             <div className="flex flex-col gap-2">
               {PDF_COMPRESSION_PRESETS.map((preset) => (

@@ -8,6 +8,12 @@ import { CANVAS_H, CANVAS_IMAGE_MAX_H, CANVAS_IMAGE_MAX_W, CANVAS_W } from '../c
 
 const DEFAULT_LAYOUT_PADDING = 20;
 const DEFAULT_LAYOUT_GAP = 10;
+const DEFAULT_COVER_TITLE_FONT_SIZE = 48;
+const DEFAULT_COVER_SUBTITLE_FONT_SIZE = 24;
+const DEFAULT_COVER_TITLE_FONT_FAMILY = 'Arial';
+const DEFAULT_COVER_SUBTITLE_FONT_FAMILY = 'Arial';
+const DEFAULT_COVER_TITLE_COLOR = '#ffffff';
+const DEFAULT_COVER_SUBTITLE_COLOR = '#ffffffcc';
 
 function createEmptyPage(): Page {
   return {
@@ -25,6 +31,13 @@ function createDefaultProject(name: string = 'Unbenanntes Projekt'): Project {
     isCover: true,
     coverTitle: name,
     coverSubtitle: '',
+    showCoverSubtitle: true,
+    coverTitleFontSize: DEFAULT_COVER_TITLE_FONT_SIZE,
+    coverTitleFontFamily: DEFAULT_COVER_TITLE_FONT_FAMILY,
+    coverTitleColor: DEFAULT_COVER_TITLE_COLOR,
+    coverSubtitleFontSize: DEFAULT_COVER_SUBTITLE_FONT_SIZE,
+    coverSubtitleFontFamily: DEFAULT_COVER_SUBTITLE_FONT_FAMILY,
+    coverSubtitleColor: DEFAULT_COVER_SUBTITLE_COLOR,
     layoutId: 'cover-full',
   };
   return {
@@ -41,6 +54,19 @@ function createDefaultProject(name: string = 'Unbenanntes Projekt'): Project {
 function normalizeProject(project: Project): Project {
   return {
     ...project,
+    pages: project.pages.map((page) => {
+      if (!page.isCover) return page;
+      return {
+        ...page,
+        showCoverSubtitle: page.showCoverSubtitle ?? true,
+        coverTitleFontSize: page.coverTitleFontSize ?? DEFAULT_COVER_TITLE_FONT_SIZE,
+        coverTitleFontFamily: page.coverTitleFontFamily ?? DEFAULT_COVER_TITLE_FONT_FAMILY,
+        coverTitleColor: page.coverTitleColor ?? DEFAULT_COVER_TITLE_COLOR,
+        coverSubtitleFontSize: page.coverSubtitleFontSize ?? DEFAULT_COVER_SUBTITLE_FONT_SIZE,
+        coverSubtitleFontFamily: page.coverSubtitleFontFamily ?? DEFAULT_COVER_SUBTITLE_FONT_FAMILY,
+        coverSubtitleColor: page.coverSubtitleColor ?? DEFAULT_COVER_SUBTITLE_COLOR,
+      };
+    }),
     meta: {
       ...project.meta,
       defaultLayoutPadding: project.meta.defaultLayoutPadding ?? DEFAULT_LAYOUT_PADDING,
@@ -103,6 +129,11 @@ interface ProjectState {
 
   setCoverTitle: (title: string) => void;
   setCoverSubtitle: (subtitle: string) => void;
+  setCoverSubtitleVisible: (visible: boolean) => void;
+  setCoverTitleStyle: (changes: { fontSize?: number; fontFamily?: string; color?: string }) => void;
+  setCoverSubtitleStyle: (changes: { fontSize?: number; fontFamily?: string; color?: string }) => void;
+  setCurrentPageChapterTitle: (title: string) => void;
+  setCurrentPageSubchapterTitle: (title: string) => void;
   toggleCover: (isCover: boolean) => void;
   addCoverPage: () => void;
 
@@ -444,6 +475,71 @@ const useProjectStore = create<ProjectState>((set, get) => ({
       return { project: { ...state.project, pages } };
     }),
 
+  setCoverSubtitleVisible: (visible) =>
+    set((state) => {
+      const pages = [...state.project.pages];
+      const page = { ...pages[state.currentPageIndex] };
+      page.showCoverSubtitle = visible;
+      pages[state.currentPageIndex] = page;
+      return { project: { ...state.project, pages } };
+    }),
+
+  setCoverTitleStyle: (changes) =>
+    set((state) => {
+      const pages = [...state.project.pages];
+      const page = { ...pages[state.currentPageIndex] };
+      if (changes.fontSize !== undefined) {
+        page.coverTitleFontSize = Math.max(1, changes.fontSize);
+      }
+      if (changes.fontFamily !== undefined) {
+        page.coverTitleFontFamily = changes.fontFamily;
+      }
+      if (changes.color !== undefined) {
+        page.coverTitleColor = changes.color;
+      }
+      pages[state.currentPageIndex] = page;
+      return { project: { ...state.project, pages } };
+    }),
+
+  setCoverSubtitleStyle: (changes) =>
+    set((state) => {
+      const pages = [...state.project.pages];
+      const page = { ...pages[state.currentPageIndex] };
+      if (changes.fontSize !== undefined) {
+        page.coverSubtitleFontSize = Math.max(1, changes.fontSize);
+      }
+      if (changes.fontFamily !== undefined) {
+        page.coverSubtitleFontFamily = changes.fontFamily;
+      }
+      if (changes.color !== undefined) {
+        page.coverSubtitleColor = changes.color;
+      }
+      pages[state.currentPageIndex] = page;
+      return { project: { ...state.project, pages } };
+    }),
+
+  setCurrentPageChapterTitle: (title) =>
+    set((state) => {
+      const pages = [...state.project.pages];
+      const page = { ...pages[state.currentPageIndex] };
+      const trimmed = title.trim();
+      if (trimmed) page.chapterTitle = trimmed;
+      else delete page.chapterTitle;
+      pages[state.currentPageIndex] = page;
+      return { project: { ...state.project, pages } };
+    }),
+
+  setCurrentPageSubchapterTitle: (title) =>
+    set((state) => {
+      const pages = [...state.project.pages];
+      const page = { ...pages[state.currentPageIndex] };
+      const trimmed = title.trim();
+      if (trimmed) page.subchapterTitle = trimmed;
+      else delete page.subchapterTitle;
+      pages[state.currentPageIndex] = page;
+      return { project: { ...state.project, pages } };
+    }),
+
   toggleCover: (isCover) =>
     set((state) => {
       const pages = [...state.project.pages];
@@ -463,6 +559,13 @@ const useProjectStore = create<ProjectState>((set, get) => ({
         isCover: true,
         coverTitle: state.project.meta.name,
         coverSubtitle: '',
+        showCoverSubtitle: true,
+        coverTitleFontSize: DEFAULT_COVER_TITLE_FONT_SIZE,
+        coverTitleFontFamily: DEFAULT_COVER_TITLE_FONT_FAMILY,
+        coverTitleColor: DEFAULT_COVER_TITLE_COLOR,
+        coverSubtitleFontSize: DEFAULT_COVER_SUBTITLE_FONT_SIZE,
+        coverSubtitleFontFamily: DEFAULT_COVER_SUBTITLE_FONT_FAMILY,
+        coverSubtitleColor: DEFAULT_COVER_SUBTITLE_COLOR,
         layoutId: 'cover-full',
       };
       const newPages = [coverPage, ...state.project.pages];
