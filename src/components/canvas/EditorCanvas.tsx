@@ -1,4 +1,4 @@
-import { Stage, Layer, Rect, Text, Image as KonvaImage, Transformer, Group } from 'react-konva';
+import { Stage, Layer, Rect, Text, Image as KonvaImage, Transformer, Group, Line } from 'react-konva';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import type Konva from 'konva';
 import useProjectStore from '../../store/useProjectStore';
@@ -359,11 +359,15 @@ function TextElementComponent({
   isSelected,
   onSelect,
   onChange,
+  onStartEdit,
+  onDragMove,
 }: {
   element: TextElement;
   isSelected: boolean;
   onSelect: () => void;
   onChange: (changes: Partial<TextElement>) => void;
+  onStartEdit: () => void;
+  onDragMove?: (e: Konva.KonvaEventObject<DragEvent>) => void;
 }) {
   const shapeRef = useRef<Konva.Text>(null);
   const trRef = useRef<Konva.Transformer>(null);
@@ -394,13 +398,6 @@ function TextElementComponent({
     });
   };
 
-  const handleDblClick = () => {
-    const newText = prompt('Text bearbeiten:', element.content);
-    if (newText !== null) {
-      onChange({ content: newText });
-    }
-  };
-
   return (
     <>
       <Text
@@ -417,9 +414,10 @@ function TextElementComponent({
         onClick={onSelect}
         onTap={onSelect}
         onDragEnd={handleDragEnd}
+        onDragMove={onDragMove}
         onTransformEnd={handleTransformEnd}
-        onDblClick={handleDblClick}
-        onDblTap={handleDblClick}
+        onDblClick={onStartEdit}
+        onDblTap={onStartEdit}
       />
       {isSelected && (
         <Transformer
@@ -443,12 +441,16 @@ function ElementRenderer({
   isSelected,
   onSelect,
   onChange,
+  onStartEdit,
+  onDragMove,
 }: {
   element: PageElement;
   assetBlobs: Record<string, Blob>;
   isSelected: boolean;
   onSelect: () => void;
   onChange: (changes: Partial<PageElement>) => void;
+  onStartEdit?: () => void;
+  onDragMove?: (e: Konva.KonvaEventObject<DragEvent>) => void;
 }) {
   switch (element.type) {
     case 'image':
@@ -468,6 +470,8 @@ function ElementRenderer({
           isSelected={isSelected}
           onSelect={onSelect}
           onChange={onChange}
+          onStartEdit={onStartEdit || (() => {})}
+          onDragMove={onDragMove}
         />
       );
     default:
@@ -492,6 +496,7 @@ function EditorCanvas() {
   const setCoverSubtitle = useProjectStore((s) => s.setCoverSubtitle);
   const updateSlotCrop = useProjectStore((s) => s.updateSlotCrop);
   const clearSlotCrop = useProjectStore((s) => s.clearSlotCrop);
+  const snapshot = useProjectStore((s) => s.snapshot);
 
   const layoutId = currentPage?.layoutId;
   const isLayoutMode = !!layoutId;
@@ -510,6 +515,24 @@ function EditorCanvas() {
   const isCover = currentPage?.isCover;
   const coverTitle = currentPage?.coverTitle ?? '';
   const coverSubtitle = currentPage?.coverSubtitle ?? '';
+
+  // ─── Inline editing state ────────────────────────────────────────────────
+  const [inlineEdit, setInlineEdit] = useState<{
+    type: 'element' | 'coverTitle' | 'coverSubtitle';
+    id?: string;
+    text: string;
+    x: number;
+    y: number;
+    width: number;
+    fontSize: number;
+    fontFamily: string;
+    color: string;
+    align?: string;
+    fontStyle?: string;
+  } | null>(null);
+
+  // ─── Snap guide state ────────────────────────────────────────────────────
+  const [snapGuides, setSnapGuides] = useState<{ x?: number; y?: number }[]>([]);
 
   // ─── Responsive scaling ──────────────────────────────────────────────────
   const containerRef = useRef<HTMLDivElement>(null);
@@ -572,6 +595,129 @@ function EditorCanvas() {
     [setSelectedElementId, setSelectedSlotIndex],
   );
 
+  // ─── Snapshot on drag start ───────────────────────────────────────────────
+  const handleDragStart = useCallback(() => {
+    snapshot();
+  }, [snapshot]);
+
+  // ─── Inline editing helpers ──────────────────────────────────────────────
+  const startInlineEdit = useCallback(
+    (elementId: string) => {
+      const el = freeElements.find((e) => e.id === elementId);
+      if (!el || el.type !== 'text') return;
+      snapshot();
+      setInlineEdit({
+        type: 'element',
+        id: elementId,
+        text: el.content,
+        x: el.x,
+        y: el.y,
+        width: el.width || 200,
+        fontSize: el.fontSize,
+        fontFamily: el.fontFamily,
+        color: el.color,
+      });
+    },
+    [freeElements, snapshot],
+  );
+
+  const startCoverEdit = useCallback(
+    (field: 'coverTitle' | 'coverSubtitle') => {
+      snapshot();
+      const isTitle = field === 'coverTitle';
+      setInlineEdit({
+        type: field,
+        text: isTitle ? coverTitle : coverSubtitle,
+        x: 0,
+        y: isTitle ? CANVAS_H * 0.35 : CANVAS_H * 0.35 + 60,
+        width: CANVAS_W,
+        fontSize: isTitle ? 48 : 24,
+        fontFamily: 'Arial',
+        color: isTitle ? '#ffffff' : '#ffffffcc',
+        align: 'center',
+        fontStyle: isTitle ? 'bold' : undefined,
+      });
+    },
+    [coverTitle, coverSubtitle, snapshot],
+  );
+
+  const commitInlineEdit = useCallback(() => {
+    if (!inlineEdit) return;
+    if (inlineEdit.type === 'element' && inlineEdit.id) {
+      updateElement(inlineEdit.id, { content: inlineEdit.text });
+    } else if (inlineEdit.type === 'coverTitle') {
+      setCoverTitle(inlineEdit.text);
+    } else if (inlineEdit.type === 'coverSubtitle') {
+      setCoverSubtitle(inlineEdit.text);
+    }
+    setInlineEdit(null);
+  }, [inlineEdit, updateElement, setCoverTitle, setCoverSubtitle]);
+
+  const cancelInlineEdit = useCallback(() => {
+    setInlineEdit(null);
+  }, []);
+
+  // ─── Snap logic for element dragging ─────────────────────────────────────
+  const handleElementDragMove = useCallback(
+    (e: Konva.KonvaEventObject<DragEvent>, elementId: string) => {
+      const node = e.target;
+      const SNAP = 8;
+      const x = node.x();
+      const y = node.y();
+      const w = node.width() * (node.scaleX() || 1);
+      const h = (node.height() || 30) * (node.scaleY() || 1);
+
+      // Compute snap targets (excluding this element)
+      const xTargets = [0, CANVAS_W, CANVAS_W / 2];
+      const yTargets = [0, CANVAS_H, CANVAS_H / 2];
+
+      if (isLayoutMode) {
+        for (const slot of computedSlots) {
+          xTargets.push(slot.x, slot.x + slot.width);
+          yTargets.push(slot.y, slot.y + slot.height);
+        }
+      }
+
+      for (const el of elements) {
+        if (el.id === elementId) continue;
+        xTargets.push(el.x);
+        yTargets.push(el.y);
+        if (el.type === 'image') {
+          xTargets.push(el.x + el.width);
+          yTargets.push(el.y + el.height);
+        }
+        if (el.type === 'text' && el.width) {
+          xTargets.push(el.x + el.width);
+        }
+      }
+
+      let snappedX = x;
+      let snappedY = y;
+      const newGuides: { x?: number; y?: number }[] = [];
+
+      for (const target of xTargets) {
+        if (Math.abs(x - target) < SNAP) { snappedX = target; newGuides.push({ x: target }); break; }
+        if (Math.abs(x + w - target) < SNAP) { snappedX = target - w; newGuides.push({ x: target }); break; }
+        if (Math.abs(x + w / 2 - target) < SNAP) { snappedX = target - w / 2; newGuides.push({ x: target }); break; }
+      }
+
+      for (const target of yTargets) {
+        if (Math.abs(y - target) < SNAP) { snappedY = target; newGuides.push({ y: target }); break; }
+        if (Math.abs(y + h - target) < SNAP) { snappedY = target - h; newGuides.push({ y: target }); break; }
+        if (Math.abs(y + h / 2 - target) < SNAP) { snappedY = target - h / 2; newGuides.push({ y: target }); break; }
+      }
+
+      node.x(snappedX);
+      node.y(snappedY);
+      setSnapGuides(newGuides);
+    },
+    [isLayoutMode, computedSlots, elements],
+  );
+
+  const handleElementDragEnd = useCallback(() => {
+    setSnapGuides([]);
+  }, []);
+
   return (
     <div
       ref={containerRef}
@@ -596,7 +742,7 @@ function EditorCanvas() {
         }}
         className="shrink-0"
       >
-        <Stage width={CANVAS_W} height={CANVAS_H} onClick={handleStageClick} onTap={handleStageClick}>
+        <Stage width={CANVAS_W} height={CANVAS_H} onClick={handleStageClick} onTap={handleStageClick} onDragStart={handleDragStart}>
           <Layer>
             {/* Page background */}
             <Rect x={0} y={0} width={CANVAS_W} height={CANVAS_H} fill={currentPage?.background ?? '#ffffff'} />
@@ -619,13 +765,13 @@ function EditorCanvas() {
               ))}
 
             {/* Cover page title overlay */}
-            {isCover && (
+            {isCover && !inlineEdit?.type?.startsWith('cover') && (
               <>
                 <Text
                   x={0}
                   y={CANVAS_H * 0.35}
                   width={CANVAS_W}
-                  text={coverTitle || 'Titel (Doppelklick)'}
+                  text={coverTitle || 'Titel'}
                   fontSize={48}
                   fontFamily="Arial"
                   fontStyle="bold"
@@ -635,20 +781,14 @@ function EditorCanvas() {
                   shadowOpacity={0.7}
                   align="center"
                   listening={true}
-                  onDblClick={() => {
-                    const newTitle = prompt('Titel bearbeiten:', coverTitle);
-                    if (newTitle !== null) setCoverTitle(newTitle);
-                  }}
-                  onDblTap={() => {
-                    const newTitle = prompt('Titel bearbeiten:', coverTitle);
-                    if (newTitle !== null) setCoverTitle(newTitle);
-                  }}
+                  onDblClick={() => startCoverEdit('coverTitle')}
+                  onDblTap={() => startCoverEdit('coverTitle')}
                 />
                 <Text
                   x={0}
                   y={CANVAS_H * 0.35 + 60}
                   width={CANVAS_W}
-                  text={coverSubtitle || 'Untertitel (Doppelklick)'}
+                  text={coverSubtitle || 'Untertitel'}
                   fontSize={24}
                   fontFamily="Arial"
                   fill="#ffffffcc"
@@ -657,14 +797,8 @@ function EditorCanvas() {
                   shadowOpacity={0.5}
                   align="center"
                   listening={true}
-                  onDblClick={() => {
-                    const newSub = prompt('Untertitel bearbeiten:', coverSubtitle);
-                    if (newSub !== null) setCoverSubtitle(newSub);
-                  }}
-                  onDblTap={() => {
-                    const newSub = prompt('Untertitel bearbeiten:', coverSubtitle);
-                    if (newSub !== null) setCoverSubtitle(newSub);
-                  }}
+                  onDblClick={() => startCoverEdit('coverSubtitle')}
+                  onDblTap={() => startCoverEdit('coverSubtitle')}
                 />
               </>
             )}
@@ -675,14 +809,74 @@ function EditorCanvas() {
                 key={el.id}
                 element={el}
                 assetBlobs={assetBlobs}
-                isSelected={selectedElementId === el.id}
+                isSelected={selectedElementId === el.id && inlineEdit?.id !== el.id}
                 onSelect={() => setSelectedElementId(el.id)}
-                onChange={(changes) => updateElement(el.id, changes)}
+                onChange={(changes) => {
+                  updateElement(el.id, changes);
+                  handleElementDragEnd();
+                }}
+                onStartEdit={el.type === 'text' ? () => startInlineEdit(el.id) : undefined}
+                onDragMove={(e) => handleElementDragMove(e, el.id)}
               />
             ))}
+
+            {/* Snap guide lines */}
+            {snapGuides.map((guide, i) =>
+              guide.x !== undefined ? (
+                <Line key={`sx${i}`} points={[guide.x, 0, guide.x, CANVAS_H]} stroke="#ff6b6b" strokeWidth={1} dash={[4, 4]} listening={false} />
+              ) : guide.y !== undefined ? (
+                <Line key={`sy${i}`} points={[0, guide.y, CANVAS_W, guide.y]} stroke="#ff6b6b" strokeWidth={1} dash={[4, 4]} listening={false} />
+              ) : null,
+            )}
           </Layer>
         </Stage>
       </div>
+
+      {/* Inline text editing overlay */}
+      {inlineEdit && containerRef.current && (() => {
+        const rect = containerRef.current!.getBoundingClientRect();
+        const canvasScreenW = CANVAS_W * displayScale;
+        const canvasScreenH = CANVAS_H * displayScale;
+        const offsetX = (rect.width - canvasScreenW) / 2;
+        const offsetY = (rect.height - canvasScreenH) / 2;
+        const left = offsetX + inlineEdit.x * displayScale;
+        const top = offsetY + inlineEdit.y * displayScale;
+        const width = inlineEdit.width * displayScale;
+        const fontSize = inlineEdit.fontSize * displayScale;
+
+        return (
+          <textarea
+            autoFocus
+            value={inlineEdit.text}
+            onChange={(e) => setInlineEdit((prev) => prev ? { ...prev, text: e.target.value } : null)}
+            onBlur={commitInlineEdit}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') { e.preventDefault(); cancelInlineEdit(); }
+              if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); commitInlineEdit(); }
+            }}
+            style={{
+              position: 'absolute',
+              left,
+              top,
+              width,
+              minHeight: fontSize * 1.5,
+              fontSize,
+              fontFamily: inlineEdit.fontFamily,
+              color: inlineEdit.color,
+              textAlign: (inlineEdit.align || 'left') as React.CSSProperties['textAlign'],
+              fontWeight: inlineEdit.fontStyle?.includes('bold') ? 'bold' : 'normal',
+              lineHeight: 1.2,
+              background: 'rgba(0,0,0,0.4)',
+              border: '2px solid #3b82f6',
+              outline: 'none',
+              resize: 'none',
+              overflow: 'hidden',
+              padding: 0,
+              zIndex: 50,
+            }}
+          />
+        );
+      })()}
     </div>
   );
 }

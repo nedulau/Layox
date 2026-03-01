@@ -89,6 +89,12 @@ interface ProjectState {
   saveCurrentProjectAs: () => Promise<void>;
   openProject: () => Promise<void>;
   loadFromFile: (file: File, handle?: FileSystemFileHandleExt | null) => Promise<void>;
+
+  historyPast: Project[];
+  historyFuture: Project[];
+  snapshot: () => void;
+  undo: () => void;
+  redo: () => void;
 }
 
 const useProjectStore = create<ProjectState>((set, get) => ({
@@ -102,6 +108,8 @@ const useProjectStore = create<ProjectState>((set, get) => ({
   autoSaveInterval: parseInt(localStorage.getItem('layox_autoSaveInterval') || '30', 10),
   showEditor: false,
   recentProjects: JSON.parse(localStorage.getItem('layox_recentProjects') || '[]') as RecentProject[],
+  historyPast: [],
+  historyFuture: [],
 
   currentPage: () => {
     const { project, currentPageIndex } = get();
@@ -155,6 +163,40 @@ const useProjectStore = create<ProjectState>((set, get) => ({
     const trimmed = recents.slice(0, 10);
     localStorage.setItem('layox_recentProjects', JSON.stringify(trimmed));
     set({ recentProjects: trimmed });
+  },
+
+  snapshot: () => {
+    const { project, historyPast } = get();
+    set({
+      historyPast: [...historyPast, JSON.parse(JSON.stringify(project))].slice(-50),
+      historyFuture: [],
+    });
+  },
+
+  undo: () => {
+    const { historyPast, historyFuture, project } = get();
+    if (historyPast.length === 0) return;
+    const prev = historyPast[historyPast.length - 1];
+    set({
+      historyPast: historyPast.slice(0, -1),
+      historyFuture: [JSON.parse(JSON.stringify(project)), ...historyFuture].slice(0, 50),
+      project: prev,
+      selectedElementId: null,
+      selectedSlotIndex: null,
+    });
+  },
+
+  redo: () => {
+    const { historyPast, historyFuture, project } = get();
+    if (historyFuture.length === 0) return;
+    const next = historyFuture[0];
+    set({
+      historyPast: [...historyPast, JSON.parse(JSON.stringify(project))],
+      historyFuture: historyFuture.slice(1),
+      project: next,
+      selectedElementId: null,
+      selectedSlotIndex: null,
+    });
   },
 
   setCurrentPageIndex: (index) =>
