@@ -49,6 +49,11 @@ export interface SlotAssignment {
   offsetX: number;
   offsetY: number;
   scale: number; // 1 = cover-fill, >1 = zoom in
+  /** Crop rectangle in *natural* image pixels (if set, overrides offset/scale) */
+  cropX?: number;
+  cropY?: number;
+  cropW?: number;
+  cropH?: number;
 }
 
 // ─── Page & Project ──────────────────────────────────────────────────────────

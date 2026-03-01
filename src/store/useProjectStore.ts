@@ -13,10 +13,25 @@ function createEmptyPage(): Page {
 }
 
 function createDefaultProject(name: string = 'Unbenanntes Projekt'): Project {
+  const coverPage: Page = {
+    id: uuidv4(),
+    elements: [],
+    background: '#ffffff',
+    isCover: true,
+    coverTitle: name,
+    coverSubtitle: '',
+    layoutId: 'cover-full',
+  };
   return {
     meta: { name, version: '1.0' },
-    pages: [createEmptyPage()],
+    pages: [coverPage, createEmptyPage()],
   };
+}
+
+interface RecentProject {
+  name: string;
+  fileName: string;
+  lastOpened: number; // timestamp
 }
 
 interface ProjectState {
@@ -26,6 +41,10 @@ interface ProjectState {
   selectedElementId: string | null;
   selectedSlotIndex: number | null;
   fileHandle: FileSystemFileHandleExt | null;
+  autoSaveEnabled: boolean;
+  autoSaveInterval: number; // seconds
+  showEditor: boolean;
+  recentProjects: RecentProject[];
 
   currentPage: () => Page | undefined;
 
@@ -33,6 +52,10 @@ interface ProjectState {
   setProjectName: (name: string) => void;
   addAsset: (path: string, blob: Blob) => void;
   resetProject: (name?: string) => void;
+  setAutoSaveEnabled: (enabled: boolean) => void;
+  setAutoSaveInterval: (seconds: number) => void;
+  setShowEditor: (show: boolean) => void;
+  addRecentProject: (name: string, fileName: string) => void;
 
   setCurrentPageIndex: (index: number) => void;
   addPage: () => void;
@@ -49,6 +72,8 @@ interface ProjectState {
   removeImageFromSlot: (slotIndex: number) => void;
   updateSlotOffset: (slotIndex: number, offsetX: number, offsetY: number) => void;
   updateSlotScale: (slotIndex: number, scale: number) => void;
+  updateSlotCrop: (slotIndex: number, cropX: number, cropY: number, cropW: number, cropH: number) => void;
+  clearSlotCrop: (slotIndex: number) => void;
   setLayoutPadding: (padding: number) => void;
   setLayoutGap: (gap: number) => void;
 
@@ -73,6 +98,10 @@ const useProjectStore = create<ProjectState>((set, get) => ({
   selectedElementId: null,
   selectedSlotIndex: null,
   fileHandle: null,
+  autoSaveEnabled: localStorage.getItem('layox_autoSaveEnabled') === 'true',
+  autoSaveInterval: parseInt(localStorage.getItem('layox_autoSaveInterval') || '30', 10),
+  showEditor: false,
+  recentProjects: JSON.parse(localStorage.getItem('layox_recentProjects') || '[]') as RecentProject[],
 
   currentPage: () => {
     const { project, currentPageIndex } = get();
@@ -95,15 +124,38 @@ const useProjectStore = create<ProjectState>((set, get) => ({
       assetBlobs: { ...state.assetBlobs, [path]: blob },
     })),
 
-  resetProject: (name) =>
+  resetProject: (name) => {
+    const projectName = name || 'Unbenanntes Projekt';
     set({
-      project: createDefaultProject(name),
+      project: createDefaultProject(projectName),
       currentPageIndex: 0,
       assetBlobs: {},
       selectedElementId: null,
       selectedSlotIndex: null,
       fileHandle: null,
-    }),
+      showEditor: true,
+    });
+  },
+
+  setAutoSaveEnabled: (enabled) => {
+    localStorage.setItem('layox_autoSaveEnabled', String(enabled));
+    set({ autoSaveEnabled: enabled });
+  },
+
+  setAutoSaveInterval: (seconds) => {
+    localStorage.setItem('layox_autoSaveInterval', String(seconds));
+    set({ autoSaveInterval: seconds });
+  },
+
+  setShowEditor: (show) => set({ showEditor: show }),
+
+  addRecentProject: (name, fileName) => {
+    const recents = get().recentProjects.filter((r) => r.fileName !== fileName);
+    recents.unshift({ name, fileName, lastOpened: Date.now() });
+    const trimmed = recents.slice(0, 10);
+    localStorage.setItem('layox_recentProjects', JSON.stringify(trimmed));
+    set({ recentProjects: trimmed });
+  },
 
   setCurrentPageIndex: (index) =>
     set({ currentPageIndex: index, selectedElementId: null, selectedSlotIndex: null }),
@@ -215,6 +267,37 @@ const useProjectStore = create<ProjectState>((set, get) => ({
       page.slotAssignments = {
         ...page.slotAssignments,
         [slotIndex]: { ...page.slotAssignments[slotIndex], scale },
+      };
+      pages[state.currentPageIndex] = page;
+      return { project: { ...state.project, pages } };
+    }),
+
+  updateSlotCrop: (slotIndex, cropX, cropY, cropW, cropH) =>
+    set((state) => {
+      const pages = [...state.project.pages];
+      const page = { ...pages[state.currentPageIndex] };
+      if (!page.slotAssignments?.[slotIndex]) return state;
+      page.slotAssignments = {
+        ...page.slotAssignments,
+        [slotIndex]: { ...page.slotAssignments[slotIndex], cropX, cropY, cropW, cropH },
+      };
+      pages[state.currentPageIndex] = page;
+      return { project: { ...state.project, pages } };
+    }),
+
+  clearSlotCrop: (slotIndex) =>
+    set((state) => {
+      const pages = [...state.project.pages];
+      const page = { ...pages[state.currentPageIndex] };
+      if (!page.slotAssignments?.[slotIndex]) return state;
+      const assignment = { ...page.slotAssignments[slotIndex] };
+      delete assignment.cropX;
+      delete assignment.cropY;
+      delete assignment.cropW;
+      delete assignment.cropH;
+      page.slotAssignments = {
+        ...page.slotAssignments,
+        [slotIndex]: assignment,
       };
       pages[state.currentPageIndex] = page;
       return { project: { ...state.project, pages } };
@@ -492,7 +575,9 @@ const useProjectStore = create<ProjectState>((set, get) => ({
         selectedElementId: null,
         selectedSlotIndex: null,
         fileHandle: result.handle,
+        showEditor: true,
       });
+      get().addRecentProject(project.meta.name, result.handle.name);
     }
   },
 
@@ -505,7 +590,9 @@ const useProjectStore = create<ProjectState>((set, get) => ({
       selectedElementId: null,
       selectedSlotIndex: null,
       fileHandle: handle ?? null,
+      showEditor: true,
     });
+    get().addRecentProject(project.meta.name, handle?.name ?? file.name);
   },
 }));
 

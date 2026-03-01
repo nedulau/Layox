@@ -2,9 +2,20 @@ import { useRef, useEffect } from 'react';
 import './index.css';
 import EditorCanvas from './components/canvas/EditorCanvas';
 import LayoutPicker from './components/LayoutPicker';
+import StartScreen from './components/StartScreen';
 import useProjectStore from './store/useProjectStore';
 
 function App() {
+  const showEditor = useProjectStore((s) => s.showEditor);
+
+  if (!showEditor) {
+    return <StartScreen />;
+  }
+
+  return <Editor />;
+}
+
+function Editor() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
 
@@ -21,6 +32,7 @@ function App() {
   const addTextElement = useProjectStore((s) => s.addTextElement);
   const removeElement = useProjectStore((s) => s.removeElement);
   const removeImageFromSlot = useProjectStore((s) => s.removeImageFromSlot);
+  const clearSlotCrop = useProjectStore((s) => s.clearSlotCrop);
   const selectedElementId = useProjectStore((s) => s.selectedElementId);
   const selectedSlotIndex = useProjectStore((s) => s.selectedSlotIndex);
   const applyLayout = useProjectStore((s) => s.applyLayout);
@@ -64,6 +76,11 @@ function App() {
     (s) => s.project.pages[0]?.isCover ?? false,
   );
 
+  const autoSaveEnabled = useProjectStore((s) => s.autoSaveEnabled);
+  const autoSaveInterval = useProjectStore((s) => s.autoSaveInterval);
+  const setAutoSaveEnabled = useProjectStore((s) => s.setAutoSaveEnabled);
+  const setAutoSaveInterval = useProjectStore((s) => s.setAutoSaveInterval);
+
   const hasFileSystemAccess = 'showOpenFilePicker' in window;
 
   const goPrevPage = () => {
@@ -77,6 +94,9 @@ function App() {
   const canDeleteSlot =
     selectedSlotIndex !== null &&
     currentSlotAssignments?.[selectedSlotIndex] !== undefined;
+  const slotHasCrop =
+    selectedSlotIndex !== null &&
+    currentSlotAssignments?.[selectedSlotIndex]?.cropX !== undefined;
   const canDelete = !!selectedElementId || canDeleteSlot;
 
   const selectedTextElement = useProjectStore((s) => {
@@ -133,6 +153,20 @@ function App() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [removeElement, removeImageFromSlot]);
+
+  // Auto-save
+  useEffect(() => {
+    if (!autoSaveEnabled || autoSaveInterval <= 0) return;
+    const id = setInterval(() => {
+      const state = useProjectStore.getState();
+      if (state.fileHandle) {
+        state.saveCurrentProject().catch((err) =>
+          console.error('Auto-save Fehler:', err),
+        );
+      }
+    }, autoSaveInterval * 1000);
+    return () => clearInterval(id);
+  }, [autoSaveEnabled, autoSaveInterval]);
 
   const handleOpen = async () => {
     if (hasFileSystemAccess) {
@@ -277,6 +311,12 @@ function App() {
           </button>
         )}
 
+        {slotHasCrop && selectedSlotIndex !== null && (
+          <button onClick={() => clearSlotCrop(selectedSlotIndex)} className={btnSecondary}>
+            Beschnitt zurücksetzen
+          </button>
+        )}
+
         {/* Text properties (when text selected) */}
         {selectedTextElement && (
           <>
@@ -367,6 +407,36 @@ function App() {
             </div>
           </>
         )}
+
+        <div className="w-px h-5 bg-[#444]" />
+
+        {/* Auto-save controls */}
+        <div className="flex items-center gap-2">
+          <label className="text-xs text-neutral-500 flex items-center gap-1 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={autoSaveEnabled}
+              onChange={(e) => setAutoSaveEnabled(e.target.checked)}
+              className="accent-blue-500"
+            />
+            Auto-Save
+          </label>
+          {autoSaveEnabled && (
+            <>
+              <select
+                value={autoSaveInterval}
+                onChange={(e) => setAutoSaveInterval(parseInt(e.target.value, 10))}
+                className="px-1.5 py-1 text-sm rounded bg-neutral-700 text-white border border-neutral-600"
+              >
+                <option value={10}>10s</option>
+                <option value={30}>30s</option>
+                <option value={60}>60s</option>
+                <option value={120}>2min</option>
+                <option value={300}>5min</option>
+              </select>
+            </>
+          )}
+        </div>
 
         <div className="w-px h-5 bg-[#444]" />
 

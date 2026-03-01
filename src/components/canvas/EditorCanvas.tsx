@@ -19,6 +19,7 @@ function SlotComponent({
   onSelect,
   onOffsetChange,
   onScaleChange,
+  onCropChange,
 }: {
   slot: LayoutSlot;
   slotIndex: number;
@@ -28,6 +29,7 @@ function SlotComponent({
   onSelect: () => void;
   onOffsetChange: (slotIndex: number, offsetX: number, offsetY: number) => void;
   onScaleChange: (slotIndex: number, scale: number) => void;
+  onCropChange: (slotIndex: number, cropX: number, cropY: number, cropW: number, cropH: number) => void;
 }) {
   const [image, setImage] = useState<HTMLImageElement | null>(null);
   const [naturalSize, setNaturalSize] = useState<{ w: number; h: number } | null>(null);
@@ -55,10 +57,11 @@ function SlotComponent({
   }, [assignment?.assetPath, assetBlobs]);
 
   const zoomScale = assignment?.scale ?? 1;
+  const hasCrop = assignment?.cropX !== undefined && assignment?.cropW !== undefined;
 
-  // Compute cover-fill dimensions (with user zoom)
+  // Compute cover-fill dimensions (with user zoom) — used when no crop is set
   const coverInfo = (() => {
-    if (!naturalSize) return null;
+    if (!naturalSize || hasCrop) return null;
     const baseScale = Math.max(slot.width / naturalSize.w, slot.height / naturalSize.h);
     const finalScale = baseScale * zoomScale;
     const renderedW = naturalSize.w * finalScale;
@@ -93,17 +96,59 @@ function SlotComponent({
     };
   };
 
-  // Scroll-to-zoom on image
+  // Scroll-to-zoom on image (adjusts scale when no crop, or adjusts crop region when cropped)
   const handleWheel = useCallback(
     (e: Konva.KonvaEventObject<WheelEvent>) => {
-      if (!assignment) return;
+      if (!assignment || !naturalSize) return;
       e.evt.preventDefault();
-      const delta = e.evt.deltaY > 0 ? -0.05 : 0.05;
-      const newScale = Math.max(1, Math.min(5, zoomScale + delta));
-      onScaleChange(slotIndex, newScale);
+      if (hasCrop) {
+        // Adjust crop region: zoom in/out about the crop center
+        const cx = (assignment.cropX ?? 0) + (assignment.cropW ?? naturalSize.w) / 2;
+        const cy = (assignment.cropY ?? 0) + (assignment.cropH ?? naturalSize.h) / 2;
+        const factor = e.evt.deltaY > 0 ? 1.05 : 0.95;
+        let newW = (assignment.cropW ?? naturalSize.w) * factor;
+        let newH = (assignment.cropH ?? naturalSize.h) * factor;
+        // Clamp to image bounds and minimum
+        newW = Math.max(20, Math.min(naturalSize.w, newW));
+        newH = Math.max(20, Math.min(naturalSize.h, newH));
+        let newX = cx - newW / 2;
+        let newY = cy - newH / 2;
+        newX = Math.max(0, Math.min(naturalSize.w - newW, newX));
+        newY = Math.max(0, Math.min(naturalSize.h - newH, newY));
+        onCropChange(slotIndex, Math.round(newX), Math.round(newY), Math.round(newW), Math.round(newH));
+      } else {
+        const delta = e.evt.deltaY > 0 ? -0.05 : 0.05;
+        const newScale = Math.max(1, Math.min(5, zoomScale + delta));
+        onScaleChange(slotIndex, newScale);
+      }
     },
-    [assignment, zoomScale, slotIndex, onScaleChange],
+    [assignment, naturalSize, hasCrop, zoomScale, slotIndex, onScaleChange, onCropChange],
   );
+
+  // Double-click to crop: initialize crop to current visible region or prompt-like behavior
+  const handleDblClick = useCallback(() => {
+    if (!assignment || !naturalSize) return;
+    if (!hasCrop) {
+      // Initialize crop from the current zoom/pan view
+      const baseScale = Math.max(slot.width / naturalSize.w, slot.height / naturalSize.h);
+      const finalScale = baseScale * zoomScale;
+      const renderedW = naturalSize.w * finalScale;
+      const renderedH = naturalSize.h * finalScale;
+      const excessW = renderedW - slot.width;
+      const excessH = renderedH - slot.height;
+      const ox = assignment.offsetX ?? 0;
+      const oy = assignment.offsetY ?? 0;
+      // Visible region origin in rendered-px
+      const visX = excessW / 2 - ox;
+      const visY = excessH / 2 - oy;
+      // Convert to natural pixels
+      const cropX = Math.max(0, Math.round(visX / finalScale));
+      const cropY = Math.max(0, Math.round(visY / finalScale));
+      const cropW = Math.min(naturalSize.w - cropX, Math.round(slot.width / finalScale));
+      const cropH = Math.min(naturalSize.h - cropY, Math.round(slot.height / finalScale));
+      onCropChange(slotIndex, cropX, cropY, cropW, cropH);
+    }
+  }, [assignment, naturalSize, hasCrop, slot, zoomScale, slotIndex, onCropChange]);
 
   return (
     <>
@@ -122,8 +167,35 @@ function SlotComponent({
         onTap={onSelect}
       />
 
-      {/* Clipped image – draggable within slot, scroll to zoom */}
-      {image && coverInfo && (
+      {/* Clipped image – draggable within slot, scroll to zoom, dblclick to crop */}
+      {image && hasCrop && (
+        <Group
+          clipX={slot.x}
+          clipY={slot.y}
+          clipWidth={slot.width}
+          clipHeight={slot.height}
+        >
+          <KonvaImage
+            image={image}
+            x={slot.x}
+            y={slot.y}
+            width={slot.width}
+            height={slot.height}
+            crop={{
+              x: assignment!.cropX!,
+              y: assignment!.cropY!,
+              width: assignment!.cropW!,
+              height: assignment!.cropH!,
+            }}
+            onClick={onSelect}
+            onTap={onSelect}
+            onWheel={handleWheel}
+            onDblClick={handleDblClick}
+            onDblTap={handleDblClick}
+          />
+        </Group>
+      )}
+      {image && coverInfo && !hasCrop && (
         <Group
           clipX={slot.x}
           clipY={slot.y}
@@ -142,6 +214,8 @@ function SlotComponent({
             onTap={onSelect}
             onDragEnd={handleDragEnd}
             onWheel={handleWheel}
+            onDblClick={handleDblClick}
+            onDblTap={handleDblClick}
           />
         </Group>
       )}
@@ -414,6 +488,10 @@ function EditorCanvas() {
   const updateSlotOffset = useProjectStore((s) => s.updateSlotOffset);
   const updateSlotScale = useProjectStore((s) => s.updateSlotScale);
   const addImageFromFile = useProjectStore((s) => s.addImageFromFile);
+  const setCoverTitle = useProjectStore((s) => s.setCoverTitle);
+  const setCoverSubtitle = useProjectStore((s) => s.setCoverSubtitle);
+  const updateSlotCrop = useProjectStore((s) => s.updateSlotCrop);
+  const clearSlotCrop = useProjectStore((s) => s.clearSlotCrop);
 
   const layoutId = currentPage?.layoutId;
   const isLayoutMode = !!layoutId;
@@ -445,7 +523,7 @@ function EditorCanvas() {
       const rect = container.getBoundingClientRect();
       const scaleX = rect.width / CANVAS_W;
       const scaleY = rect.height / CANVAS_H;
-      setDisplayScale(Math.min(scaleX, scaleY, 1.5));
+      setDisplayScale(Math.min(scaleX, scaleY));
     };
 
     updateScale();
@@ -536,6 +614,7 @@ function EditorCanvas() {
                   onSelect={() => setSelectedSlotIndex(i)}
                   onOffsetChange={updateSlotOffset}
                   onScaleChange={updateSlotScale}
+                  onCropChange={updateSlotCrop}
                 />
               ))}
 
@@ -546,7 +625,7 @@ function EditorCanvas() {
                   x={0}
                   y={CANVAS_H * 0.35}
                   width={CANVAS_W}
-                  text={coverTitle}
+                  text={coverTitle || 'Titel (Doppelklick)'}
                   fontSize={48}
                   fontFamily="Arial"
                   fontStyle="bold"
@@ -555,24 +634,38 @@ function EditorCanvas() {
                   shadowBlur={8}
                   shadowOpacity={0.7}
                   align="center"
-                  listening={false}
+                  listening={true}
+                  onDblClick={() => {
+                    const newTitle = prompt('Titel bearbeiten:', coverTitle);
+                    if (newTitle !== null) setCoverTitle(newTitle);
+                  }}
+                  onDblTap={() => {
+                    const newTitle = prompt('Titel bearbeiten:', coverTitle);
+                    if (newTitle !== null) setCoverTitle(newTitle);
+                  }}
                 />
-                {coverSubtitle && (
-                  <Text
-                    x={0}
-                    y={CANVAS_H * 0.35 + 60}
-                    width={CANVAS_W}
-                    text={coverSubtitle}
-                    fontSize={24}
-                    fontFamily="Arial"
-                    fill="#ffffffcc"
-                    shadowColor="#000000"
-                    shadowBlur={6}
-                    shadowOpacity={0.5}
-                    align="center"
-                    listening={false}
-                  />
-                )}
+                <Text
+                  x={0}
+                  y={CANVAS_H * 0.35 + 60}
+                  width={CANVAS_W}
+                  text={coverSubtitle || 'Untertitel (Doppelklick)'}
+                  fontSize={24}
+                  fontFamily="Arial"
+                  fill="#ffffffcc"
+                  shadowColor="#000000"
+                  shadowBlur={6}
+                  shadowOpacity={0.5}
+                  align="center"
+                  listening={true}
+                  onDblClick={() => {
+                    const newSub = prompt('Untertitel bearbeiten:', coverSubtitle);
+                    if (newSub !== null) setCoverSubtitle(newSub);
+                  }}
+                  onDblTap={() => {
+                    const newSub = prompt('Untertitel bearbeiten:', coverSubtitle);
+                    if (newSub !== null) setCoverSubtitle(newSub);
+                  }}
+                />
               </>
             )}
 
