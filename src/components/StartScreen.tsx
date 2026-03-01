@@ -43,6 +43,11 @@ function StartScreen() {
     e.target.value = '';
   };
 
+  // Double-click on a recent project opens the file picker so the user can quickly re-open
+  const handleRecentDoubleClick = async () => {
+    await handleOpen();
+  };
+
   const formatDate = (ts: number) => {
     const d = new Date(ts);
     return d.toLocaleDateString('de-DE', {
@@ -93,8 +98,11 @@ function StartScreen() {
               {recentProjects.map((rp, i) => (
                 <div
                   key={`${rp.fileName}-${i}`}
+                  onDoubleClick={handleRecentDoubleClick}
                   className="flex items-center justify-between px-4 py-2.5 rounded-lg
-                             bg-neutral-800/60 hover:bg-neutral-700/80 transition-colors"
+                             bg-neutral-800/60 hover:bg-neutral-700/80 transition-colors
+                             cursor-pointer select-none"
+                  title="Doppelklick zum Öffnen"
                 >
                   <div className="flex flex-col min-w-0">
                     <span className="text-white text-sm font-medium truncate">

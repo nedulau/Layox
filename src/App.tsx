@@ -5,7 +5,7 @@ import LayoutPicker from './components/LayoutPicker';
 import StartScreen from './components/StartScreen';
 import CropModal from './components/CropModal';
 import useProjectStore from './store/useProjectStore';
-import { computeLayoutSlots } from './utils/layouts';
+import { exportAsPdf, exportCurrentPageAsPng, exportCurrentPageAsJpeg } from './utils/exportProject';
 
 const FONTS = ['Arial', 'Times New Roman', 'Georgia', 'Verdana', 'Courier New', 'Trebuchet MS', 'Impact', 'Comic Sans MS'];
 
@@ -190,7 +190,6 @@ function Editor() {
   // ─── Crop modal state ──────────────────────────────────────────────────
   const [cropModal, setCropModal] = useState<{
     blob: Blob;
-    aspectRatio: number;
     initialCrop?: { x: number; y: number; w: number; h: number };
     slotIndex: number;
   } | null>(null);
@@ -373,13 +372,10 @@ function Editor() {
     if (!assignment) return;
     const blob = assetBlobs[assignment.assetPath];
     if (!blob) return;
-    const slots = currentLayoutId ? computeLayoutSlots(currentLayoutId, currentLayoutPadding, currentLayoutGap) : [];
-    const slot = slots[selectedSlotIndex];
-    if (!slot) return;
     const initial = assignment.cropX !== undefined
       ? { x: assignment.cropX, y: assignment.cropY!, w: assignment.cropW!, h: assignment.cropH! }
       : undefined;
-    setCropModal({ blob, aspectRatio: slot.width / slot.height, initialCrop: initial, slotIndex: selectedSlotIndex });
+    setCropModal({ blob, initialCrop: initial, slotIndex: selectedSlotIndex });
   };
 
   const handleCropConfirm = (crop: { x: number; y: number; w: number; h: number }) => {
@@ -395,7 +391,27 @@ function Editor() {
     if (selectedSlotIndex !== null) { snapshot(); clearSlotCrop(selectedSlotIndex); }
   };
 
-  const handleGoHome = () => { closeMenu(); setShowEditor(false); };
+  const handleGoHome = () => {
+    closeMenu();
+    const confirmed = window.confirm('Möchtest du wirklich zur Startseite zurückkehren? Nicht gespeicherte Änderungen gehen verloren.');
+    if (confirmed) setShowEditor(false);
+  };
+
+  // ─── Export handlers ──────────────────────────────────────────────────
+  const handleExportPdf = async () => {
+    closeMenu();
+    await exportAsPdf(pages.length, setCurrentPageIndex, projectName);
+  };
+
+  const handleExportPng = () => {
+    closeMenu();
+    exportCurrentPageAsPng(projectName, currentPageIndex);
+  };
+
+  const handleExportJpeg = () => {
+    closeMenu();
+    exportCurrentPageAsJpeg(projectName, currentPageIndex);
+  };
 
   const btnPageNav =
     'w-7 h-7 flex items-center justify-center rounded text-sm transition-colors cursor-pointer select-none';
@@ -442,6 +458,34 @@ function Editor() {
               <MenuItem label="Speichern" shortcut="Ctrl+S" onClick={handleSave} />
               <MenuItem label="Speichern unter" shortcut="Ctrl+Shift+S" onClick={handleSaveAs} />
               <MenuDivider />
+              <MenuItem label="Exportieren als PDF" onClick={handleExportPdf} />
+              <MenuItem label="Seite als PNG" onClick={handleExportPng} />
+              <MenuItem label="Seite als JPEG" onClick={handleExportJpeg} />
+              <MenuDivider />
+              <div className="px-3 py-1.5 flex items-center gap-2">
+                <label className="text-xs text-neutral-500 flex items-center gap-1 cursor-pointer select-none">
+                  <input
+                    type="checkbox" checked={autoSaveEnabled}
+                    onChange={(e) => setAutoSaveEnabled(e.target.checked)}
+                    className="accent-blue-500"
+                  />
+                  Auto-Save
+                </label>
+                {autoSaveEnabled && (
+                  <select
+                    value={autoSaveInterval}
+                    onChange={(e) => setAutoSaveInterval(parseInt(e.target.value, 10))}
+                    className="px-1.5 py-1 text-xs rounded bg-neutral-700 text-white border border-neutral-600"
+                  >
+                    <option value={10}>10s</option>
+                    <option value={30}>30s</option>
+                    <option value={60}>60s</option>
+                    <option value={120}>2min</option>
+                    <option value={300}>5min</option>
+                  </select>
+                )}
+              </div>
+              <MenuDivider />
               <MenuItem label="Startseite" onClick={handleGoHome} />
             </div>
           )}
@@ -463,19 +507,6 @@ function Editor() {
                   <MenuItem label="Beschnitt zurücksetzen" onClick={handleClearCrop} disabled={!slotHasCrop} />
                 </>
               )}
-            </div>
-          )}
-        </div>
-
-        {/* ── Einfügen menu ── */}
-        <div className="relative" data-menu>
-          <MenuButton label="Einfügen" isOpen={openMenu === 'einfuegen'} onClick={() => toggleMenu('einfuegen')} />
-          {openMenu === 'einfuegen' && (
-            <div className="absolute top-full left-0 mt-1 min-w-[220px] bg-[#252525] border border-[#444] rounded-lg shadow-xl z-50 py-1">
-              <MenuItem label="Bild" onClick={handleAddImage} />
-              <MenuItem label="Text" shortcut="Ctrl+T" onClick={handleAddText} />
-              <MenuDivider />
-              <MenuItem label="Deckblatt" onClick={handleAddCoverPage} disabled={hasCoverPage} />
             </div>
           )}
         </div>
@@ -514,77 +545,26 @@ function Editor() {
           )}
         </div>
 
-        {/* ── Seite menu ── */}
-        <div className="relative" data-menu>
-          <MenuButton label="Seite" isOpen={openMenu === 'seite'} onClick={() => toggleMenu('seite')} />
-          {openMenu === 'seite' && (
-            <div className="absolute top-full left-0 mt-1 min-w-[220px] bg-[#252525] border border-[#444] rounded-lg shadow-xl z-50 py-1">
-              <MenuItem label="Neue Seite" onClick={() => { closeMenu(); snapshot(); addPage(); }} />
-              <MenuItem label="Seite löschen" onClick={() => { closeMenu(); snapshot(); removePage(currentPageIndex); }} disabled={pages.length <= 1} danger />
-              {currentIsCover && (
-                <>
-                  <MenuDivider />
-                  <div className="px-3 py-1.5 flex items-center gap-2">
-                    <label className="text-xs text-neutral-500">Titel</label>
-                    <input
-                      type="text" value={currentCoverTitle}
-                      onFocus={() => snapshot()}
-                      onChange={(e) => setCoverTitle(e.target.value)}
-                      className="flex-1 px-1.5 py-1 text-sm rounded bg-neutral-700 text-white border border-neutral-600"
-                      placeholder="Titel"
-                    />
-                  </div>
-                  <div className="px-3 py-1.5 flex items-center gap-2">
-                    <label className="text-xs text-neutral-500">Untertitel</label>
-                    <input
-                      type="text" value={currentCoverSubtitle}
-                      onFocus={() => snapshot()}
-                      onChange={(e) => setCoverSubtitle(e.target.value)}
-                      className="flex-1 px-1.5 py-1 text-sm rounded bg-neutral-700 text-white border border-neutral-600"
-                      placeholder="Untertitel"
-                    />
-                  </div>
-                </>
-              )}
-              <MenuDivider />
-              <div className="px-3 py-1.5 flex items-center gap-2">
-                <label className="text-xs text-neutral-500 flex items-center gap-1 cursor-pointer select-none">
-                  <input
-                    type="checkbox" checked={autoSaveEnabled}
-                    onChange={(e) => setAutoSaveEnabled(e.target.checked)}
-                    className="accent-blue-500"
-                  />
-                  Auto-Save
-                </label>
-                {autoSaveEnabled && (
-                  <select
-                    value={autoSaveInterval}
-                    onChange={(e) => setAutoSaveInterval(parseInt(e.target.value, 10))}
-                    className="px-1.5 py-1 text-xs rounded bg-neutral-700 text-white border border-neutral-600"
-                  >
-                    <option value={10}>10s</option>
-                    <option value={30}>30s</option>
-                    <option value={60}>60s</option>
-                    <option value={120}>2min</option>
-                    <option value={300}>5min</option>
-                  </select>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
+        <div className="w-px h-4 bg-[#444]" />
+
+        {/* ── Quick insert buttons (Bild + Text + Deckblatt) ── */}
+        <button onClick={handleAddImage} className="px-2.5 py-1 text-sm rounded text-neutral-300 hover:bg-neutral-800 hover:text-white transition-colors cursor-pointer select-none" title="Bild einfügen">
+          + Bild
+        </button>
+        <button onClick={handleAddText} className="px-2.5 py-1 text-sm rounded text-neutral-300 hover:bg-neutral-800 hover:text-white transition-colors cursor-pointer select-none" title="Text einfügen (Ctrl+T)">
+          + Text
+        </button>
+        {!hasCoverPage && (
+          <button onClick={handleAddCoverPage} className="px-2.5 py-1 text-sm rounded text-neutral-300 hover:bg-neutral-800 hover:text-white transition-colors cursor-pointer select-none" title="Deckblatt hinzufügen">
+            + Deckblatt
+          </button>
+        )}
 
         {/* ── Spacer ── */}
         <div className="flex-1" />
 
-        {/* ── Page navigation ── */}
+        {/* ── Page navigation (numbers + add/delete) ── */}
         <div className="flex items-center gap-1">
-          <button
-            onClick={goPrevPage}
-            disabled={currentPageIndex === 0}
-            className={`${btnPageNav} bg-neutral-800 hover:bg-neutral-700 text-neutral-400 disabled:opacity-20`}
-            title="Vorherige Seite (←)"
-          >◀</button>
           {pages.map((_, i) => (
             <button
               key={i}
@@ -599,11 +579,21 @@ function Editor() {
             </button>
           ))}
           <button
-            onClick={goNextPage}
-            disabled={currentPageIndex >= pages.length - 1}
-            className={`${btnPageNav} bg-neutral-800 hover:bg-neutral-700 text-neutral-400 disabled:opacity-20`}
-            title="Nächste Seite (→)"
-          >▶</button>
+            onClick={() => { snapshot(); addPage(); }}
+            className={`${btnPageNav} bg-neutral-700 hover:bg-neutral-600 text-neutral-300`}
+            title="Neue Seite"
+          >
+            +
+          </button>
+          {pages.length > 1 && (
+            <button
+              onClick={() => { snapshot(); removePage(currentPageIndex); }}
+              className={`${btnPageNav} bg-red-800 hover:bg-red-700 text-neutral-300`}
+              title="Seite löschen"
+            >
+              −
+            </button>
+          )}
         </div>
 
         {/* Hidden file inputs */}
@@ -611,7 +601,7 @@ function Editor() {
         <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageSelected} />
       </div>
 
-      {/* ─── Context bar (text format, etc.) ─── */}
+      {/* ─── Context bar (text format / cover controls) ─── */}
       {selectedTextElement && (
         <div className="flex items-center gap-3 px-4 py-1.5 bg-[#222] border-b border-[#333] shrink-0 text-sm">
           <label className="text-xs text-neutral-500">Schriftart</label>
@@ -640,17 +630,60 @@ function Editor() {
           />
         </div>
       )}
+      {currentIsCover && (
+        <div className="flex items-center gap-3 px-4 py-1.5 bg-[#222] border-b border-[#333] shrink-0 text-sm">
+          <label className="text-xs text-neutral-500">Titel</label>
+          <input
+            type="text" value={currentCoverTitle}
+            onFocus={() => snapshot()}
+            onChange={(e) => setCoverTitle(e.target.value)}
+            className="w-40 px-1.5 py-1 text-sm rounded bg-neutral-700 text-white border border-neutral-600"
+            placeholder="Titel"
+          />
+          <label className="text-xs text-neutral-500">Untertitel</label>
+          <input
+            type="text" value={currentCoverSubtitle}
+            onFocus={() => snapshot()}
+            onChange={(e) => setCoverSubtitle(e.target.value)}
+            className="w-36 px-1.5 py-1 text-sm rounded bg-neutral-700 text-white border border-neutral-600"
+            placeholder="Untertitel"
+          />
+        </div>
+      )}
 
-      {/* ─── Canvas area ─── */}
-      <div className="flex-1 flex items-center justify-center overflow-hidden px-2">
+      {/* ─── Canvas area with page arrows on sides ─── */}
+      <div className="flex-1 flex items-center justify-center overflow-hidden gap-2 px-2">
+        {/* Left arrow */}
+        <button
+          onClick={goPrevPage}
+          disabled={currentPageIndex === 0}
+          className="shrink-0 w-10 h-10 flex items-center justify-center rounded-full
+                     bg-neutral-800 hover:bg-neutral-700 text-neutral-300 disabled:opacity-20
+                     disabled:cursor-not-allowed transition-colors cursor-pointer select-none text-lg"
+          title="Vorherige Seite (←)"
+        >
+          ◀
+        </button>
+
         <EditorCanvas />
+
+        {/* Right arrow */}
+        <button
+          onClick={goNextPage}
+          disabled={currentPageIndex >= pages.length - 1}
+          className="shrink-0 w-10 h-10 flex items-center justify-center rounded-full
+                     bg-neutral-800 hover:bg-neutral-700 text-neutral-300 disabled:opacity-20
+                     disabled:cursor-not-allowed transition-colors cursor-pointer select-none text-lg"
+          title="Nächste Seite (→)"
+        >
+          ▶
+        </button>
       </div>
 
       {/* ─── Crop modal ─── */}
       {cropModal && (
         <CropModal
           imageBlob={cropModal.blob}
-          aspectRatio={cropModal.aspectRatio}
           initialCrop={cropModal.initialCrop}
           onConfirm={handleCropConfirm}
           onCancel={handleCropCancel}

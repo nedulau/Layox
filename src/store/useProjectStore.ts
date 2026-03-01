@@ -638,4 +638,8 @@ const useProjectStore = create<ProjectState>((set, get) => ({
   },
 }));
 
+// Expose store globally for export utility
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(globalThis as any).__layoxStore = useProjectStore;
+
 export default useProjectStore;

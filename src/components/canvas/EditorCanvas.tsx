@@ -361,6 +361,7 @@ function TextElementComponent({
   onChange,
   onStartEdit,
   onDragMove,
+  isEditing,
 }: {
   element: TextElement;
   isSelected: boolean;
@@ -368,6 +369,7 @@ function TextElementComponent({
   onChange: (changes: Partial<TextElement>) => void;
   onStartEdit: () => void;
   onDragMove?: (e: Konva.KonvaEventObject<DragEvent>) => void;
+  isEditing?: boolean;
 }) {
   const shapeRef = useRef<Konva.Text>(null);
   const trRef = useRef<Konva.Transformer>(null);
@@ -397,6 +399,9 @@ function TextElementComponent({
       rotation: Math.round(node.rotation()),
     });
   };
+
+  // Hide the Konva text node when inline editing is active (prevents doubled/offset display)
+  if (isEditing) return null;
 
   return (
     <>
@@ -443,6 +448,7 @@ function ElementRenderer({
   onChange,
   onStartEdit,
   onDragMove,
+  isEditing,
 }: {
   element: PageElement;
   assetBlobs: Record<string, Blob>;
@@ -451,6 +457,7 @@ function ElementRenderer({
   onChange: (changes: Partial<PageElement>) => void;
   onStartEdit?: () => void;
   onDragMove?: (e: Konva.KonvaEventObject<DragEvent>) => void;
+  isEditing?: boolean;
 }) {
   switch (element.type) {
     case 'image':
@@ -472,6 +479,7 @@ function ElementRenderer({
           onChange={onChange}
           onStartEdit={onStartEdit || (() => {})}
           onDragMove={onDragMove}
+          isEditing={isEditing}
         />
       );
     default:
@@ -495,7 +503,6 @@ function EditorCanvas() {
   const setCoverTitle = useProjectStore((s) => s.setCoverTitle);
   const setCoverSubtitle = useProjectStore((s) => s.setCoverSubtitle);
   const updateSlotCrop = useProjectStore((s) => s.updateSlotCrop);
-  const clearSlotCrop = useProjectStore((s) => s.clearSlotCrop);
   const snapshot = useProjectStore((s) => s.snapshot);
 
   const layoutId = currentPage?.layoutId;
@@ -606,10 +613,11 @@ function EditorCanvas() {
       const el = freeElements.find((e) => e.id === elementId);
       if (!el || el.type !== 'text') return;
       snapshot();
+      const isDefaultText = el.content === 'Text bearbeiten';
       setInlineEdit({
         type: 'element',
         id: elementId,
-        text: el.content,
+        text: isDefaultText ? '' : el.content,
         x: el.x,
         y: el.y,
         width: el.width || 200,
@@ -643,12 +651,13 @@ function EditorCanvas() {
 
   const commitInlineEdit = useCallback(() => {
     if (!inlineEdit) return;
+    const finalText = inlineEdit.text.trim() || (inlineEdit.type === 'element' ? 'Text bearbeiten' : '');
     if (inlineEdit.type === 'element' && inlineEdit.id) {
-      updateElement(inlineEdit.id, { content: inlineEdit.text });
+      updateElement(inlineEdit.id, { content: finalText });
     } else if (inlineEdit.type === 'coverTitle') {
-      setCoverTitle(inlineEdit.text);
+      setCoverTitle(finalText);
     } else if (inlineEdit.type === 'coverSubtitle') {
-      setCoverSubtitle(inlineEdit.text);
+      setCoverSubtitle(finalText);
     }
     setInlineEdit(null);
   }, [inlineEdit, updateElement, setCoverTitle, setCoverSubtitle]);
@@ -742,7 +751,7 @@ function EditorCanvas() {
         }}
         className="shrink-0"
       >
-        <Stage width={CANVAS_W} height={CANVAS_H} onClick={handleStageClick} onTap={handleStageClick} onDragStart={handleDragStart}>
+        <Stage width={CANVAS_W} height={CANVAS_H} onClick={handleStageClick} onTap={handleStageClick as any} onDragStart={handleDragStart}>
           <Layer>
             {/* Page background */}
             <Rect x={0} y={0} width={CANVAS_W} height={CANVAS_H} fill={currentPage?.background ?? '#ffffff'} />
@@ -817,6 +826,7 @@ function EditorCanvas() {
                 }}
                 onStartEdit={el.type === 'text' ? () => startInlineEdit(el.id) : undefined}
                 onDragMove={(e) => handleElementDragMove(e, el.id)}
+                isEditing={inlineEdit?.id === el.id}
               />
             ))}
 
