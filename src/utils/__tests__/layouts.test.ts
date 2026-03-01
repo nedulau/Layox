@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { computeLayoutSlots, getLayoutById, LAYOUT_TEMPLATES } from '../../utils/layouts';
+import { CANVAS_H, CANVAS_W } from '../../constants/canvas';
 
 describe('layouts', () => {
   describe('LAYOUT_TEMPLATES', () => {
@@ -43,7 +44,7 @@ describe('layouts', () => {
     it('returns cover-full with a full-page slot', () => {
       const coverFull = getLayoutById('cover-full');
       expect(coverFull).toBeDefined();
-      expect(coverFull!.slots[0]).toEqual({ x: 0, y: 0, width: 800, height: 600 });
+      expect(coverFull!.slots[0]).toEqual({ x: 0, y: 0, width: CANVAS_W, height: CANVAS_H });
     });
   });
 
@@ -55,7 +56,7 @@ describe('layouts', () => {
     it('cover-full ignores padding', () => {
       const slots = computeLayoutSlots('cover-full', 50, 20);
       expect(slots).toHaveLength(1);
-      expect(slots[0]).toEqual({ x: 0, y: 0, width: 800, height: 600 });
+      expect(slots[0]).toEqual({ x: 0, y: 0, width: CANVAS_W, height: CANVAS_H });
     });
 
     it('single layout uses full inner area', () => {
@@ -64,8 +65,8 @@ describe('layouts', () => {
       expect(slots).toHaveLength(1);
       expect(slots[0].x).toBe(padding);
       expect(slots[0].y).toBe(padding);
-      expect(slots[0].width).toBe(800 - 2 * padding);
-      expect(slots[0].height).toBe(600 - 2 * padding);
+      expect(slots[0].width).toBe(CANVAS_W - 2 * padding);
+      expect(slots[0].height).toBe(CANVAS_H - 2 * padding);
     });
 
     it('two-side creates 2 equal slots with gap', () => {
@@ -74,7 +75,7 @@ describe('layouts', () => {
       const slots = computeLayoutSlots('two-side', padding, gap);
       expect(slots).toHaveLength(2);
 
-      const iw = 800 - 2 * padding;
+      const iw = CANVAS_W - 2 * padding;
       const expectedSlotWidth = (iw - gap) / 2;
 
       expect(slots[0].width).toBeCloseTo(expectedSlotWidth);
@@ -89,7 +90,7 @@ describe('layouts', () => {
       const slots = computeLayoutSlots('two-stack', padding, gap);
       expect(slots).toHaveLength(2);
 
-      const ih = 600 - 2 * padding;
+      const ih = CANVAS_H - 2 * padding;
       const expectedSlotHeight = (ih - gap) / 2;
 
       expect(slots[0].height).toBeCloseTo(expectedSlotHeight);
@@ -104,12 +105,12 @@ describe('layouts', () => {
       const slots = computeLayoutSlots('three-cols', padding, gap);
       expect(slots).toHaveLength(3);
 
-      const iw = 800 - 2 * padding;
+      const iw = CANVAS_W - 2 * padding;
       const expectedSlotWidth = (iw - 2 * gap) / 3;
 
       for (const slot of slots) {
         expect(slot.width).toBeCloseTo(expectedSlotWidth);
-        expect(slot.height).toBe(600 - 2 * padding);
+        expect(slot.height).toBe(CANVAS_H - 2 * padding);
       }
     });
 
@@ -119,8 +120,8 @@ describe('layouts', () => {
       const slots = computeLayoutSlots('grid-4', padding, gap);
       expect(slots).toHaveLength(4);
 
-      const iw = 800 - 2 * padding;
-      const ih = 600 - 2 * padding;
+      const iw = CANVAS_W - 2 * padding;
+      const ih = CANVAS_H - 2 * padding;
       const sw = (iw - gap) / 2;
       const sh = (ih - gap) / 2;
 
@@ -136,8 +137,8 @@ describe('layouts', () => {
       const slots = computeLayoutSlots('one-big-two-small', padding, gap);
       expect(slots).toHaveLength(3);
 
-      const iw = 800 - 2 * padding;
-      const ih = 600 - 2 * padding;
+      const iw = CANVAS_W - 2 * padding;
+      const ih = CANVAS_H - 2 * padding;
 
       // Big slot is 60% of inner width
       expect(slots[0].width).toBe(Math.round(iw * 0.6));
@@ -156,8 +157,8 @@ describe('layouts', () => {
 
       expect(slots[0].x).toBe(40);
       expect(slots[0].y).toBe(40);
-      expect(slots[0].width).toBe(800 - 80);
-      expect(slots[0].height).toBe(600 - 80);
+      expect(slots[0].width).toBe(CANVAS_W - 80);
+      expect(slots[0].height).toBe(CANVAS_H - 80);
     });
 
     it('cover-center uses inset from padding', () => {
@@ -166,15 +167,15 @@ describe('layouts', () => {
       // An inset is applied inside the padding area
       expect(slots[0].x).toBeGreaterThan(20);
       expect(slots[0].y).toBeGreaterThan(20);
-      expect(slots[0].width).toBeLessThan(800 - 40);
-      expect(slots[0].height).toBeLessThan(600 - 40);
+      expect(slots[0].width).toBeLessThan(CANVAS_W - 40);
+      expect(slots[0].height).toBeLessThan(CANVAS_H - 40);
     });
 
     it('three-rows creates 3 equal rows', () => {
       const slots = computeLayoutSlots('three-rows', 20, 10);
       expect(slots).toHaveLength(3);
       for (const slot of slots) {
-        expect(slot.width).toBe(800 - 40);
+        expect(slot.width).toBe(CANVAS_W - 40);
       }
       expect(slots[0].height).toBeCloseTo(slots[1].height);
       expect(slots[1].height).toBeCloseTo(slots[2].height);
@@ -190,13 +191,13 @@ describe('layouts', () => {
     it('one-top-two-bottom has 3 slots', () => {
       const slots = computeLayoutSlots('one-top-two-bottom', 20, 10);
       expect(slots).toHaveLength(3);
-      expect(slots[0].width).toBe(800 - 40);
+      expect(slots[0].width).toBe(CANVAS_W - 40);
     });
 
     it('two-top-one-bottom has 3 slots', () => {
       const slots = computeLayoutSlots('two-top-one-bottom', 20, 10);
       expect(slots).toHaveLength(3);
-      expect(slots[2].width).toBe(800 - 40);
+      expect(slots[2].width).toBe(CANVAS_W - 40);
     });
 
     it('sidebar-left has 3 slots with left being narrower', () => {

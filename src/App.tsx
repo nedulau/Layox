@@ -428,10 +428,36 @@ function Editor() {
   const btnIcon =
     'w-8 h-8 flex items-center justify-center rounded-lg border text-base transition-all cursor-pointer select-none disabled:opacity-35 disabled:cursor-not-allowed';
 
+  const getVisiblePageItems = useCallback((total: number, current: number): Array<number | 'ellipsis-left' | 'ellipsis-right'> => {
+    if (total <= 9) return Array.from({ length: total }, (_, i) => i);
+
+    const items: Array<number | 'ellipsis-left' | 'ellipsis-right'> = [0];
+
+    let start = Math.max(1, current - 1);
+    let end = Math.min(total - 2, current + 1);
+
+    if (current <= 2) {
+      start = 1;
+      end = 3;
+    } else if (current >= total - 3) {
+      start = total - 4;
+      end = total - 2;
+    }
+
+    if (start > 1) items.push('ellipsis-left');
+    for (let i = start; i <= end; i++) items.push(i);
+    if (end < total - 2) items.push('ellipsis-right');
+
+    items.push(total - 1);
+    return items;
+  }, []);
+
+  const pageItems = getVisiblePageItems(pages.length, currentPageIndex);
+
   return (
-    <div className="flex flex-col w-screen h-screen bg-neutral-950 text-neutral-100">
+    <div className="relative isolate flex flex-col w-screen h-screen bg-neutral-950 text-neutral-100">
       {/* ─── Menu Bar ─── */}
-      <div className="flex items-center gap-1.5 px-3 py-2 bg-neutral-900/95 border border-neutral-800 rounded-xl shadow-lg mx-4 mt-4 shrink-0 backdrop-blur-sm">
+      <div className="relative z-40 flex items-center gap-1.5 px-3 py-2 bg-neutral-900/95 border border-neutral-800 rounded-xl shadow-lg mx-4 mt-4 shrink-0 backdrop-blur-sm">
         {/* Project name */}
         <div className="flex items-center gap-2 mr-1 min-w-0">
           <input
@@ -461,7 +487,7 @@ function Editor() {
         <div className="relative" data-menu>
           <MenuButton label="Datei" isOpen={openMenu === 'datei'} onClick={() => toggleMenu('datei')} />
           {openMenu === 'datei' && (
-            <div className="absolute top-full left-0 mt-2 min-w-[230px] bg-neutral-900 border border-neutral-700 rounded-xl shadow-2xl z-50 p-1">
+            <div className="absolute top-full left-0 mt-2 min-w-[230px] bg-neutral-900 border border-neutral-700 rounded-xl shadow-2xl z-[90] p-1">
               <MenuItem label="Neues Projekt" shortcut="Ctrl+N" onClick={handleNewProject} />
               <MenuItem label="Öffnen" shortcut="Ctrl+O" onClick={handleOpen} />
               <MenuDivider />
@@ -505,7 +531,7 @@ function Editor() {
         <div className="relative" data-menu>
           <MenuButton label="Bearbeiten" isOpen={openMenu === 'bearbeiten'} onClick={() => toggleMenu('bearbeiten')} />
           {openMenu === 'bearbeiten' && (
-            <div className="absolute top-full left-0 mt-2 min-w-[230px] bg-neutral-900 border border-neutral-700 rounded-xl shadow-2xl z-50 p-1">
+            <div className="absolute top-full left-0 mt-2 min-w-[230px] bg-neutral-900 border border-neutral-700 rounded-xl shadow-2xl z-[90] p-1">
               <MenuItem label="Rückgängig" shortcut="Ctrl+Z" onClick={handleUndo} disabled={!canUndo} />
               <MenuItem label="Wiederherstellen" shortcut="Ctrl+Y" onClick={handleRedo} disabled={!canRedo} />
               <MenuDivider />
@@ -525,7 +551,7 @@ function Editor() {
         <div className="relative" data-menu>
           <MenuButton label="Layout" isOpen={openMenu === 'layout'} onClick={() => toggleMenu('layout')} />
           {openMenu === 'layout' && (
-            <div className="absolute top-full left-0 mt-2 bg-neutral-900 border border-neutral-700 rounded-xl shadow-2xl z-50 py-3 px-3 min-w-[280px]">
+            <div className="absolute top-full left-0 mt-2 bg-neutral-900 border border-neutral-700 rounded-xl shadow-2xl z-[90] py-3 px-3 min-w-[280px]">
               <div className="mb-2">
                 <LayoutPicker currentLayoutId={currentLayoutId} onSelect={(id) => { handleLayoutSelect(id); closeMenu(); }} />
               </div>
@@ -574,36 +600,50 @@ function Editor() {
         <div className="flex-1" />
 
         {/* ── Page navigation (numbers + add/delete) ── */}
-        <div className="flex items-center gap-1">
-          {pages.map((_, i) => (
+        <div className="flex items-center">
+          <div className="flex items-center gap-1">
+            {pageItems.map((item) => {
+              if (item === 'ellipsis-left' || item === 'ellipsis-right') {
+                return (
+                  <span key={item} className="px-1 text-neutral-500 text-sm select-none">…</span>
+                );
+              }
+
+              const i = item;
+              return (
+                <button
+                  key={i}
+                  onClick={() => setCurrentPageIndex(i)}
+                  className={`${btnPageNav} ${
+                    i === currentPageIndex
+                      ? 'bg-blue-600/90 border-blue-500 text-white shadow-sm'
+                      : 'bg-neutral-900 border-neutral-700 hover:bg-neutral-800 text-neutral-300'
+                  }`}
+                >
+                  {i + 1}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="flex items-center gap-1 ml-3 pl-3 border-l border-neutral-700/80">
             <button
-              key={i}
-              onClick={() => setCurrentPageIndex(i)}
-              className={`${btnPageNav} ${
-                i === currentPageIndex
-                  ? 'bg-blue-600/90 border-blue-500 text-white shadow-sm'
-                  : 'bg-neutral-900 border-neutral-700 hover:bg-neutral-800 text-neutral-300'
-              }`}
+              onClick={() => { snapshot(); addPage(); }}
+              className={`${btnPageNav} bg-neutral-900 border-neutral-700 hover:bg-neutral-800 text-neutral-300`}
+              title="Neue Seite"
             >
-              {i + 1}
+              +
             </button>
-          ))}
-          <button
-            onClick={() => { snapshot(); addPage(); }}
-            className={`${btnPageNav} bg-neutral-900 border-neutral-700 hover:bg-neutral-800 text-neutral-300`}
-            title="Neue Seite"
-          >
-            +
-          </button>
-          {pages.length > 1 && (
-            <button
-              onClick={() => { snapshot(); removePage(currentPageIndex); }}
-              className={`${btnPageNav} bg-red-900/60 border-red-800 hover:bg-red-800/70 text-red-200`}
-              title="Seite löschen"
-            >
-              −
-            </button>
-          )}
+            {pages.length > 1 && (
+              <button
+                onClick={() => { snapshot(); removePage(currentPageIndex); }}
+                className={`${btnPageNav} bg-red-900/60 border-red-800 hover:bg-red-800/70 text-red-200`}
+                title="Seite löschen"
+              >
+                −
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Hidden file inputs */}
@@ -613,7 +653,7 @@ function Editor() {
 
       {/* ─── Context bar (text format / cover controls) ─── */}
       {selectedTextElement && (
-        <div className="flex items-center gap-3 px-4 py-2 bg-neutral-900/95 border border-neutral-800 rounded-xl shadow-lg mx-4 mt-3 shrink-0 text-sm">
+        <div className="relative z-30 flex items-center gap-3 px-4 py-2 bg-neutral-900/95 border border-neutral-800 rounded-xl shadow-lg mx-4 mt-3 shrink-0 text-sm">
           <label className="text-xs text-neutral-500">Schriftart</label>
           <select
             value={selectedTextElement.fontFamily}
@@ -641,7 +681,7 @@ function Editor() {
         </div>
       )}
       {currentIsCover && (
-        <div className="flex items-center gap-3 px-4 py-2 bg-neutral-900/95 border border-neutral-800 rounded-xl shadow-lg mx-4 mt-3 shrink-0 text-sm">
+        <div className="relative z-30 flex items-center gap-3 px-4 py-2 bg-neutral-900/95 border border-neutral-800 rounded-xl shadow-lg mx-4 mt-3 shrink-0 text-sm">
           <label className="text-xs text-neutral-500">Titel</label>
           <input
             type="text" value={currentCoverTitle}
@@ -662,7 +702,7 @@ function Editor() {
       )}
 
       {/* ─── Canvas area with page arrows on sides ─── */}
-      <div className="flex-1 flex items-center justify-center overflow-hidden gap-3 px-4 pb-4 pt-3">
+      <div className="relative z-0 flex-1 flex items-center justify-center overflow-hidden gap-3 px-4 pb-4 pt-3">
         {/* Left arrow */}
         <button
           onClick={goPrevPage}

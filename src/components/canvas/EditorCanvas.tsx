@@ -4,9 +4,7 @@ import type Konva from 'konva';
 import useProjectStore from '../../store/useProjectStore';
 import type { ImageElement, TextElement, PageElement, LayoutSlot, SlotAssignment } from '../../types';
 import { computeLayoutSlots } from '../../utils/layouts';
-
-const CANVAS_W = 800;
-const CANVAS_H = 600;
+import { CANVAS_H, CANVAS_W } from '../../constants/canvas';
 
 // ─── Layout slot (for layout mode) ──────────────────────────────────────────
 
@@ -570,6 +568,7 @@ function EditorCanvas() {
     align?: string;
     fontStyle?: string;
   } | null>(null);
+  const inlineTextareaRef = useRef<HTMLTextAreaElement>(null);
 
   // ─── Snap guide state ────────────────────────────────────────────────────
   const [snapGuides, setSnapGuides] = useState<{ x?: number; y?: number }[]>([]);
@@ -698,6 +697,13 @@ function EditorCanvas() {
   const cancelInlineEdit = useCallback(() => {
     setInlineEdit(null);
   }, []);
+
+  useEffect(() => {
+    if (!inlineEdit || !inlineTextareaRef.current) return;
+    const textarea = inlineTextareaRef.current;
+    textarea.style.height = 'auto';
+    textarea.style.height = `${textarea.scrollHeight}px`;
+  }, [inlineEdit]);
 
   // ─── Snap logic for element dragging ─────────────────────────────────────
   const handleElementDragMove = useCallback(
@@ -889,13 +895,19 @@ function EditorCanvas() {
 
         return (
           <textarea
+            ref={inlineTextareaRef}
             autoFocus
             value={inlineEdit.text}
-            onChange={(e) => setInlineEdit((prev) => prev ? { ...prev, text: e.target.value } : null)}
+            onChange={(e) => {
+              const target = e.target;
+              target.style.height = 'auto';
+              target.style.height = `${target.scrollHeight}px`;
+              setInlineEdit((prev) => prev ? { ...prev, text: target.value } : null);
+            }}
             onBlur={commitInlineEdit}
             onKeyDown={(e) => {
               if (e.key === 'Escape') { e.preventDefault(); cancelInlineEdit(); }
-              if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); commitInlineEdit(); }
+              if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); commitInlineEdit(); }
             }}
             style={{
               position: 'absolute',
@@ -912,9 +924,9 @@ function EditorCanvas() {
               background: 'rgba(0,0,0,0.4)',
               border: '2px solid #3b82f6',
               outline: 'none',
-              resize: 'none',
+              resize: 'vertical',
               overflow: 'hidden',
-              padding: 0,
+              padding: 4,
               zIndex: 50,
             }}
           />

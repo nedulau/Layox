@@ -1,19 +1,17 @@
 import { jsPDF } from 'jspdf';
 import { saveAs } from 'file-saver';
-
-const CANVAS_W = 800;
-const CANVAS_H = 600;
+import { CANVAS_H, CANVAS_W } from '../constants/canvas';
 
 /**
  * Captures the current Konva stage as a data URL (PNG).
  * Works by finding the Konva stage DOM node and calling .toDataURL().
  */
-function getStageDataUrl(mimeType: string = 'image/png', quality: number = 1): string | null {
+function getStageDataUrl(mimeType: string = 'image/png', quality: number = 1, pixelRatio: number = 2): string | null {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const konvaStages = (window as any).Konva?.stages;
   if (!konvaStages || konvaStages.length === 0) return null;
   const stage = konvaStages[konvaStages.length - 1];
-  return stage.toDataURL({ mimeType, quality, pixelRatio: 2 });
+  return stage.toDataURL({ mimeType, quality, pixelRatio });
 }
 
 function dataUrlToBlob(dataUrl: string): Blob {
@@ -73,7 +71,7 @@ export async function exportAsPdf(
 ): Promise<void> {
   const cfg = compressionConfig(compression);
 
-  // A4 landscape-ish proportions matching 800x600 (4:3)
+  // A4 landscape proportions with scale-to-fit for current canvas size
   const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
   const pageW = pdf.internal.pageSize.getWidth();
   const pageH = pdf.internal.pageSize.getHeight();
@@ -92,7 +90,7 @@ export async function exportAsPdf(
     // Give Konva a frame to render the new page
     await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
 
-    const dataUrl = getStageDataUrl(cfg.mime, cfg.quality);
+    const dataUrl = getStageDataUrl(cfg.mime, cfg.quality, cfg.pixelRatio);
     if (!dataUrl) continue;
 
     if (i > 0) pdf.addPage();

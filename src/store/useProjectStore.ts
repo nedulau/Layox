@@ -4,6 +4,7 @@ import type { Project, Page, PageElement, ImageElement, TextElement, FileSystemF
 import { saveProject, saveProjectAs, loadProject, showOpenDialog } from '../utils/fileIO';
 import { getLayoutById, computeLayoutSlots } from '../utils/layouts';
 import { storeHandle } from '../utils/handleStore';
+import { CANVAS_H, CANVAS_IMAGE_MAX_H, CANVAS_IMAGE_MAX_W, CANVAS_W } from '../constants/canvas';
 
 function createEmptyPage(): Page {
   return {
@@ -550,8 +551,8 @@ const useProjectStore = create<ProjectState>((set, get) => ({
       });
 
       let { w, h } = dimensions;
-      if (w > 600 || h > 450) {
-        const scale = Math.min(600 / w, 450 / h);
+      if (w > CANVAS_IMAGE_MAX_W || h > CANVAS_IMAGE_MAX_H) {
+        const scale = Math.min(CANVAS_IMAGE_MAX_W / w, CANVAS_IMAGE_MAX_H / h);
         w = Math.round(w * scale);
         h = Math.round(h * scale);
       }
@@ -559,8 +560,8 @@ const useProjectStore = create<ProjectState>((set, get) => ({
       const element: ImageElement = {
         id,
         type: 'image',
-        x: Math.round((800 - w) / 2),
-        y: Math.round((600 - h) / 2),
+        x: Math.round((CANVAS_W - w) / 2),
+        y: Math.round((CANVAS_H - h) / 2),
         width: w,
         height: h,
         rotation: 0,

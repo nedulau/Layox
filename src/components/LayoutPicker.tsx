@@ -1,11 +1,12 @@
 import { useState, useRef, useEffect } from 'react';
 import { LAYOUT_TEMPLATES } from '../utils/layouts';
 import type { LayoutTemplate } from '../types';
+import { CANVAS_H, CANVAS_W } from '../constants/canvas';
 
 const THUMB_W = 80;
 const THUMB_H = 60;
-const SCALE_X = THUMB_W / 800;
-const SCALE_Y = THUMB_H / 600;
+const SCALE_X = THUMB_W / CANVAS_W;
+const SCALE_Y = THUMB_H / CANVAS_H;
 
 function LayoutThumb({ layout, isActive }: { layout: LayoutTemplate; isActive: boolean }) {
   return (

@@ -1,9 +1,8 @@
 import type { LayoutTemplate, LayoutSlot } from '../types';
+import { CANVAS_H as H, CANVAS_W as W } from '../constants/canvas';
 
 const P = 20;  // padding from page edge
 const G = 10;  // gap between slots
-const W = 800; // canvas width
-const H = 600; // canvas height
 const IW = W - 2 * P; // inner width
 const IH = H - 2 * P; // inner height
 
