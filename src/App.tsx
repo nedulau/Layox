@@ -31,8 +31,10 @@ function MenuButton({
     <button
       onClick={onClick}
       data-menu
-      className={`px-2.5 py-1 text-sm rounded transition-colors cursor-pointer select-none ${
-        isOpen ? 'bg-neutral-700 text-white' : 'text-neutral-300 hover:bg-neutral-800 hover:text-white'
+      className={`px-3 py-1.5 text-sm rounded-lg border transition-all duration-150 cursor-pointer select-none ${
+        isOpen
+          ? 'bg-neutral-800 border-neutral-600 text-white shadow-sm'
+          : 'bg-transparent border-transparent text-neutral-300 hover:bg-neutral-800/80 hover:border-neutral-700 hover:text-white'
       }`}
     >
       {label}
@@ -57,8 +59,8 @@ function MenuItem({
     <button
       onClick={onClick}
       disabled={disabled}
-      className={`w-full text-left px-3 py-1.5 text-sm flex justify-between items-center transition-colors cursor-pointer select-none
-                  ${disabled ? 'text-neutral-600 cursor-not-allowed' : danger ? 'text-red-400 hover:bg-red-600/20' : 'text-neutral-200 hover:bg-blue-600 hover:text-white'}`}
+      className={`w-full text-left px-3 py-2 text-sm flex justify-between items-center rounded-md transition-colors cursor-pointer select-none
+                  ${disabled ? 'text-neutral-600 cursor-not-allowed' : danger ? 'text-red-300 hover:bg-red-500/15' : 'text-neutral-200 hover:bg-neutral-700 hover:text-white'}`}
     >
       <span>{label}</span>
       {shortcut && <span className="text-neutral-500 text-xs ml-6">{shortcut}</span>}
@@ -67,7 +69,7 @@ function MenuItem({
 }
 
 function MenuDivider() {
-  return <div className="h-px bg-[#444] my-1" />;
+  return <div className="h-px bg-neutral-700/80 my-1" />;
 }
 
 // ─── Editor ──────────────────────────────────────────────────────────────────
@@ -422,44 +424,44 @@ function Editor() {
   };
 
   const btnPageNav =
-    'w-7 h-7 flex items-center justify-center rounded text-sm transition-colors cursor-pointer select-none';
+    'min-w-8 h-8 px-2 flex items-center justify-center rounded-lg border text-sm transition-all cursor-pointer select-none';
   const btnIcon =
-    'w-8 h-8 flex items-center justify-center rounded text-base transition-colors cursor-pointer select-none disabled:opacity-30 disabled:cursor-not-allowed';
+    'w-8 h-8 flex items-center justify-center rounded-lg border text-base transition-all cursor-pointer select-none disabled:opacity-35 disabled:cursor-not-allowed';
 
   return (
-    <div className="flex flex-col w-screen h-screen">
+    <div className="flex flex-col w-screen h-screen bg-neutral-950 text-neutral-100">
       {/* ─── Menu Bar ─── */}
-      <div className="flex items-center gap-1 px-2 py-1 bg-[#1e1e1e] border-b border-[#333] shrink-0">
+      <div className="flex items-center gap-1.5 px-3 py-2 bg-neutral-900/95 border border-neutral-800 rounded-xl shadow-lg mx-4 mt-4 shrink-0 backdrop-blur-sm">
         {/* Project name */}
-        <div className="flex items-center gap-1 mr-1">
+        <div className="flex items-center gap-2 mr-1 min-w-0">
           <input
             type="text"
             value={projectName}
             onChange={(e) => setProjectName(e.target.value)}
             onFocus={() => snapshot()}
-            className="text-sm text-neutral-400 font-medium bg-transparent border-b border-transparent
-                       outline-none focus:text-white focus:border-blue-500 w-36 py-0.5
-                       hover:border-neutral-600 transition-colors"
+            className="text-sm text-neutral-300 font-medium bg-neutral-900 border border-neutral-700 rounded-lg
+                       outline-none focus:text-white focus:border-blue-500 w-44 py-1 px-2
+                       hover:border-neutral-500 transition-colors"
             title="Projektname bearbeiten"
           />
           {fileHandle && (
-            <span className="text-neutral-600 text-xs select-none">({fileHandle.name})</span>
+            <span className="text-neutral-500 text-xs select-none truncate max-w-36" title={fileHandle.name}>({fileHandle.name})</span>
           )}
         </div>
 
-        <div className="w-px h-4 bg-[#444]" />
+        <div className="w-px h-5 bg-neutral-700/80" />
 
         {/* Undo / Redo */}
-        <button onClick={handleUndo} disabled={!canUndo} className={`${btnIcon} text-neutral-300 hover:bg-neutral-700`} title="Rückgängig (Ctrl+Z)">↩</button>
-        <button onClick={handleRedo} disabled={!canRedo} className={`${btnIcon} text-neutral-300 hover:bg-neutral-700`} title="Wiederherstellen (Ctrl+Y)">↪</button>
+        <button onClick={handleUndo} disabled={!canUndo} className={`${btnIcon} border-neutral-700 bg-neutral-900 text-neutral-300 hover:bg-neutral-800`} title="Rückgängig (Ctrl+Z)">↩</button>
+        <button onClick={handleRedo} disabled={!canRedo} className={`${btnIcon} border-neutral-700 bg-neutral-900 text-neutral-300 hover:bg-neutral-800`} title="Wiederherstellen (Ctrl+Y)">↪</button>
 
-        <div className="w-px h-4 bg-[#444]" />
+        <div className="w-px h-5 bg-neutral-700/80" />
 
         {/* ── Datei menu ── */}
         <div className="relative" data-menu>
           <MenuButton label="Datei" isOpen={openMenu === 'datei'} onClick={() => toggleMenu('datei')} />
           {openMenu === 'datei' && (
-            <div className="absolute top-full left-0 mt-1 min-w-[220px] bg-[#252525] border border-[#444] rounded-lg shadow-xl z-50 py-1">
+            <div className="absolute top-full left-0 mt-2 min-w-[230px] bg-neutral-900 border border-neutral-700 rounded-xl shadow-2xl z-50 p-1">
               <MenuItem label="Neues Projekt" shortcut="Ctrl+N" onClick={handleNewProject} />
               <MenuItem label="Öffnen" shortcut="Ctrl+O" onClick={handleOpen} />
               <MenuDivider />
@@ -483,7 +485,7 @@ function Editor() {
                   <select
                     value={autoSaveInterval}
                     onChange={(e) => setAutoSaveInterval(parseInt(e.target.value, 10))}
-                    className="px-1.5 py-1 text-xs rounded bg-neutral-700 text-white border border-neutral-600"
+                    className="px-2 py-1 text-xs rounded-md bg-neutral-800 text-white border border-neutral-600"
                   >
                     <option value={10}>10s</option>
                     <option value={30}>30s</option>
@@ -503,7 +505,7 @@ function Editor() {
         <div className="relative" data-menu>
           <MenuButton label="Bearbeiten" isOpen={openMenu === 'bearbeiten'} onClick={() => toggleMenu('bearbeiten')} />
           {openMenu === 'bearbeiten' && (
-            <div className="absolute top-full left-0 mt-1 min-w-[220px] bg-[#252525] border border-[#444] rounded-lg shadow-xl z-50 py-1">
+            <div className="absolute top-full left-0 mt-2 min-w-[230px] bg-neutral-900 border border-neutral-700 rounded-xl shadow-2xl z-50 p-1">
               <MenuItem label="Rückgängig" shortcut="Ctrl+Z" onClick={handleUndo} disabled={!canUndo} />
               <MenuItem label="Wiederherstellen" shortcut="Ctrl+Y" onClick={handleRedo} disabled={!canRedo} />
               <MenuDivider />
@@ -523,18 +525,18 @@ function Editor() {
         <div className="relative" data-menu>
           <MenuButton label="Layout" isOpen={openMenu === 'layout'} onClick={() => toggleMenu('layout')} />
           {openMenu === 'layout' && (
-            <div className="absolute top-full left-0 mt-1 bg-[#252525] border border-[#444] rounded-lg shadow-xl z-50 py-2 px-3 min-w-[260px]">
+            <div className="absolute top-full left-0 mt-2 bg-neutral-900 border border-neutral-700 rounded-xl shadow-2xl z-50 py-3 px-3 min-w-[280px]">
               <div className="mb-2">
                 <LayoutPicker currentLayoutId={currentLayoutId} onSelect={(id) => { handleLayoutSelect(id); closeMenu(); }} />
               </div>
               {currentLayoutId && (
-                <div className="flex items-center gap-2 mt-2 pt-2 border-t border-[#444]">
+                <div className="flex items-center gap-2 mt-2 pt-2 border-t border-neutral-700">
                   <label className="text-xs text-neutral-500">Rand</label>
                   <input
                     type="number" min={0} max={100} value={currentLayoutPadding}
                     onFocus={() => snapshot()}
                     onChange={(e) => setLayoutPadding(Math.max(0, parseInt(e.target.value) || 0))}
-                    className="w-14 px-1.5 py-1 text-sm rounded bg-neutral-700 text-white border border-neutral-600"
+                    className="w-16 px-2 py-1 text-sm rounded-md bg-neutral-800 text-white border border-neutral-600"
                   />
                   {showGap && (
                     <>
@@ -543,7 +545,7 @@ function Editor() {
                         type="number" min={0} max={100} value={currentLayoutGap}
                         onFocus={() => snapshot()}
                         onChange={(e) => setLayoutGap(Math.max(0, parseInt(e.target.value) || 0))}
-                        className="w-14 px-1.5 py-1 text-sm rounded bg-neutral-700 text-white border border-neutral-600"
+                        className="w-16 px-2 py-1 text-sm rounded-md bg-neutral-800 text-white border border-neutral-600"
                       />
                     </>
                   )}
@@ -553,17 +555,17 @@ function Editor() {
           )}
         </div>
 
-        <div className="w-px h-4 bg-[#444]" />
+        <div className="w-px h-5 bg-neutral-700/80" />
 
         {/* ── Quick insert buttons (Bild + Text + Deckblatt) ── */}
-        <button onClick={handleAddImage} className="px-2.5 py-1 text-sm rounded text-neutral-300 hover:bg-neutral-800 hover:text-white transition-colors cursor-pointer select-none" title="Bild einfügen">
+        <button onClick={handleAddImage} className="px-3 py-1.5 text-sm rounded-lg border border-neutral-700 bg-neutral-900 text-neutral-200 hover:bg-neutral-800 transition-colors cursor-pointer select-none" title="Bild einfügen">
           + Bild
         </button>
-        <button onClick={handleAddText} className="px-2.5 py-1 text-sm rounded text-neutral-300 hover:bg-neutral-800 hover:text-white transition-colors cursor-pointer select-none" title="Text einfügen (Ctrl+T)">
+        <button onClick={handleAddText} className="px-3 py-1.5 text-sm rounded-lg border border-neutral-700 bg-neutral-900 text-neutral-200 hover:bg-neutral-800 transition-colors cursor-pointer select-none" title="Text einfügen (Ctrl+T)">
           + Text
         </button>
         {!hasCoverPage && (
-          <button onClick={handleAddCoverPage} className="px-2.5 py-1 text-sm rounded text-neutral-300 hover:bg-neutral-800 hover:text-white transition-colors cursor-pointer select-none" title="Deckblatt hinzufügen">
+          <button onClick={handleAddCoverPage} className="px-3 py-1.5 text-sm rounded-lg border border-neutral-700 bg-neutral-900 text-neutral-200 hover:bg-neutral-800 transition-colors cursor-pointer select-none" title="Deckblatt hinzufügen">
             + Deckblatt
           </button>
         )}
@@ -579,8 +581,8 @@ function Editor() {
               onClick={() => setCurrentPageIndex(i)}
               className={`${btnPageNav} ${
                 i === currentPageIndex
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-neutral-700 hover:bg-neutral-600 text-neutral-300'
+                  ? 'bg-blue-600/90 border-blue-500 text-white shadow-sm'
+                  : 'bg-neutral-900 border-neutral-700 hover:bg-neutral-800 text-neutral-300'
               }`}
             >
               {i + 1}
@@ -588,7 +590,7 @@ function Editor() {
           ))}
           <button
             onClick={() => { snapshot(); addPage(); }}
-            className={`${btnPageNav} bg-neutral-700 hover:bg-neutral-600 text-neutral-300`}
+            className={`${btnPageNav} bg-neutral-900 border-neutral-700 hover:bg-neutral-800 text-neutral-300`}
             title="Neue Seite"
           >
             +
@@ -596,7 +598,7 @@ function Editor() {
           {pages.length > 1 && (
             <button
               onClick={() => { snapshot(); removePage(currentPageIndex); }}
-              className={`${btnPageNav} bg-red-800 hover:bg-red-700 text-neutral-300`}
+              className={`${btnPageNav} bg-red-900/60 border-red-800 hover:bg-red-800/70 text-red-200`}
               title="Seite löschen"
             >
               −
@@ -611,12 +613,12 @@ function Editor() {
 
       {/* ─── Context bar (text format / cover controls) ─── */}
       {selectedTextElement && (
-        <div className="flex items-center gap-3 px-4 py-1.5 bg-[#222] border-b border-[#333] shrink-0 text-sm">
+        <div className="flex items-center gap-3 px-4 py-2 bg-neutral-900/95 border border-neutral-800 rounded-xl shadow-lg mx-4 mt-3 shrink-0 text-sm">
           <label className="text-xs text-neutral-500">Schriftart</label>
           <select
             value={selectedTextElement.fontFamily}
             onChange={(e) => { snapshot(); updateElement(selectedTextElement.id, { fontFamily: e.target.value }); }}
-            className="px-1.5 py-1 text-sm rounded bg-neutral-700 text-white border border-neutral-600"
+            className="px-2 py-1 text-sm rounded-md bg-neutral-800 text-white border border-neutral-600"
           >
             {FONTS.map((f) => (
               <option key={f} value={f} style={{ fontFamily: f }}>{f}</option>
@@ -627,25 +629,25 @@ function Editor() {
             type="number" min={1} max={200} value={selectedTextElement.fontSize}
             onFocus={() => snapshot()}
             onChange={(e) => updateElement(selectedTextElement.id, { fontSize: Math.max(1, parseInt(e.target.value) || 24) })}
-            className="w-14 px-1.5 py-1 text-sm rounded bg-neutral-700 text-white border border-neutral-600"
+            className="w-16 px-2 py-1 text-sm rounded-md bg-neutral-800 text-white border border-neutral-600"
           />
           <label className="text-xs text-neutral-500">Farbe</label>
           <input
             type="color" value={selectedTextElement.color}
             onFocus={() => snapshot()}
             onChange={(e) => updateElement(selectedTextElement.id, { color: e.target.value })}
-            className="w-8 h-8 rounded border border-neutral-600 cursor-pointer p-0.5"
+            className="w-8 h-8 rounded-md border border-neutral-600 cursor-pointer p-0.5 bg-neutral-800"
           />
         </div>
       )}
       {currentIsCover && (
-        <div className="flex items-center gap-3 px-4 py-1.5 bg-[#222] border-b border-[#333] shrink-0 text-sm">
+        <div className="flex items-center gap-3 px-4 py-2 bg-neutral-900/95 border border-neutral-800 rounded-xl shadow-lg mx-4 mt-3 shrink-0 text-sm">
           <label className="text-xs text-neutral-500">Titel</label>
           <input
             type="text" value={currentCoverTitle}
             onFocus={() => snapshot()}
             onChange={(e) => setCoverTitle(e.target.value)}
-            className="w-40 px-1.5 py-1 text-sm rounded bg-neutral-700 text-white border border-neutral-600"
+            className="w-48 px-2 py-1 text-sm rounded-md bg-neutral-800 text-white border border-neutral-600"
             placeholder="Titel"
           />
           <label className="text-xs text-neutral-500">Untertitel</label>
@@ -653,35 +655,37 @@ function Editor() {
             type="text" value={currentCoverSubtitle}
             onFocus={() => snapshot()}
             onChange={(e) => setCoverSubtitle(e.target.value)}
-            className="w-36 px-1.5 py-1 text-sm rounded bg-neutral-700 text-white border border-neutral-600"
+            className="w-40 px-2 py-1 text-sm rounded-md bg-neutral-800 text-white border border-neutral-600"
             placeholder="Untertitel"
           />
         </div>
       )}
 
       {/* ─── Canvas area with page arrows on sides ─── */}
-      <div className="flex-1 flex items-center justify-center overflow-hidden gap-2 px-2">
+      <div className="flex-1 flex items-center justify-center overflow-hidden gap-3 px-4 pb-4 pt-3">
         {/* Left arrow */}
         <button
           onClick={goPrevPage}
           disabled={currentPageIndex === 0}
-          className="shrink-0 w-10 h-10 flex items-center justify-center rounded-full
-                     bg-neutral-800 hover:bg-neutral-700 text-neutral-300 disabled:opacity-20
-                     disabled:cursor-not-allowed transition-colors cursor-pointer select-none text-lg"
+          className="shrink-0 w-11 h-11 flex items-center justify-center rounded-xl border border-neutral-700
+                     bg-neutral-900 hover:bg-neutral-800 text-neutral-300 disabled:opacity-25
+                     disabled:cursor-not-allowed transition-all cursor-pointer select-none text-2xl leading-none"
           title="Vorherige Seite (←)"
         >
-          ◀
+          ‹
         </button>
 
-        <EditorCanvas />
+        <div className="p-2 rounded-2xl border border-neutral-800 bg-neutral-900/80 shadow-2xl">
+          <EditorCanvas />
+        </div>
 
         {/* Right arrow / Add page */}
         {currentPageIndex >= pages.length - 1 ? (
           <button
             onClick={() => { snapshot(); addPage(); }}
-            className="shrink-0 w-10 h-10 flex items-center justify-center rounded-full
-                       bg-neutral-800 hover:bg-green-700 text-green-400
-                       transition-colors cursor-pointer select-none text-xl font-bold"
+            className="shrink-0 w-11 h-11 flex items-center justify-center rounded-xl border border-green-700/50
+                       bg-neutral-900 hover:bg-green-900/40 text-green-300
+                       transition-all cursor-pointer select-none text-2xl leading-none"
             title="Neue Seite hinzufügen"
           >
             +
@@ -689,12 +693,12 @@ function Editor() {
         ) : (
           <button
             onClick={goNextPage}
-            className="shrink-0 w-10 h-10 flex items-center justify-center rounded-full
-                       bg-neutral-800 hover:bg-neutral-700 text-neutral-300
-                       transition-colors cursor-pointer select-none text-lg"
+            className="shrink-0 w-11 h-11 flex items-center justify-center rounded-xl border border-neutral-700
+                       bg-neutral-900 hover:bg-neutral-800 text-neutral-300
+                       transition-all cursor-pointer select-none text-2xl leading-none"
             title="Nächste Seite (→)"
           >
-            ▶
+            ›
           </button>
         )}
       </div>
@@ -712,14 +716,14 @@ function Editor() {
       {/* ─── PDF compression dialog ─── */}
       {showPdfDialog && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60">
-          <div className="bg-[#252525] border border-[#444] rounded-xl shadow-2xl p-5 w-80">
+          <div className="bg-neutral-900 border border-neutral-700 rounded-2xl shadow-2xl p-5 w-80">
             <h3 className="text-white font-semibold text-base mb-3">PDF-Kompression</h3>
             <div className="flex flex-col gap-2">
               {PDF_COMPRESSION_PRESETS.map((preset) => (
                 <button
                   key={preset.id}
                   onClick={() => handleExportPdfConfirm(preset.id)}
-                  className="text-left px-3 py-2.5 rounded-lg bg-neutral-700 hover:bg-blue-600/30
+                  className="text-left px-3 py-2.5 rounded-lg bg-neutral-800 hover:bg-blue-600/20
                              border border-neutral-600 hover:border-blue-500 transition-colors
                              cursor-pointer select-none"
                 >
@@ -730,7 +734,7 @@ function Editor() {
             </div>
             <button
               onClick={() => setShowPdfDialog(false)}
-              className="mt-3 w-full py-1.5 text-sm rounded-lg bg-neutral-700 hover:bg-neutral-600
+              className="mt-3 w-full py-1.5 text-sm rounded-lg bg-neutral-800 hover:bg-neutral-700
                          text-neutral-300 border border-neutral-600 cursor-pointer select-none transition-colors"
             >
               Abbrechen

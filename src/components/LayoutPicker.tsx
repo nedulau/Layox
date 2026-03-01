@@ -51,7 +51,7 @@ export default function LayoutPicker({
     <div className="relative" ref={ref}>
       <button
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-2 px-2 py-1 text-sm rounded bg-neutral-700 hover:bg-neutral-600 text-white border border-neutral-600 cursor-pointer select-none"
+        className="flex items-center gap-2 px-2.5 py-1.5 text-sm rounded-lg bg-neutral-800 hover:bg-neutral-700 text-white border border-neutral-600 cursor-pointer select-none transition-colors"
       >
         {active ? (
           <>
@@ -65,12 +65,12 @@ export default function LayoutPicker({
       </button>
 
       {open && (
-        <div className="absolute top-full left-0 mt-1 bg-[#2a2a2a] border border-[#444] rounded-lg shadow-2xl z-50 p-2 w-[300px] max-h-[400px] overflow-y-auto">
+        <div className="absolute top-full left-0 mt-2 bg-neutral-900 border border-neutral-700 rounded-xl shadow-2xl z-50 p-2 w-[310px] max-h-[400px] overflow-y-auto">
           {/* Free mode */}
           <button
             onClick={() => { onSelect(null); setOpen(false); }}
             className={`flex items-center gap-3 w-full px-3 py-2 rounded text-left text-sm cursor-pointer ${
-              !currentLayoutId ? 'bg-blue-600/20 text-blue-300' : 'hover:bg-neutral-700 text-neutral-300'
+              !currentLayoutId ? 'bg-blue-600/20 border border-blue-500/40 text-blue-300' : 'hover:bg-neutral-800 text-neutral-300 border border-transparent'
             }`}
           >
             <svg width={THUMB_W} height={THUMB_H} className="block shrink-0">
@@ -89,14 +89,14 @@ export default function LayoutPicker({
             <span>Freie Anordnung</span>
           </button>
 
-          <div className="h-px bg-[#444] my-1" />
+          <div className="h-px bg-neutral-700 my-1" />
 
           {LAYOUT_TEMPLATES.map((layout) => (
             <button
               key={layout.id}
               onClick={() => { onSelect(layout.id); setOpen(false); }}
               className={`flex items-center gap-3 w-full px-3 py-2 rounded text-left text-sm cursor-pointer ${
-                currentLayoutId === layout.id ? 'bg-blue-600/20 text-blue-300' : 'hover:bg-neutral-700 text-neutral-300'
+                currentLayoutId === layout.id ? 'bg-blue-600/20 border border-blue-500/40 text-blue-300' : 'hover:bg-neutral-800 text-neutral-300 border border-transparent'
               }`}
             >
               <LayoutThumb layout={layout} isActive={currentLayoutId === layout.id} />
