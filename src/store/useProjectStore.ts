@@ -1,8 +1,8 @@
 import { create } from 'zustand';
 import { v4 as uuidv4 } from 'uuid';
-import type { Project, Page, PageElement, ImageElement, TextElement, FileSystemFileHandleExt } from '../types';
+import type { Project, Page, PageElement, ImageElement, TextElement, FileSystemFileHandleExt, SlotAssignment } from '../types';
 import { saveProject, saveProjectAs, loadProject, showOpenDialog } from '../utils/fileIO';
-import { getLayoutById } from '../utils/layouts';
+import { getLayoutById, computeLayoutSlots } from '../utils/layouts';
 
 function createEmptyPage(): Page {
   return {
@@ -47,6 +47,9 @@ interface ProjectState {
   addImageFromFile: (file: File) => Promise<void>;
   addTextElement: () => void;
   removeImageFromSlot: (slotIndex: number) => void;
+  updateSlotOffset: (slotIndex: number, offsetX: number, offsetY: number) => void;
+  setLayoutPadding: (padding: number) => void;
+  setLayoutGap: (gap: number) => void;
 
   applyLayout: (layoutId: string) => void;
   clearLayout: () => void;
@@ -185,6 +188,37 @@ const useProjectStore = create<ProjectState>((set, get) => ({
       };
     }),
 
+  updateSlotOffset: (slotIndex, offsetX, offsetY) =>
+    set((state) => {
+      const pages = [...state.project.pages];
+      const page = { ...pages[state.currentPageIndex] };
+      if (!page.slotAssignments?.[slotIndex]) return state;
+      page.slotAssignments = {
+        ...page.slotAssignments,
+        [slotIndex]: { ...page.slotAssignments[slotIndex], offsetX, offsetY },
+      };
+      pages[state.currentPageIndex] = page;
+      return { project: { ...state.project, pages } };
+    }),
+
+  setLayoutPadding: (padding) =>
+    set((state) => {
+      const pages = [...state.project.pages];
+      const page = { ...pages[state.currentPageIndex] };
+      page.layoutPadding = padding;
+      pages[state.currentPageIndex] = page;
+      return { project: { ...state.project, pages } };
+    }),
+
+  setLayoutGap: (gap) =>
+    set((state) => {
+      const pages = [...state.project.pages];
+      const page = { ...pages[state.currentPageIndex] };
+      page.layoutGap = gap;
+      pages[state.currentPageIndex] = page;
+      return { project: { ...state.project, pages } };
+    }),
+
   // --- Layout ---
 
   applyLayout: (layoutId) =>
@@ -200,10 +234,10 @@ const useProjectStore = create<ProjectState>((set, get) => ({
         const images = page.elements.filter(
           (el): el is ImageElement => el.type === 'image',
         );
-        const assignments: Record<number, string> = {};
+        const assignments: Record<number, SlotAssignment> = {};
         images.forEach((img, i) => {
           if (i < layout.slots.length) {
-            assignments[i] = img.src;
+            assignments[i] = { assetPath: img.src, offsetX: 0, offsetY: 0 };
           }
         });
         // Remove image elements (keep text)
@@ -230,14 +264,16 @@ const useProjectStore = create<ProjectState>((set, get) => ({
       const page = { ...pages[state.currentPageIndex] };
       if (!page.layoutId) return state;
 
-      const layout = getLayoutById(page.layoutId);
+      const padding = page.layoutPadding ?? 20;
+      const gap = page.layoutGap ?? 10;
+      const slots = computeLayoutSlots(page.layoutId, padding, gap);
 
       // Convert slot assignments back to free ImageElements
-      if (page.slotAssignments && layout) {
+      if (page.slotAssignments) {
         const newElements = [...page.elements];
-        for (const [indexStr, assetPath] of Object.entries(page.slotAssignments)) {
+        for (const [indexStr, slotData] of Object.entries(page.slotAssignments)) {
           const slotIndex = parseInt(indexStr, 10);
-          const slot = layout.slots[slotIndex];
+          const slot = slots[slotIndex];
           if (!slot) continue;
           const element: ImageElement = {
             id: uuidv4(),
@@ -248,7 +284,7 @@ const useProjectStore = create<ProjectState>((set, get) => ({
             height: Math.round(slot.height),
             rotation: 0,
             zIndex: newElements.length,
-            src: assetPath,
+            src: slotData.assetPath,
           };
           newElements.push(element);
         }
@@ -256,6 +292,8 @@ const useProjectStore = create<ProjectState>((set, get) => ({
       }
 
       delete page.layoutId;
+      delete page.layoutPadding;
+      delete page.layoutGap;
       delete page.slotAssignments;
       pages[state.currentPageIndex] = page;
 
@@ -294,7 +332,7 @@ const useProjectStore = create<ProjectState>((set, get) => ({
       set((state) => {
         const pages = [...state.project.pages];
         const p = { ...pages[state.currentPageIndex] };
-        p.slotAssignments = { ...(p.slotAssignments ?? {}), [finalSlot]: assetPath };
+        p.slotAssignments = { ...(p.slotAssignments ?? {}), [finalSlot]: { assetPath, offsetX: 0, offsetY: 0 } };
         pages[state.currentPageIndex] = p;
         return {
           project: { ...state.project, pages },

@@ -25,6 +25,9 @@ function App() {
   const selectedSlotIndex = useProjectStore((s) => s.selectedSlotIndex);
   const applyLayout = useProjectStore((s) => s.applyLayout);
   const clearLayout = useProjectStore((s) => s.clearLayout);
+  const updateElement = useProjectStore((s) => s.updateElement);
+  const setLayoutPadding = useProjectStore((s) => s.setLayoutPadding);
+  const setLayoutGap = useProjectStore((s) => s.setLayoutGap);
 
   const pages = useProjectStore((s) => s.project.pages);
   const currentPageIndex = useProjectStore((s) => s.currentPageIndex);
@@ -33,6 +36,12 @@ function App() {
   );
   const currentSlotAssignments = useProjectStore(
     (s) => s.project.pages[s.currentPageIndex]?.slotAssignments,
+  );
+  const currentLayoutPadding = useProjectStore(
+    (s) => s.project.pages[s.currentPageIndex]?.layoutPadding ?? 20,
+  );
+  const currentLayoutGap = useProjectStore(
+    (s) => s.project.pages[s.currentPageIndex]?.layoutGap ?? 10,
   );
   const setCurrentPageIndex = useProjectStore((s) => s.setCurrentPageIndex);
   const addPage = useProjectStore((s) => s.addPage);
@@ -45,6 +54,15 @@ function App() {
     selectedSlotIndex !== null &&
     currentSlotAssignments?.[selectedSlotIndex] !== undefined;
   const canDelete = !!selectedElementId || canDeleteSlot;
+
+  const selectedTextElement = useProjectStore((s) => {
+    if (!s.selectedElementId) return null;
+    const page = s.project.pages[s.currentPageIndex];
+    if (!page) return null;
+    const el = page.elements.find((e) => e.id === s.selectedElementId);
+    if (el && el.type === 'text') return el;
+    return null;
+  });
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -220,6 +238,37 @@ function App() {
           </button>
         )}
 
+        {/* Text properties (when text selected) */}
+        {selectedTextElement && (
+          <>
+            <div className="w-px h-5 bg-[#444]" />
+            <div className="flex items-center gap-2">
+              <label className="text-xs text-neutral-500">Größe</label>
+              <input
+                type="number"
+                min={1}
+                max={200}
+                value={selectedTextElement.fontSize}
+                onChange={(e) =>
+                  updateElement(selectedTextElement.id, {
+                    fontSize: Math.max(1, parseInt(e.target.value) || 24),
+                  })
+                }
+                className="w-14 px-1.5 py-1 text-sm rounded bg-neutral-700 text-white border border-neutral-600"
+              />
+              <label className="text-xs text-neutral-500">Farbe</label>
+              <input
+                type="color"
+                value={selectedTextElement.color}
+                onChange={(e) =>
+                  updateElement(selectedTextElement.id, { color: e.target.value })
+                }
+                className="w-8 h-8 rounded border border-neutral-600 cursor-pointer p-0.5"
+              />
+            </div>
+          </>
+        )}
+
         <div className="w-px h-5 bg-[#444]" />
 
         {/* Layout picker with previews */}
@@ -227,6 +276,33 @@ function App() {
           currentLayoutId={currentLayoutId}
           onSelect={handleLayoutSelect}
         />
+
+        {/* Layout spacing controls */}
+        {currentLayoutId && (
+          <>
+            <div className="w-px h-5 bg-[#444]" />
+            <div className="flex items-center gap-2">
+              <label className="text-xs text-neutral-500">Rand</label>
+              <input
+                type="number"
+                min={0}
+                max={100}
+                value={currentLayoutPadding}
+                onChange={(e) => setLayoutPadding(Math.max(0, parseInt(e.target.value) || 0))}
+                className="w-14 px-1.5 py-1 text-sm rounded bg-neutral-700 text-white border border-neutral-600"
+              />
+              <label className="text-xs text-neutral-500">Abstand</label>
+              <input
+                type="number"
+                min={0}
+                max={100}
+                value={currentLayoutGap}
+                onChange={(e) => setLayoutGap(Math.max(0, parseInt(e.target.value) || 0))}
+                className="w-14 px-1.5 py-1 text-sm rounded bg-neutral-700 text-white border border-neutral-600"
+              />
+            </div>
+          </>
+        )}
 
         <div className="w-px h-5 bg-[#444]" />
 

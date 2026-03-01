@@ -1,37 +1,39 @@
-import { Stage, Layer, Rect, Text, Image as KonvaImage, Transformer } from 'react-konva';
+import { Stage, Layer, Rect, Text, Image as KonvaImage, Transformer, Group } from 'react-konva';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import type Konva from 'konva';
 import useProjectStore from '../../store/useProjectStore';
-import type { ImageElement, TextElement, PageElement, LayoutSlot } from '../../types';
-import { getLayoutById } from '../../utils/layouts';
+import type { ImageElement, TextElement, PageElement, LayoutSlot, SlotAssignment } from '../../types';
+import { computeLayoutSlots } from '../../utils/layouts';
 
 // ─── Layout slot (for layout mode) ──────────────────────────────────────────
 
 function SlotComponent({
   slot,
   slotIndex,
-  assetPath,
+  assignment,
   assetBlobs,
   isSelected,
   onSelect,
+  onOffsetChange,
 }: {
   slot: LayoutSlot;
   slotIndex: number;
-  assetPath?: string;
+  assignment?: SlotAssignment;
   assetBlobs: Record<string, Blob>;
   isSelected: boolean;
   onSelect: () => void;
+  onOffsetChange: (slotIndex: number, offsetX: number, offsetY: number) => void;
 }) {
   const [image, setImage] = useState<HTMLImageElement | null>(null);
   const [naturalSize, setNaturalSize] = useState<{ w: number; h: number } | null>(null);
 
   useEffect(() => {
-    if (!assetPath) {
+    if (!assignment?.assetPath) {
       setImage(null);
       setNaturalSize(null);
       return;
     }
-    const blob = assetBlobs[assetPath];
+    const blob = assetBlobs[assignment.assetPath];
     if (!blob) {
       setImage(null);
       setNaturalSize(null);
@@ -45,22 +47,42 @@ function SlotComponent({
     };
     img.src = url;
     return () => URL.revokeObjectURL(url);
-  }, [assetPath, assetBlobs]);
+  }, [assignment?.assetPath, assetBlobs]);
 
-  // "Cover" crop: fill slot, crop overflow
-  const getCrop = () => {
-    if (!naturalSize) return undefined;
-    const imgAspect = naturalSize.w / naturalSize.h;
-    const slotAspect = slot.width / slot.height;
-    if (imgAspect > slotAspect) {
-      const cropH = naturalSize.h;
-      const cropW = cropH * slotAspect;
-      return { x: (naturalSize.w - cropW) / 2, y: 0, width: cropW, height: cropH };
-    } else {
-      const cropW = naturalSize.w;
-      const cropH = cropW / slotAspect;
-      return { x: 0, y: (naturalSize.h - cropH) / 2, width: cropW, height: cropH };
-    }
+  // Compute cover-fill dimensions
+  const coverInfo = (() => {
+    if (!naturalSize) return null;
+    const scale = Math.max(slot.width / naturalSize.w, slot.height / naturalSize.h);
+    const renderedW = naturalSize.w * scale;
+    const renderedH = naturalSize.h * scale;
+    const excessW = renderedW - slot.width;
+    const excessH = renderedH - slot.height;
+    return { renderedW, renderedH, excessW, excessH };
+  })();
+
+  // Clamp offsets so image always covers the slot
+  const rawOffsetX = assignment?.offsetX ?? 0;
+  const rawOffsetY = assignment?.offsetY ?? 0;
+  const clampedOffsetX = coverInfo
+    ? Math.max(-coverInfo.excessW / 2, Math.min(coverInfo.excessW / 2, rawOffsetX))
+    : 0;
+  const clampedOffsetY = coverInfo
+    ? Math.max(-coverInfo.excessH / 2, Math.min(coverInfo.excessH / 2, rawOffsetY))
+    : 0;
+
+  const handleDragEnd = (e: Konva.KonvaEventObject<DragEvent>) => {
+    if (!coverInfo) return;
+    const newOffsetX = e.target.x() - slot.x + coverInfo.excessW / 2;
+    const newOffsetY = e.target.y() - slot.y + coverInfo.excessH / 2;
+    onOffsetChange(slotIndex, newOffsetX, newOffsetY);
+  };
+
+  const dragBoundFunc = (pos: { x: number; y: number }) => {
+    if (!coverInfo) return pos;
+    return {
+      x: Math.max(slot.x - coverInfo.excessW, Math.min(slot.x, pos.x)),
+      y: Math.max(slot.y - coverInfo.excessH, Math.min(slot.y, pos.y)),
+    };
   };
 
   return (
@@ -80,18 +102,27 @@ function SlotComponent({
         onTap={onSelect}
       />
 
-      {/* Image filling the slot */}
-      {image && (
-        <KonvaImage
-          image={image}
-          x={slot.x}
-          y={slot.y}
-          width={slot.width}
-          height={slot.height}
-          crop={getCrop()}
-          onClick={onSelect}
-          onTap={onSelect}
-        />
+      {/* Clipped image – draggable within slot */}
+      {image && coverInfo && (
+        <Group
+          clipX={slot.x}
+          clipY={slot.y}
+          clipWidth={slot.width}
+          clipHeight={slot.height}
+        >
+          <KonvaImage
+            image={image}
+            x={slot.x - coverInfo.excessW / 2 + clampedOffsetX}
+            y={slot.y - coverInfo.excessH / 2 + clampedOffsetY}
+            width={coverInfo.renderedW}
+            height={coverInfo.renderedH}
+            draggable
+            dragBoundFunc={dragBoundFunc}
+            onClick={onSelect}
+            onTap={onSelect}
+            onDragEnd={handleDragEnd}
+          />
+        </Group>
       )}
 
       {/* Selected overlay */}
@@ -359,10 +390,13 @@ function EditorCanvas() {
   const setSelectedElementId = useProjectStore((s) => s.setSelectedElementId);
   const setSelectedSlotIndex = useProjectStore((s) => s.setSelectedSlotIndex);
   const updateElement = useProjectStore((s) => s.updateElement);
+  const updateSlotOffset = useProjectStore((s) => s.updateSlotOffset);
 
   const layoutId = currentPage?.layoutId;
-  const layout = layoutId ? getLayoutById(layoutId) : null;
-  const isLayoutMode = !!layout;
+  const isLayoutMode = !!layoutId;
+  const layoutPadding = currentPage?.layoutPadding ?? 20;
+  const layoutGap = currentPage?.layoutGap ?? 10;
+  const computedSlots = layoutId ? computeLayoutSlots(layoutId, layoutPadding, layoutGap) : [];
 
   // In layout mode: only text elements are free. In free mode: all elements.
   const elements = currentPage?.elements ?? [];
@@ -388,16 +422,17 @@ function EditorCanvas() {
         <Rect x={0} y={0} width={800} height={600} fill={currentPage?.background ?? '#ffffff'} />
 
         {/* Layout slots (layout mode only) */}
-        {layout &&
-          layout.slots.map((slot, i) => (
+        {isLayoutMode &&
+          computedSlots.map((slot, i) => (
             <SlotComponent
               key={i}
               slot={slot}
               slotIndex={i}
-              assetPath={currentPage?.slotAssignments?.[i]}
+              assignment={currentPage?.slotAssignments?.[i]}
               assetBlobs={assetBlobs}
               isSelected={selectedSlotIndex === i}
               onSelect={() => setSelectedSlotIndex(i)}
+              onOffsetChange={updateSlotOffset}
             />
           ))}
 

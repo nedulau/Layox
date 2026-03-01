@@ -1,4 +1,4 @@
-import type { LayoutTemplate } from '../types';
+import type { LayoutTemplate, LayoutSlot } from '../types';
 
 const P = 20;  // padding from page edge
 const G = 10;  // gap between slots
@@ -73,4 +73,58 @@ export const LAYOUT_TEMPLATES: LayoutTemplate[] = [
 
 export function getLayoutById(id: string): LayoutTemplate | undefined {
   return LAYOUT_TEMPLATES.find((l) => l.id === id);
+}
+
+export function computeLayoutSlots(layoutId: string, padding: number, gap: number): LayoutSlot[] {
+  const IW = W - 2 * padding;
+  const IH = H - 2 * padding;
+
+  switch (layoutId) {
+    case 'single':
+      return [{ x: padding, y: padding, width: IW, height: IH }];
+    case 'two-side': {
+      const sw = (IW - gap) / 2;
+      return [
+        { x: padding, y: padding, width: sw, height: IH },
+        { x: padding + sw + gap, y: padding, width: sw, height: IH },
+      ];
+    }
+    case 'two-stack': {
+      const sh = (IH - gap) / 2;
+      return [
+        { x: padding, y: padding, width: IW, height: sh },
+        { x: padding, y: padding + sh + gap, width: IW, height: sh },
+      ];
+    }
+    case 'three-cols': {
+      const sw = (IW - 2 * gap) / 3;
+      return [
+        { x: padding, y: padding, width: sw, height: IH },
+        { x: padding + sw + gap, y: padding, width: sw, height: IH },
+        { x: padding + 2 * (sw + gap), y: padding, width: sw, height: IH },
+      ];
+    }
+    case 'grid-4': {
+      const sw = (IW - gap) / 2;
+      const sh = (IH - gap) / 2;
+      return [
+        { x: padding, y: padding, width: sw, height: sh },
+        { x: padding + sw + gap, y: padding, width: sw, height: sh },
+        { x: padding, y: padding + sh + gap, width: sw, height: sh },
+        { x: padding + sw + gap, y: padding + sh + gap, width: sw, height: sh },
+      ];
+    }
+    case 'one-big-two-small': {
+      const bigW = Math.round(IW * 0.6);
+      const smallW = IW - bigW - gap;
+      const sh = (IH - gap) / 2;
+      return [
+        { x: padding, y: padding, width: bigW, height: IH },
+        { x: padding + bigW + gap, y: padding, width: smallW, height: sh },
+        { x: padding + bigW + gap, y: padding + sh + gap, width: smallW, height: sh },
+      ];
+    }
+    default:
+      return [];
+  }
 }

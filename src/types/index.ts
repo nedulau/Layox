@@ -42,14 +42,24 @@ export interface LayoutTemplate {
   slots: LayoutSlot[];
 }
 
+// ─── Slot assignments ────────────────────────────────────────────────────────
+
+export interface SlotAssignment {
+  assetPath: string;
+  offsetX: number;
+  offsetY: number;
+}
+
 // ─── Page & Project ──────────────────────────────────────────────────────────
 
 export interface Page {
   id: string;
   elements: PageElement[];
   background: string;
-  layoutId?: string; // ID of the applied layout template
-  slotAssignments?: Record<number, string>; // slot index → asset path
+  layoutId?: string;
+  layoutPadding?: number;
+  layoutGap?: number;
+  slotAssignments?: Record<number, SlotAssignment>;
 }
 
 export interface Project {
