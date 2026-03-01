@@ -48,6 +48,7 @@ export interface SlotAssignment {
   assetPath: string;
   offsetX: number;
   offsetY: number;
+  scale: number; // 1 = cover-fill, >1 = zoom in
 }
 
 // ─── Page & Project ──────────────────────────────────────────────────────────
@@ -60,6 +61,9 @@ export interface Page {
   layoutPadding?: number;
   layoutGap?: number;
   slotAssignments?: Record<number, SlotAssignment>;
+  isCover?: boolean;
+  coverTitle?: string;
+  coverSubtitle?: string;
 }
 
 export interface Project {

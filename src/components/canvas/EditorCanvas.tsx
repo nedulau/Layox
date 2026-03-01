@@ -5,6 +5,9 @@ import useProjectStore from '../../store/useProjectStore';
 import type { ImageElement, TextElement, PageElement, LayoutSlot, SlotAssignment } from '../../types';
 import { computeLayoutSlots } from '../../utils/layouts';
 
+const CANVAS_W = 800;
+const CANVAS_H = 600;
+
 // ─── Layout slot (for layout mode) ──────────────────────────────────────────
 
 function SlotComponent({
@@ -15,6 +18,7 @@ function SlotComponent({
   isSelected,
   onSelect,
   onOffsetChange,
+  onScaleChange,
 }: {
   slot: LayoutSlot;
   slotIndex: number;
@@ -23,6 +27,7 @@ function SlotComponent({
   isSelected: boolean;
   onSelect: () => void;
   onOffsetChange: (slotIndex: number, offsetX: number, offsetY: number) => void;
+  onScaleChange: (slotIndex: number, scale: number) => void;
 }) {
   const [image, setImage] = useState<HTMLImageElement | null>(null);
   const [naturalSize, setNaturalSize] = useState<{ w: number; h: number } | null>(null);
@@ -49,12 +54,15 @@ function SlotComponent({
     return () => URL.revokeObjectURL(url);
   }, [assignment?.assetPath, assetBlobs]);
 
-  // Compute cover-fill dimensions
+  const zoomScale = assignment?.scale ?? 1;
+
+  // Compute cover-fill dimensions (with user zoom)
   const coverInfo = (() => {
     if (!naturalSize) return null;
-    const scale = Math.max(slot.width / naturalSize.w, slot.height / naturalSize.h);
-    const renderedW = naturalSize.w * scale;
-    const renderedH = naturalSize.h * scale;
+    const baseScale = Math.max(slot.width / naturalSize.w, slot.height / naturalSize.h);
+    const finalScale = baseScale * zoomScale;
+    const renderedW = naturalSize.w * finalScale;
+    const renderedH = naturalSize.h * finalScale;
     const excessW = renderedW - slot.width;
     const excessH = renderedH - slot.height;
     return { renderedW, renderedH, excessW, excessH };
@@ -85,6 +93,18 @@ function SlotComponent({
     };
   };
 
+  // Scroll-to-zoom on image
+  const handleWheel = useCallback(
+    (e: Konva.KonvaEventObject<WheelEvent>) => {
+      if (!assignment) return;
+      e.evt.preventDefault();
+      const delta = e.evt.deltaY > 0 ? -0.05 : 0.05;
+      const newScale = Math.max(1, Math.min(5, zoomScale + delta));
+      onScaleChange(slotIndex, newScale);
+    },
+    [assignment, zoomScale, slotIndex, onScaleChange],
+  );
+
   return (
     <>
       {/* Slot background */}
@@ -102,7 +122,7 @@ function SlotComponent({
         onTap={onSelect}
       />
 
-      {/* Clipped image – draggable within slot */}
+      {/* Clipped image – draggable within slot, scroll to zoom */}
       {image && coverInfo && (
         <Group
           clipX={slot.x}
@@ -121,6 +141,7 @@ function SlotComponent({
             onClick={onSelect}
             onTap={onSelect}
             onDragEnd={handleDragEnd}
+            onWheel={handleWheel}
           />
         </Group>
       )}
@@ -391,6 +412,8 @@ function EditorCanvas() {
   const setSelectedSlotIndex = useProjectStore((s) => s.setSelectedSlotIndex);
   const updateElement = useProjectStore((s) => s.updateElement);
   const updateSlotOffset = useProjectStore((s) => s.updateSlotOffset);
+  const updateSlotScale = useProjectStore((s) => s.updateSlotScale);
+  const addImageFromFile = useProjectStore((s) => s.addImageFromFile);
 
   const layoutId = currentPage?.layoutId;
   const isLayoutMode = !!layoutId;
@@ -405,6 +428,62 @@ function EditorCanvas() {
     : elements;
   const sortedFreeElements = [...freeElements].sort((a, b) => a.zIndex - b.zIndex);
 
+  // Cover page
+  const isCover = currentPage?.isCover;
+  const coverTitle = currentPage?.coverTitle ?? '';
+  const coverSubtitle = currentPage?.coverSubtitle ?? '';
+
+  // ─── Responsive scaling ──────────────────────────────────────────────────
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [displayScale, setDisplayScale] = useState(1);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const updateScale = () => {
+      const rect = container.getBoundingClientRect();
+      const scaleX = rect.width / CANVAS_W;
+      const scaleY = rect.height / CANVAS_H;
+      setDisplayScale(Math.min(scaleX, scaleY, 1.5));
+    };
+
+    updateScale();
+    const observer = new ResizeObserver(updateScale);
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, []);
+
+  // ─── Drag & drop ─────────────────────────────────────────────────────────
+  const [dragOver, setDragOver] = useState(false);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.dataTransfer.types.includes('Files')) {
+      setDragOver(true);
+    }
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+  }, []);
+
+  const handleDrop = useCallback(
+    async (e: React.DragEvent) => {
+      e.preventDefault();
+      setDragOver(false);
+      const files = Array.from(e.dataTransfer.files).filter((f) =>
+        f.type.startsWith('image/'),
+      );
+      for (const file of files) {
+        await addImageFromFile(file);
+      }
+    },
+    [addImageFromFile],
+  );
+
   const handleStageClick = useCallback(
     (e: Konva.KonvaEventObject<MouseEvent>) => {
       if (e.target === e.target.getStage()) {
@@ -416,39 +495,102 @@ function EditorCanvas() {
   );
 
   return (
-    <Stage width={800} height={600} onClick={handleStageClick} onTap={handleStageClick}>
-      <Layer>
-        {/* Page background */}
-        <Rect x={0} y={0} width={800} height={600} fill={currentPage?.background ?? '#ffffff'} />
+    <div
+      ref={containerRef}
+      className="relative w-full h-full flex items-center justify-center"
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      {/* Drop overlay */}
+      {dragOver && (
+        <div className="absolute inset-0 bg-blue-500/20 border-4 border-dashed border-blue-400 rounded-xl z-50 flex items-center justify-center pointer-events-none">
+          <span className="text-blue-300 text-xl font-medium">Bild(er) hier ablegen</span>
+        </div>
+      )}
 
-        {/* Layout slots (layout mode only) */}
-        {isLayoutMode &&
-          computedSlots.map((slot, i) => (
-            <SlotComponent
-              key={i}
-              slot={slot}
-              slotIndex={i}
-              assignment={currentPage?.slotAssignments?.[i]}
-              assetBlobs={assetBlobs}
-              isSelected={selectedSlotIndex === i}
-              onSelect={() => setSelectedSlotIndex(i)}
-              onOffsetChange={updateSlotOffset}
-            />
-          ))}
+      <div
+        style={{
+          width: CANVAS_W,
+          height: CANVAS_H,
+          transform: `scale(${displayScale})`,
+          transformOrigin: 'center center',
+        }}
+        className="shrink-0"
+      >
+        <Stage width={CANVAS_W} height={CANVAS_H} onClick={handleStageClick} onTap={handleStageClick}>
+          <Layer>
+            {/* Page background */}
+            <Rect x={0} y={0} width={CANVAS_W} height={CANVAS_H} fill={currentPage?.background ?? '#ffffff'} />
 
-        {/* Free elements (all in free mode, text-only in layout mode) */}
-        {sortedFreeElements.map((el) => (
-          <ElementRenderer
-            key={el.id}
-            element={el}
-            assetBlobs={assetBlobs}
-            isSelected={selectedElementId === el.id}
-            onSelect={() => setSelectedElementId(el.id)}
-            onChange={(changes) => updateElement(el.id, changes)}
-          />
-        ))}
-      </Layer>
-    </Stage>
+            {/* Layout slots (layout mode only) */}
+            {isLayoutMode &&
+              computedSlots.map((slot, i) => (
+                <SlotComponent
+                  key={i}
+                  slot={slot}
+                  slotIndex={i}
+                  assignment={currentPage?.slotAssignments?.[i]}
+                  assetBlobs={assetBlobs}
+                  isSelected={selectedSlotIndex === i}
+                  onSelect={() => setSelectedSlotIndex(i)}
+                  onOffsetChange={updateSlotOffset}
+                  onScaleChange={updateSlotScale}
+                />
+              ))}
+
+            {/* Cover page title overlay */}
+            {isCover && (
+              <>
+                <Text
+                  x={0}
+                  y={CANVAS_H * 0.35}
+                  width={CANVAS_W}
+                  text={coverTitle}
+                  fontSize={48}
+                  fontFamily="Arial"
+                  fontStyle="bold"
+                  fill="#ffffff"
+                  shadowColor="#000000"
+                  shadowBlur={8}
+                  shadowOpacity={0.7}
+                  align="center"
+                  listening={false}
+                />
+                {coverSubtitle && (
+                  <Text
+                    x={0}
+                    y={CANVAS_H * 0.35 + 60}
+                    width={CANVAS_W}
+                    text={coverSubtitle}
+                    fontSize={24}
+                    fontFamily="Arial"
+                    fill="#ffffffcc"
+                    shadowColor="#000000"
+                    shadowBlur={6}
+                    shadowOpacity={0.5}
+                    align="center"
+                    listening={false}
+                  />
+                )}
+              </>
+            )}
+
+            {/* Free elements (all in free mode, text-only in layout mode) */}
+            {sortedFreeElements.map((el) => (
+              <ElementRenderer
+                key={el.id}
+                element={el}
+                assetBlobs={assetBlobs}
+                isSelected={selectedElementId === el.id}
+                onSelect={() => setSelectedElementId(el.id)}
+                onChange={(changes) => updateElement(el.id, changes)}
+              />
+            ))}
+          </Layer>
+        </Stage>
+      </div>
+    </div>
   );
 }
 

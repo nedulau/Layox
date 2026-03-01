@@ -28,6 +28,10 @@ function App() {
   const updateElement = useProjectStore((s) => s.updateElement);
   const setLayoutPadding = useProjectStore((s) => s.setLayoutPadding);
   const setLayoutGap = useProjectStore((s) => s.setLayoutGap);
+  const setCoverTitle = useProjectStore((s) => s.setCoverTitle);
+  const setCoverSubtitle = useProjectStore((s) => s.setCoverSubtitle);
+  const toggleCover = useProjectStore((s) => s.toggleCover);
+  const addCoverPage = useProjectStore((s) => s.addCoverPage);
 
   const pages = useProjectStore((s) => s.project.pages);
   const currentPageIndex = useProjectStore((s) => s.currentPageIndex);
@@ -47,7 +51,27 @@ function App() {
   const addPage = useProjectStore((s) => s.addPage);
   const removePage = useProjectStore((s) => s.removePage);
 
+  const currentIsCover = useProjectStore(
+    (s) => s.project.pages[s.currentPageIndex]?.isCover ?? false,
+  );
+  const currentCoverTitle = useProjectStore(
+    (s) => s.project.pages[s.currentPageIndex]?.coverTitle ?? '',
+  );
+  const currentCoverSubtitle = useProjectStore(
+    (s) => s.project.pages[s.currentPageIndex]?.coverSubtitle ?? '',
+  );
+  const hasCoverPage = useProjectStore(
+    (s) => s.project.pages[0]?.isCover ?? false,
+  );
+
   const hasFileSystemAccess = 'showOpenFilePicker' in window;
+
+  const goPrevPage = () => {
+    if (currentPageIndex > 0) setCurrentPageIndex(currentPageIndex - 1);
+  };
+  const goNextPage = () => {
+    if (currentPageIndex < pages.length - 1) setCurrentPageIndex(currentPageIndex + 1);
+  };
 
   // Can we delete something?
   const canDeleteSlot =
@@ -94,6 +118,16 @@ function App() {
         } else {
           useProjectStore.getState().saveCurrentProject();
         }
+      }
+
+      // Arrow keys for page navigation
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+      if (e.key === 'ArrowLeft') {
+        const s = useProjectStore.getState();
+        if (s.currentPageIndex > 0) s.setCurrentPageIndex(s.currentPageIndex - 1);
+      } else if (e.key === 'ArrowRight') {
+        const s = useProjectStore.getState();
+        if (s.currentPageIndex < s.project.pages.length - 1) s.setCurrentPageIndex(s.currentPageIndex + 1);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -221,6 +255,11 @@ function App() {
         <button onClick={handleNewProject} className={btnSecondary}>
           Neues Projekt
         </button>
+        {!hasCoverPage && (
+          <button onClick={addCoverPage} className={btnSecondary}>
+            + Deckblatt
+          </button>
+        )}
 
         <div className="w-px h-5 bg-[#444]" />
 
@@ -304,6 +343,31 @@ function App() {
           </>
         )}
 
+        {/* Cover page controls */}
+        {currentIsCover && (
+          <>
+            <div className="w-px h-5 bg-[#444]" />
+            <div className="flex items-center gap-2">
+              <label className="text-xs text-neutral-500">Titel</label>
+              <input
+                type="text"
+                value={currentCoverTitle}
+                onChange={(e) => setCoverTitle(e.target.value)}
+                className="w-32 px-1.5 py-1 text-sm rounded bg-neutral-700 text-white border border-neutral-600"
+                placeholder="Titel"
+              />
+              <label className="text-xs text-neutral-500">Untertitel</label>
+              <input
+                type="text"
+                value={currentCoverSubtitle}
+                onChange={(e) => setCoverSubtitle(e.target.value)}
+                className="w-28 px-1.5 py-1 text-sm rounded bg-neutral-700 text-white border border-neutral-600"
+                placeholder="Untertitel"
+              />
+            </div>
+          </>
+        )}
+
         <div className="w-px h-5 bg-[#444]" />
 
         {/* Page navigation */}
@@ -356,9 +420,33 @@ function App() {
         />
       </div>
 
-      {/* Canvas Area */}
-      <div className="flex-1 flex items-center justify-center overflow-hidden">
+      {/* Canvas Area with page navigation arrows */}
+      <div className="flex-1 flex items-center justify-center overflow-hidden gap-2 px-2">
+        {/* Left arrow */}
+        <button
+          onClick={goPrevPage}
+          disabled={currentPageIndex === 0}
+          className="shrink-0 w-10 h-10 flex items-center justify-center rounded-full
+                     bg-neutral-800 hover:bg-neutral-700 text-neutral-300 disabled:opacity-20
+                     disabled:cursor-not-allowed transition-colors cursor-pointer select-none text-lg"
+          title="Vorherige Seite"
+        >
+          ◀
+        </button>
+
         <EditorCanvas />
+
+        {/* Right arrow */}
+        <button
+          onClick={goNextPage}
+          disabled={currentPageIndex >= pages.length - 1}
+          className="shrink-0 w-10 h-10 flex items-center justify-center rounded-full
+                     bg-neutral-800 hover:bg-neutral-700 text-neutral-300 disabled:opacity-20
+                     disabled:cursor-not-allowed transition-colors cursor-pointer select-none text-lg"
+          title="Nächste Seite"
+        >
+          ▶
+        </button>
       </div>
     </div>
   );

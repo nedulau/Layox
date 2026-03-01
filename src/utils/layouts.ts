@@ -9,6 +9,16 @@ const IH = H - 2 * P; // inner height
 
 export const LAYOUT_TEMPLATES: LayoutTemplate[] = [
   {
+    id: 'cover-full',
+    name: 'Deckblatt (Vollbild)',
+    slots: [{ x: 0, y: 0, width: W, height: H }],
+  },
+  {
+    id: 'cover-center',
+    name: 'Deckblatt (Mitte)',
+    slots: [{ x: P + 80, y: P + 80, width: IW - 160, height: IH - 160 }],
+  },
+  {
     id: 'single',
     name: 'Einzelbild',
     slots: [{ x: P, y: P, width: IW, height: IH }],
@@ -80,6 +90,12 @@ export function computeLayoutSlots(layoutId: string, padding: number, gap: numbe
   const IH = H - 2 * padding;
 
   switch (layoutId) {
+    case 'cover-full':
+      return [{ x: 0, y: 0, width: W, height: H }];
+    case 'cover-center': {
+      const inset = Math.min(80, IW / 4, IH / 4);
+      return [{ x: padding + inset, y: padding + inset, width: IW - 2 * inset, height: IH - 2 * inset }];
+    }
     case 'single':
       return [{ x: padding, y: padding, width: IW, height: IH }];
     case 'two-side': {

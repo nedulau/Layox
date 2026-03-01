@@ -48,8 +48,14 @@ interface ProjectState {
   addTextElement: () => void;
   removeImageFromSlot: (slotIndex: number) => void;
   updateSlotOffset: (slotIndex: number, offsetX: number, offsetY: number) => void;
+  updateSlotScale: (slotIndex: number, scale: number) => void;
   setLayoutPadding: (padding: number) => void;
   setLayoutGap: (gap: number) => void;
+
+  setCoverTitle: (title: string) => void;
+  setCoverSubtitle: (subtitle: string) => void;
+  toggleCover: (isCover: boolean) => void;
+  addCoverPage: () => void;
 
   applyLayout: (layoutId: string) => void;
   clearLayout: () => void;
@@ -201,6 +207,19 @@ const useProjectStore = create<ProjectState>((set, get) => ({
       return { project: { ...state.project, pages } };
     }),
 
+  updateSlotScale: (slotIndex, scale) =>
+    set((state) => {
+      const pages = [...state.project.pages];
+      const page = { ...pages[state.currentPageIndex] };
+      if (!page.slotAssignments?.[slotIndex]) return state;
+      page.slotAssignments = {
+        ...page.slotAssignments,
+        [slotIndex]: { ...page.slotAssignments[slotIndex], scale },
+      };
+      pages[state.currentPageIndex] = page;
+      return { project: { ...state.project, pages } };
+    }),
+
   setLayoutPadding: (padding) =>
     set((state) => {
       const pages = [...state.project.pages];
@@ -217,6 +236,54 @@ const useProjectStore = create<ProjectState>((set, get) => ({
       page.layoutGap = gap;
       pages[state.currentPageIndex] = page;
       return { project: { ...state.project, pages } };
+    }),
+
+  setCoverTitle: (title) =>
+    set((state) => {
+      const pages = [...state.project.pages];
+      const page = { ...pages[state.currentPageIndex] };
+      page.coverTitle = title;
+      pages[state.currentPageIndex] = page;
+      return { project: { ...state.project, pages } };
+    }),
+
+  setCoverSubtitle: (subtitle) =>
+    set((state) => {
+      const pages = [...state.project.pages];
+      const page = { ...pages[state.currentPageIndex] };
+      page.coverSubtitle = subtitle;
+      pages[state.currentPageIndex] = page;
+      return { project: { ...state.project, pages } };
+    }),
+
+  toggleCover: (isCover) =>
+    set((state) => {
+      const pages = [...state.project.pages];
+      const page = { ...pages[state.currentPageIndex] };
+      page.isCover = isCover;
+      if (isCover && !page.coverTitle) page.coverTitle = state.project.meta.name;
+      pages[state.currentPageIndex] = page;
+      return { project: { ...state.project, pages } };
+    }),
+
+  addCoverPage: () =>
+    set((state) => {
+      const coverPage: Page = {
+        id: uuidv4(),
+        elements: [],
+        background: '#ffffff',
+        isCover: true,
+        coverTitle: state.project.meta.name,
+        coverSubtitle: '',
+        layoutId: 'cover-full',
+      };
+      const newPages = [coverPage, ...state.project.pages];
+      return {
+        project: { ...state.project, pages: newPages },
+        currentPageIndex: 0,
+        selectedElementId: null,
+        selectedSlotIndex: null,
+      };
     }),
 
   // --- Layout ---
@@ -237,7 +304,7 @@ const useProjectStore = create<ProjectState>((set, get) => ({
         const assignments: Record<number, SlotAssignment> = {};
         images.forEach((img, i) => {
           if (i < layout.slots.length) {
-            assignments[i] = { assetPath: img.src, offsetX: 0, offsetY: 0 };
+            assignments[i] = { assetPath: img.src, offsetX: 0, offsetY: 0, scale: 1 };
           }
         });
         // Remove image elements (keep text)
@@ -332,7 +399,7 @@ const useProjectStore = create<ProjectState>((set, get) => ({
       set((state) => {
         const pages = [...state.project.pages];
         const p = { ...pages[state.currentPageIndex] };
-        p.slotAssignments = { ...(p.slotAssignments ?? {}), [finalSlot]: { assetPath, offsetX: 0, offsetY: 0 } };
+        p.slotAssignments = { ...(p.slotAssignments ?? {}), [finalSlot]: { assetPath, offsetX: 0, offsetY: 0, scale: 1 } };
         pages[state.currentPageIndex] = p;
         return {
           project: { ...state.project, pages },
