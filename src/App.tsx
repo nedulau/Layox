@@ -106,6 +106,9 @@ function Editor() {
   const updateElement = useProjectStore((s) => s.updateElement);
   const setLayoutPadding = useProjectStore((s) => s.setLayoutPadding);
   const setLayoutGap = useProjectStore((s) => s.setLayoutGap);
+  const setDefaultLayoutPadding = useProjectStore((s) => s.setDefaultLayoutPadding);
+  const setDefaultLayoutGap = useProjectStore((s) => s.setDefaultLayoutGap);
+  const applyLayoutDefaultsToAllPages = useProjectStore((s) => s.applyLayoutDefaultsToAllPages);
   const setCoverTitle = useProjectStore((s) => s.setCoverTitle);
   const setCoverSubtitle = useProjectStore((s) => s.setCoverSubtitle);
   const addCoverPage = useProjectStore((s) => s.addCoverPage);
@@ -120,11 +123,17 @@ function Editor() {
   const currentSlotAssignments = useProjectStore(
     (s) => s.project.pages[s.currentPageIndex]?.slotAssignments,
   );
+  const defaultLayoutPadding = useProjectStore(
+    (s) => s.project.meta.defaultLayoutPadding ?? 20,
+  );
+  const defaultLayoutGap = useProjectStore(
+    (s) => s.project.meta.defaultLayoutGap ?? 10,
+  );
   const currentLayoutPadding = useProjectStore(
-    (s) => s.project.pages[s.currentPageIndex]?.layoutPadding ?? 20,
+    (s) => s.project.pages[s.currentPageIndex]?.layoutPadding ?? (s.project.meta.defaultLayoutPadding ?? 20),
   );
   const currentLayoutGap = useProjectStore(
-    (s) => s.project.pages[s.currentPageIndex]?.layoutGap ?? 10,
+    (s) => s.project.pages[s.currentPageIndex]?.layoutGap ?? (s.project.meta.defaultLayoutGap ?? 10),
   );
   const setCurrentPageIndex = useProjectStore((s) => s.setCurrentPageIndex);
   const addPage = useProjectStore((s) => s.addPage);
@@ -577,6 +586,39 @@ function Editor() {
                   )}
                 </div>
               )}
+
+              <div className="mt-3 pt-3 border-t border-neutral-700 space-y-2">
+                <div className="text-xs text-neutral-400">Projekt-Standard</div>
+                <div className="flex items-center gap-2">
+                  <label className="text-xs text-neutral-500">Rand</label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={defaultLayoutPadding}
+                    onFocus={() => snapshot()}
+                    onChange={(e) => setDefaultLayoutPadding(Math.max(0, parseInt(e.target.value) || 0))}
+                    className="w-16 px-2 py-1 text-sm rounded-md bg-neutral-800 text-white border border-neutral-600"
+                  />
+                  <label className="text-xs text-neutral-500">Abstand</label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={defaultLayoutGap}
+                    onFocus={() => snapshot()}
+                    onChange={(e) => setDefaultLayoutGap(Math.max(0, parseInt(e.target.value) || 0))}
+                    className="w-16 px-2 py-1 text-sm rounded-md bg-neutral-800 text-white border border-neutral-600"
+                  />
+                </div>
+                <button
+                  onClick={() => { snapshot(); applyLayoutDefaultsToAllPages(); }}
+                  className="w-full mt-1 px-2.5 py-1.5 text-xs rounded-md border border-neutral-600 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 transition-colors cursor-pointer select-none"
+                  title="Standard-Rand und -Abstand auf alle Seiten anwenden"
+                >
+                  Auf alle Seiten anwenden
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -712,7 +754,9 @@ function Editor() {
                      disabled:cursor-not-allowed transition-all cursor-pointer select-none text-2xl leading-none"
           title="Vorherige Seite (←)"
         >
-          ‹
+          <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
         </button>
 
         <div className="p-2 rounded-2xl border border-neutral-800 bg-neutral-900/80 shadow-2xl">
@@ -738,7 +782,9 @@ function Editor() {
                        transition-all cursor-pointer select-none text-2xl leading-none"
             title="Nächste Seite (→)"
           >
-            ›
+            <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M9 18l6-6-6-6" />
+            </svg>
           </button>
         )}
       </div>

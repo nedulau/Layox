@@ -72,7 +72,12 @@ export interface Page {
 }
 
 export interface Project {
-  meta: { name: string; version: string };
+  meta: {
+    name: string;
+    version: string;
+    defaultLayoutPadding?: number;
+    defaultLayoutGap?: number;
+  };
   pages: Page[];
 }
 

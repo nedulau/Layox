@@ -6,6 +6,9 @@ import { getLayoutById, computeLayoutSlots } from '../utils/layouts';
 import { storeHandle } from '../utils/handleStore';
 import { CANVAS_H, CANVAS_IMAGE_MAX_H, CANVAS_IMAGE_MAX_W, CANVAS_W } from '../constants/canvas';
 
+const DEFAULT_LAYOUT_PADDING = 20;
+const DEFAULT_LAYOUT_GAP = 10;
+
 function createEmptyPage(): Page {
   return {
     id: uuidv4(),
@@ -25,8 +28,24 @@ function createDefaultProject(name: string = 'Unbenanntes Projekt'): Project {
     layoutId: 'cover-full',
   };
   return {
-    meta: { name, version: '1.0' },
+    meta: {
+      name,
+      version: '1.0',
+      defaultLayoutPadding: DEFAULT_LAYOUT_PADDING,
+      defaultLayoutGap: DEFAULT_LAYOUT_GAP,
+    },
     pages: [coverPage, createEmptyPage()],
+  };
+}
+
+function normalizeProject(project: Project): Project {
+  return {
+    ...project,
+    meta: {
+      ...project.meta,
+      defaultLayoutPadding: project.meta.defaultLayoutPadding ?? DEFAULT_LAYOUT_PADDING,
+      defaultLayoutGap: project.meta.defaultLayoutGap ?? DEFAULT_LAYOUT_GAP,
+    },
   };
 }
 
@@ -78,6 +97,9 @@ interface ProjectState {
   clearSlotCrop: (slotIndex: number) => void;
   setLayoutPadding: (padding: number) => void;
   setLayoutGap: (gap: number) => void;
+  setDefaultLayoutPadding: (padding: number) => void;
+  setDefaultLayoutGap: (gap: number) => void;
+  applyLayoutDefaultsToAllPages: () => void;
 
   setCoverTitle: (title: string) => void;
   setCoverSubtitle: (subtitle: string) => void;
@@ -119,7 +141,7 @@ const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   setProject: (project) =>
-    set({ project, currentPageIndex: 0, selectedElementId: null, selectedSlotIndex: null }),
+    set({ project: normalizeProject(project), currentPageIndex: 0, selectedElementId: null, selectedSlotIndex: null }),
 
   setProjectName: (name) =>
     set((state) => ({
@@ -363,6 +385,45 @@ const useProjectStore = create<ProjectState>((set, get) => ({
       page.layoutGap = gap;
       pages[state.currentPageIndex] = page;
       return { project: { ...state.project, pages } };
+    }),
+
+  setDefaultLayoutPadding: (padding) =>
+    set((state) => ({
+      project: {
+        ...state.project,
+        meta: {
+          ...state.project.meta,
+          defaultLayoutPadding: padding,
+        },
+      },
+    })),
+
+  setDefaultLayoutGap: (gap) =>
+    set((state) => ({
+      project: {
+        ...state.project,
+        meta: {
+          ...state.project.meta,
+          defaultLayoutGap: gap,
+        },
+      },
+    })),
+
+  applyLayoutDefaultsToAllPages: () =>
+    set((state) => {
+      const defaultPadding = state.project.meta.defaultLayoutPadding ?? DEFAULT_LAYOUT_PADDING;
+      const defaultGap = state.project.meta.defaultLayoutGap ?? DEFAULT_LAYOUT_GAP;
+      const pages = state.project.pages.map((page) => ({
+        ...page,
+        layoutPadding: defaultPadding,
+        layoutGap: defaultGap,
+      }));
+      return {
+        project: {
+          ...state.project,
+          pages,
+        },
+      };
     }),
 
   setCoverTitle: (title) =>
@@ -612,8 +673,9 @@ const useProjectStore = create<ProjectState>((set, get) => ({
     const result = await showOpenDialog();
     if (result) {
       const { project, assetBlobs } = await loadProject(result.file);
+      const normalizedProject = normalizeProject(project);
       set({
-        project,
+        project: normalizedProject,
         assetBlobs,
         currentPageIndex: 0,
         selectedElementId: null,
@@ -621,7 +683,7 @@ const useProjectStore = create<ProjectState>((set, get) => ({
         fileHandle: result.handle,
         showEditor: true,
       });
-      get().addRecentProject(project.meta.name, result.handle.name);
+      get().addRecentProject(normalizedProject.meta.name, result.handle.name);
       // Persist handle in IndexedDB for later re-open
       storeHandle(result.handle.name, result.handle as unknown as FileSystemFileHandle).catch(() => {});
     }
@@ -629,8 +691,9 @@ const useProjectStore = create<ProjectState>((set, get) => ({
 
   loadFromFile: async (file, handle) => {
     const { project, assetBlobs } = await loadProject(file);
+    const normalizedProject = normalizeProject(project);
     set({
-      project,
+      project: normalizedProject,
       assetBlobs,
       currentPageIndex: 0,
       selectedElementId: null,
@@ -638,7 +701,7 @@ const useProjectStore = create<ProjectState>((set, get) => ({
       fileHandle: handle ?? null,
       showEditor: true,
     });
-    get().addRecentProject(project.meta.name, handle?.name ?? file.name);
+    get().addRecentProject(normalizedProject.meta.name, handle?.name ?? file.name);
     // Persist handle in IndexedDB if available
     if (handle) {
       storeHandle(handle.name, handle as unknown as FileSystemFileHandle).catch(() => {});

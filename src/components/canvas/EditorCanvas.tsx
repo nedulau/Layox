@@ -535,11 +535,13 @@ function EditorCanvas() {
   const setCoverSubtitle = useProjectStore((s) => s.setCoverSubtitle);
   const updateSlotCrop = useProjectStore((s) => s.updateSlotCrop);
   const snapshot = useProjectStore((s) => s.snapshot);
+  const defaultLayoutPadding = useProjectStore((s) => s.project.meta.defaultLayoutPadding ?? 20);
+  const defaultLayoutGap = useProjectStore((s) => s.project.meta.defaultLayoutGap ?? 10);
 
   const layoutId = currentPage?.layoutId;
   const isLayoutMode = !!layoutId;
-  const layoutPadding = currentPage?.layoutPadding ?? 20;
-  const layoutGap = currentPage?.layoutGap ?? 10;
+  const layoutPadding = currentPage?.layoutPadding ?? defaultLayoutPadding;
+  const layoutGap = currentPage?.layoutGap ?? defaultLayoutGap;
   const computedSlots = layoutId ? computeLayoutSlots(layoutId, layoutPadding, layoutGap) : [];
 
   // In layout mode: only text elements are free. In free mode: all elements.
