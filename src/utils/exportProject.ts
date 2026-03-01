@@ -26,6 +26,42 @@ function dataUrlToBlob(dataUrl: string): Blob {
 }
 
 /**
+ * Compression presets for PDF export.
+ * Each has a label, an image format (JPEG for compressed, PNG for lossless),
+ * a quality value (0–1 for JPEG), and a pixelRatio for capture resolution.
+ */
+export type PdfCompressionLevel = 'none' | 'low' | 'medium' | 'high';
+
+export const PDF_COMPRESSION_PRESETS: {
+  id: PdfCompressionLevel;
+  label: string;
+  description: string;
+}[] = [
+  { id: 'none', label: 'Keine Kompression', description: 'Maximale Qualität (PNG, große Datei)' },
+  { id: 'low', label: 'Gering', description: 'Sehr hohe Qualität (JPEG 95 %)' },
+  { id: 'medium', label: 'Mittel', description: 'Gute Qualität (JPEG 80 %)' },
+  { id: 'high', label: 'Stark', description: 'Kleine Datei (JPEG 55 %)' },
+];
+
+function compressionConfig(level: PdfCompressionLevel): {
+  mime: string;
+  quality: number;
+  format: 'PNG' | 'JPEG';
+  pixelRatio: number;
+} {
+  switch (level) {
+    case 'none':
+      return { mime: 'image/png', quality: 1, format: 'PNG', pixelRatio: 2 };
+    case 'low':
+      return { mime: 'image/jpeg', quality: 0.95, format: 'JPEG', pixelRatio: 2 };
+    case 'medium':
+      return { mime: 'image/jpeg', quality: 0.80, format: 'JPEG', pixelRatio: 2 };
+    case 'high':
+      return { mime: 'image/jpeg', quality: 0.55, format: 'JPEG', pixelRatio: 1.5 };
+  }
+}
+
+/**
  * Export ALL pages of a project as a multi-page PDF.
  * Navigates through pages, captures each, then restores position.
  */
@@ -33,7 +69,10 @@ export async function exportAsPdf(
   pageCount: number,
   setPageIndex: (i: number) => void,
   projectName: string,
+  compression: PdfCompressionLevel = 'none',
 ): Promise<void> {
+  const cfg = compressionConfig(compression);
+
   // A4 landscape-ish proportions matching 800x600 (4:3)
   const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
   const pageW = pdf.internal.pageSize.getWidth();
@@ -53,13 +92,13 @@ export async function exportAsPdf(
     // Give Konva a frame to render the new page
     await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
 
-    const dataUrl = getStageDataUrl('image/png', 1);
+    const dataUrl = getStageDataUrl(cfg.mime, cfg.quality);
     if (!dataUrl) continue;
 
     if (i > 0) pdf.addPage();
     pdf.setFillColor(255, 255, 255);
     pdf.rect(0, 0, pageW, pageH, 'F');
-    pdf.addImage(dataUrl, 'PNG', offsetX, offsetY, imgW, imgH);
+    pdf.addImage(dataUrl, cfg.format, offsetX, offsetY, imgW, imgH);
   }
 
   // Restore original page

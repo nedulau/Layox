@@ -5,7 +5,8 @@ import LayoutPicker from './components/LayoutPicker';
 import StartScreen from './components/StartScreen';
 import CropModal from './components/CropModal';
 import useProjectStore from './store/useProjectStore';
-import { exportAsPdf, exportCurrentPageAsPng, exportCurrentPageAsJpeg } from './utils/exportProject';
+import { exportAsPdf, exportCurrentPageAsPng, exportCurrentPageAsJpeg, PDF_COMPRESSION_PRESETS } from './utils/exportProject';
+import type { PdfCompressionLevel } from './utils/exportProject';
 
 const FONTS = ['Arial', 'Times New Roman', 'Georgia', 'Verdana', 'Courier New', 'Trebuchet MS', 'Impact', 'Comic Sans MS'];
 
@@ -398,9 +399,16 @@ function Editor() {
   };
 
   // ─── Export handlers ──────────────────────────────────────────────────
-  const handleExportPdf = async () => {
+  const [showPdfDialog, setShowPdfDialog] = useState(false);
+
+  const handleExportPdfPrompt = () => {
     closeMenu();
-    await exportAsPdf(pages.length, setCurrentPageIndex, projectName);
+    setShowPdfDialog(true);
+  };
+
+  const handleExportPdfConfirm = async (level: PdfCompressionLevel) => {
+    setShowPdfDialog(false);
+    await exportAsPdf(pages.length, setCurrentPageIndex, projectName, level);
   };
 
   const handleExportPng = () => {
@@ -458,7 +466,7 @@ function Editor() {
               <MenuItem label="Speichern" shortcut="Ctrl+S" onClick={handleSave} />
               <MenuItem label="Speichern unter" shortcut="Ctrl+Shift+S" onClick={handleSaveAs} />
               <MenuDivider />
-              <MenuItem label="Exportieren als PDF" onClick={handleExportPdf} />
+              <MenuItem label="Exportieren als PDF" onClick={handleExportPdfPrompt} />
               <MenuItem label="Seite als PNG" onClick={handleExportPng} />
               <MenuItem label="Seite als JPEG" onClick={handleExportJpeg} />
               <MenuDivider />
@@ -667,17 +675,28 @@ function Editor() {
 
         <EditorCanvas />
 
-        {/* Right arrow */}
-        <button
-          onClick={goNextPage}
-          disabled={currentPageIndex >= pages.length - 1}
-          className="shrink-0 w-10 h-10 flex items-center justify-center rounded-full
-                     bg-neutral-800 hover:bg-neutral-700 text-neutral-300 disabled:opacity-20
-                     disabled:cursor-not-allowed transition-colors cursor-pointer select-none text-lg"
-          title="Nächste Seite (→)"
-        >
-          ▶
-        </button>
+        {/* Right arrow / Add page */}
+        {currentPageIndex >= pages.length - 1 ? (
+          <button
+            onClick={() => { snapshot(); addPage(); }}
+            className="shrink-0 w-10 h-10 flex items-center justify-center rounded-full
+                       bg-neutral-800 hover:bg-green-700 text-green-400
+                       transition-colors cursor-pointer select-none text-xl font-bold"
+            title="Neue Seite hinzufügen"
+          >
+            +
+          </button>
+        ) : (
+          <button
+            onClick={goNextPage}
+            className="shrink-0 w-10 h-10 flex items-center justify-center rounded-full
+                       bg-neutral-800 hover:bg-neutral-700 text-neutral-300
+                       transition-colors cursor-pointer select-none text-lg"
+            title="Nächste Seite (→)"
+          >
+            ▶
+          </button>
+        )}
       </div>
 
       {/* ─── Crop modal ─── */}
@@ -688,6 +707,36 @@ function Editor() {
           onConfirm={handleCropConfirm}
           onCancel={handleCropCancel}
         />
+      )}
+
+      {/* ─── PDF compression dialog ─── */}
+      {showPdfDialog && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60">
+          <div className="bg-[#252525] border border-[#444] rounded-xl shadow-2xl p-5 w-80">
+            <h3 className="text-white font-semibold text-base mb-3">PDF-Kompression</h3>
+            <div className="flex flex-col gap-2">
+              {PDF_COMPRESSION_PRESETS.map((preset) => (
+                <button
+                  key={preset.id}
+                  onClick={() => handleExportPdfConfirm(preset.id)}
+                  className="text-left px-3 py-2.5 rounded-lg bg-neutral-700 hover:bg-blue-600/30
+                             border border-neutral-600 hover:border-blue-500 transition-colors
+                             cursor-pointer select-none"
+                >
+                  <div className="text-sm text-white font-medium">{preset.label}</div>
+                  <div className="text-xs text-neutral-400 mt-0.5">{preset.description}</div>
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={() => setShowPdfDialog(false)}
+              className="mt-3 w-full py-1.5 text-sm rounded-lg bg-neutral-700 hover:bg-neutral-600
+                         text-neutral-300 border border-neutral-600 cursor-pointer select-none transition-colors"
+            >
+              Abbrechen
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -1,5 +1,6 @@
 import { useRef } from 'react';
 import useProjectStore from '../store/useProjectStore';
+import { getHandle } from '../utils/handleStore';
 
 function StartScreen() {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -43,8 +44,24 @@ function StartScreen() {
     e.target.value = '';
   };
 
-  // Double-click on a recent project opens the file picker so the user can quickly re-open
-  const handleRecentDoubleClick = async () => {
+  // Double-click on a recent project: try to re-open from stored handle, fall back to file picker
+  const handleRecentDoubleClick = async (fileName: string) => {
+    try {
+      const handle = await getHandle(fileName);
+      if (handle) {
+        // Request permission (needed after page reload)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const perm = await (handle as any).requestPermission?.({ mode: 'readwrite' });
+        if (perm === 'granted' || perm === undefined) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const file = await (handle as any).getFile();
+          await loadFromFile(file, handle as any);
+          return;
+        }
+      }
+    } catch {
+      // IndexedDB or permission error — fall through to open dialog
+    }
     await handleOpen();
   };
 
@@ -98,7 +115,7 @@ function StartScreen() {
               {recentProjects.map((rp, i) => (
                 <div
                   key={`${rp.fileName}-${i}`}
-                  onDoubleClick={handleRecentDoubleClick}
+                  onDoubleClick={() => handleRecentDoubleClick(rp.fileName)}
                   className="flex items-center justify-between px-4 py-2.5 rounded-lg
                              bg-neutral-800/60 hover:bg-neutral-700/80 transition-colors
                              cursor-pointer select-none"

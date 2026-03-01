@@ -79,6 +79,95 @@ export const LAYOUT_TEMPLATES: LayoutTemplate[] = [
       ];
     })(),
   },
+  // ─── Additional layouts ────────────────────────────────────────────────
+  {
+    id: 'three-rows',
+    name: 'Drei Zeilen',
+    slots: (() => {
+      const sh = (IH - 2 * G) / 3;
+      return [
+        { x: P, y: P, width: IW, height: sh },
+        { x: P, y: P + sh + G, width: IW, height: sh },
+        { x: P, y: P + 2 * (sh + G), width: IW, height: sh },
+      ];
+    })(),
+  },
+  {
+    id: 'grid-6',
+    name: 'Sechser-Raster',
+    slots: (() => {
+      const sw = (IW - 2 * G) / 3;
+      const sh = (IH - G) / 2;
+      return [
+        { x: P, y: P, width: sw, height: sh },
+        { x: P + sw + G, y: P, width: sw, height: sh },
+        { x: P + 2 * (sw + G), y: P, width: sw, height: sh },
+        { x: P, y: P + sh + G, width: sw, height: sh },
+        { x: P + sw + G, y: P + sh + G, width: sw, height: sh },
+        { x: P + 2 * (sw + G), y: P + sh + G, width: sw, height: sh },
+      ];
+    })(),
+  },
+  {
+    id: 'one-top-two-bottom',
+    name: '1 oben + 2 unten',
+    slots: (() => {
+      const topH = Math.round(IH * 0.6);
+      const botH = IH - topH - G;
+      const sw = (IW - G) / 2;
+      return [
+        { x: P, y: P, width: IW, height: topH },
+        { x: P, y: P + topH + G, width: sw, height: botH },
+        { x: P + sw + G, y: P + topH + G, width: sw, height: botH },
+      ];
+    })(),
+  },
+  {
+    id: 'two-top-one-bottom',
+    name: '2 oben + 1 unten',
+    slots: (() => {
+      const topH = Math.round(IH * 0.4);
+      const botH = IH - topH - G;
+      const sw = (IW - G) / 2;
+      return [
+        { x: P, y: P, width: sw, height: topH },
+        { x: P + sw + G, y: P, width: sw, height: topH },
+        { x: P, y: P + topH + G, width: IW, height: botH },
+      ];
+    })(),
+  },
+  {
+    id: 'sidebar-left',
+    name: 'Seitenleiste links',
+    slots: (() => {
+      const leftW = Math.round(IW * 0.35);
+      const rightW = IW - leftW - G;
+      const sh = (IH - G) / 2;
+      return [
+        { x: P, y: P, width: leftW, height: IH },
+        { x: P + leftW + G, y: P, width: rightW, height: sh },
+        { x: P + leftW + G, y: P + sh + G, width: rightW, height: sh },
+      ];
+    })(),
+  },
+  {
+    id: 'mosaic-5',
+    name: 'Mosaik (5)',
+    slots: (() => {
+      const bigW = Math.round(IW * 0.5);
+      const smallW = IW - bigW - G;
+      const topH = Math.round(IH * 0.6);
+      const botH = IH - topH - G;
+      const botSw = (IW - 2 * G) / 3;
+      return [
+        { x: P, y: P, width: bigW, height: topH },
+        { x: P + bigW + G, y: P, width: smallW, height: topH },
+        { x: P, y: P + topH + G, width: botSw, height: botH },
+        { x: P + botSw + G, y: P + topH + G, width: botSw, height: botH },
+        { x: P + 2 * (botSw + G), y: P + topH + G, width: botSw, height: botH },
+      ];
+    })(),
+  },
 ];
 
 export function getLayoutById(id: string): LayoutTemplate | undefined {
@@ -138,6 +227,70 @@ export function computeLayoutSlots(layoutId: string, padding: number, gap: numbe
         { x: padding, y: padding, width: bigW, height: IH },
         { x: padding + bigW + gap, y: padding, width: smallW, height: sh },
         { x: padding + bigW + gap, y: padding + sh + gap, width: smallW, height: sh },
+      ];
+    }
+    case 'three-rows': {
+      const sh = (IH - 2 * gap) / 3;
+      return [
+        { x: padding, y: padding, width: IW, height: sh },
+        { x: padding, y: padding + sh + gap, width: IW, height: sh },
+        { x: padding, y: padding + 2 * (sh + gap), width: IW, height: sh },
+      ];
+    }
+    case 'grid-6': {
+      const sw = (IW - 2 * gap) / 3;
+      const sh = (IH - gap) / 2;
+      return [
+        { x: padding, y: padding, width: sw, height: sh },
+        { x: padding + sw + gap, y: padding, width: sw, height: sh },
+        { x: padding + 2 * (sw + gap), y: padding, width: sw, height: sh },
+        { x: padding, y: padding + sh + gap, width: sw, height: sh },
+        { x: padding + sw + gap, y: padding + sh + gap, width: sw, height: sh },
+        { x: padding + 2 * (sw + gap), y: padding + sh + gap, width: sw, height: sh },
+      ];
+    }
+    case 'one-top-two-bottom': {
+      const topH = Math.round(IH * 0.6);
+      const botH = IH - topH - gap;
+      const sw = (IW - gap) / 2;
+      return [
+        { x: padding, y: padding, width: IW, height: topH },
+        { x: padding, y: padding + topH + gap, width: sw, height: botH },
+        { x: padding + sw + gap, y: padding + topH + gap, width: sw, height: botH },
+      ];
+    }
+    case 'two-top-one-bottom': {
+      const topH = Math.round(IH * 0.4);
+      const botH = IH - topH - gap;
+      const sw = (IW - gap) / 2;
+      return [
+        { x: padding, y: padding, width: sw, height: topH },
+        { x: padding + sw + gap, y: padding, width: sw, height: topH },
+        { x: padding, y: padding + topH + gap, width: IW, height: botH },
+      ];
+    }
+    case 'sidebar-left': {
+      const leftW = Math.round(IW * 0.35);
+      const rightW = IW - leftW - gap;
+      const sh = (IH - gap) / 2;
+      return [
+        { x: padding, y: padding, width: leftW, height: IH },
+        { x: padding + leftW + gap, y: padding, width: rightW, height: sh },
+        { x: padding + leftW + gap, y: padding + sh + gap, width: rightW, height: sh },
+      ];
+    }
+    case 'mosaic-5': {
+      const bigW = Math.round(IW * 0.5);
+      const smallW = IW - bigW - gap;
+      const topH = Math.round(IH * 0.6);
+      const botH = IH - topH - gap;
+      const botSw = (IW - 2 * gap) / 3;
+      return [
+        { x: padding, y: padding, width: bigW, height: topH },
+        { x: padding + bigW + gap, y: padding, width: smallW, height: topH },
+        { x: padding, y: padding + topH + gap, width: botSw, height: botH },
+        { x: padding + botSw + gap, y: padding + topH + gap, width: botSw, height: botH },
+        { x: padding + 2 * (botSw + gap), y: padding + topH + gap, width: botSw, height: botH },
       ];
     }
     default:

@@ -3,8 +3,8 @@ import { computeLayoutSlots, getLayoutById, LAYOUT_TEMPLATES } from '../../utils
 
 describe('layouts', () => {
   describe('LAYOUT_TEMPLATES', () => {
-    it('should have 8 layout templates', () => {
-      expect(LAYOUT_TEMPLATES).toHaveLength(8);
+    it('should have 14 layout templates', () => {
+      expect(LAYOUT_TEMPLATES).toHaveLength(14);
     });
 
     it('each template has a unique id', () => {
@@ -168,6 +168,46 @@ describe('layouts', () => {
       expect(slots[0].y).toBeGreaterThan(20);
       expect(slots[0].width).toBeLessThan(800 - 40);
       expect(slots[0].height).toBeLessThan(600 - 40);
+    });
+
+    it('three-rows creates 3 equal rows', () => {
+      const slots = computeLayoutSlots('three-rows', 20, 10);
+      expect(slots).toHaveLength(3);
+      for (const slot of slots) {
+        expect(slot.width).toBe(800 - 40);
+      }
+      expect(slots[0].height).toBeCloseTo(slots[1].height);
+      expect(slots[1].height).toBeCloseTo(slots[2].height);
+    });
+
+    it('grid-6 creates 6 equal cells (3x2)', () => {
+      const slots = computeLayoutSlots('grid-6', 20, 10);
+      expect(slots).toHaveLength(6);
+      const widths = new Set(slots.map((s) => Math.round(s.width)));
+      expect(widths.size).toBe(1);
+    });
+
+    it('one-top-two-bottom has 3 slots', () => {
+      const slots = computeLayoutSlots('one-top-two-bottom', 20, 10);
+      expect(slots).toHaveLength(3);
+      expect(slots[0].width).toBe(800 - 40);
+    });
+
+    it('two-top-one-bottom has 3 slots', () => {
+      const slots = computeLayoutSlots('two-top-one-bottom', 20, 10);
+      expect(slots).toHaveLength(3);
+      expect(slots[2].width).toBe(800 - 40);
+    });
+
+    it('sidebar-left has 3 slots with left being narrower', () => {
+      const slots = computeLayoutSlots('sidebar-left', 20, 10);
+      expect(slots).toHaveLength(3);
+      expect(slots[0].width).toBeLessThan(slots[1].width);
+    });
+
+    it('mosaic-5 creates 5 slots', () => {
+      const slots = computeLayoutSlots('mosaic-5', 20, 10);
+      expect(slots).toHaveLength(5);
     });
   });
 });

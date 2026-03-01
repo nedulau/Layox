@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import type { Project, Page, PageElement, ImageElement, TextElement, FileSystemFileHandleExt, SlotAssignment } from '../types';
 import { saveProject, saveProjectAs, loadProject, showOpenDialog } from '../utils/fileIO';
 import { getLayoutById, computeLayoutSlots } from '../utils/layouts';
+import { storeHandle } from '../utils/handleStore';
 
 function createEmptyPage(): Page {
   return {
@@ -620,6 +621,8 @@ const useProjectStore = create<ProjectState>((set, get) => ({
         showEditor: true,
       });
       get().addRecentProject(project.meta.name, result.handle.name);
+      // Persist handle in IndexedDB for later re-open
+      storeHandle(result.handle.name, result.handle as unknown as FileSystemFileHandle).catch(() => {});
     }
   },
 
@@ -635,6 +638,10 @@ const useProjectStore = create<ProjectState>((set, get) => ({
       showEditor: true,
     });
     get().addRecentProject(project.meta.name, handle?.name ?? file.name);
+    // Persist handle in IndexedDB if available
+    if (handle) {
+      storeHandle(handle.name, handle as unknown as FileSystemFileHandle).catch(() => {});
+    }
   },
 }));
 

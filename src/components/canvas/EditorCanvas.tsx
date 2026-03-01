@@ -234,6 +234,39 @@ function SlotComponent({
         />
       )}
 
+      {/* Pixelated / low-resolution warning */}
+      {image && naturalSize && (() => {
+        // Compare natural image pixels to the slot's display size.
+        // A pixelRatio of 2 is used for export (retina), so we expect
+        // at least 1× coverage. Below that the image will look blurry.
+        const effectiveNatW = hasCrop ? (assignment!.cropW ?? naturalSize.w) : naturalSize.w;
+        const effectiveNatH = hasCrop ? (assignment!.cropH ?? naturalSize.h) : naturalSize.h;
+        const ratio = Math.min(effectiveNatW / slot.width, effectiveNatH / slot.height);
+        if (ratio >= 1) return null;
+        return (
+          <Group listening={false}>
+            {/* Warning triangle background */}
+            <Rect
+              x={slot.x + slot.width - 30}
+              y={slot.y + 4}
+              width={26}
+              height={20}
+              fill="rgba(0,0,0,0.55)"
+              cornerRadius={4}
+            />
+            <Text
+              x={slot.x + slot.width - 30}
+              y={slot.y + 5}
+              width={26}
+              text="⚠"
+              fontSize={14}
+              fill="#fbbf24"
+              align="center"
+            />
+          </Group>
+        );
+      })()}
+
       {/* Empty slot placeholder */}
       {!image && (
         <Text
