@@ -12,9 +12,9 @@ function createEmptyPage(): Page {
   };
 }
 
-function createDefaultProject(): Project {
+function createDefaultProject(name: string = 'Unbenanntes Projekt'): Project {
   return {
-    meta: { name: 'Unbenanntes Projekt', version: '1.0' },
+    meta: { name, version: '1.0' },
     pages: [createEmptyPage()],
   };
 }
@@ -24,35 +24,33 @@ interface ProjectState {
   currentPageIndex: number;
   assetBlobs: Record<string, Blob>;
   selectedElementId: string | null;
+  selectedSlotIndex: number | null;
   fileHandle: FileSystemFileHandleExt | null;
 
-  // Getters
   currentPage: () => Page | undefined;
 
-  // Project mutations
   setProject: (project: Project) => void;
+  setProjectName: (name: string) => void;
   addAsset: (path: string, blob: Blob) => void;
-  resetProject: () => void;
+  resetProject: (name?: string) => void;
 
-  // Page management
   setCurrentPageIndex: (index: number) => void;
   addPage: () => void;
   removePage: (index: number) => void;
 
-  // Element CRUD
   addElement: (element: PageElement) => void;
   updateElement: (elementId: string, changes: Partial<PageElement>) => void;
   removeElement: (elementId: string) => void;
   setSelectedElementId: (id: string | null) => void;
+  setSelectedSlotIndex: (index: number | null) => void;
 
-  // Convenience: add image from file
   addImageFromFile: (file: File) => Promise<void>;
   addTextElement: () => void;
+  removeImageFromSlot: (slotIndex: number) => void;
 
-  // Layout
   applyLayout: (layoutId: string) => void;
+  clearLayout: () => void;
 
-  // File I/O
   saveCurrentProject: () => Promise<void>;
   saveCurrentProjectAs: () => Promise<void>;
   openProject: () => Promise<void>;
@@ -64,6 +62,7 @@ const useProjectStore = create<ProjectState>((set, get) => ({
   currentPageIndex: 0,
   assetBlobs: {},
   selectedElementId: null,
+  selectedSlotIndex: null,
   fileHandle: null,
 
   currentPage: () => {
@@ -71,23 +70,34 @@ const useProjectStore = create<ProjectState>((set, get) => ({
     return project.pages[currentPageIndex];
   },
 
-  setProject: (project) => set({ project, currentPageIndex: 0, selectedElementId: null }),
+  setProject: (project) =>
+    set({ project, currentPageIndex: 0, selectedElementId: null, selectedSlotIndex: null }),
+
+  setProjectName: (name) =>
+    set((state) => ({
+      project: {
+        ...state.project,
+        meta: { ...state.project.meta, name },
+      },
+    })),
 
   addAsset: (path, blob) =>
     set((state) => ({
       assetBlobs: { ...state.assetBlobs, [path]: blob },
     })),
 
-  resetProject: () =>
+  resetProject: (name) =>
     set({
-      project: createDefaultProject(),
+      project: createDefaultProject(name),
       currentPageIndex: 0,
       assetBlobs: {},
       selectedElementId: null,
+      selectedSlotIndex: null,
       fileHandle: null,
     }),
 
-  setCurrentPageIndex: (index) => set({ currentPageIndex: index, selectedElementId: null }),
+  setCurrentPageIndex: (index) =>
+    set({ currentPageIndex: index, selectedElementId: null, selectedSlotIndex: null }),
 
   // --- Page management ---
 
@@ -99,6 +109,7 @@ const useProjectStore = create<ProjectState>((set, get) => ({
         project: { ...state.project, pages: newPages },
         currentPageIndex: newPages.length - 1,
         selectedElementId: null,
+        selectedSlotIndex: null,
       };
     }),
 
@@ -111,6 +122,7 @@ const useProjectStore = create<ProjectState>((set, get) => ({
         project: { ...state.project, pages: newPages },
         currentPageIndex: newIndex,
         selectedElementId: null,
+        selectedSlotIndex: null,
       };
     }),
 
@@ -152,7 +164,26 @@ const useProjectStore = create<ProjectState>((set, get) => ({
       };
     }),
 
-  setSelectedElementId: (id) => set({ selectedElementId: id }),
+  setSelectedElementId: (id) => set({ selectedElementId: id, selectedSlotIndex: null }),
+
+  setSelectedSlotIndex: (index) => set({ selectedSlotIndex: index, selectedElementId: null }),
+
+  // --- Slot management ---
+
+  removeImageFromSlot: (slotIndex) =>
+    set((state) => {
+      const pages = [...state.project.pages];
+      const page = { ...pages[state.currentPageIndex] };
+      if (!page.slotAssignments) return state;
+      const assignments = { ...page.slotAssignments };
+      delete assignments[slotIndex];
+      page.slotAssignments = assignments;
+      pages[state.currentPageIndex] = page;
+      return {
+        project: { ...state.project, pages },
+        selectedSlotIndex: null,
+      };
+    }),
 
   // --- Layout ---
 
@@ -164,78 +195,151 @@ const useProjectStore = create<ProjectState>((set, get) => ({
       const pages = [...state.project.pages];
       const page = { ...pages[state.currentPageIndex] };
 
-      // Gather image elements (preserve order)
-      const images = page.elements.filter((el): el is ImageElement => el.type === 'image');
-      const others = page.elements.filter((el) => el.type !== 'image');
+      if (!page.layoutId) {
+        // Switching from free mode → layout: auto-assign existing images to slots
+        const images = page.elements.filter(
+          (el): el is ImageElement => el.type === 'image',
+        );
+        const assignments: Record<number, string> = {};
+        images.forEach((img, i) => {
+          if (i < layout.slots.length) {
+            assignments[i] = img.src;
+          }
+        });
+        // Remove image elements (keep text)
+        page.elements = page.elements.filter((el) => el.type !== 'image');
+        page.slotAssignments = assignments;
+      } else {
+        // Switching between layouts: keep existing slot assignments
+        page.slotAssignments = { ...(page.slotAssignments ?? {}) };
+      }
 
-      // Assign images to layout slots
-      const updatedImages = images.map((img, i) => {
-        if (i >= layout.slots.length) return img; // no slot → keep position
-        const slot = layout.slots[i];
-        return {
-          ...img,
-          x: Math.round(slot.x),
-          y: Math.round(slot.y),
-          width: Math.round(slot.width),
-          height: Math.round(slot.height),
-          rotation: 0,
-        };
-      });
-
-      page.elements = [...others, ...updatedImages];
       page.layoutId = layoutId;
       pages[state.currentPageIndex] = page;
 
       return {
         project: { ...state.project, pages },
         selectedElementId: null,
+        selectedSlotIndex: null,
       };
     }),
 
-  // --- Convenience: add image from file picker ---
+  clearLayout: () =>
+    set((state) => {
+      const pages = [...state.project.pages];
+      const page = { ...pages[state.currentPageIndex] };
+      if (!page.layoutId) return state;
+
+      const layout = getLayoutById(page.layoutId);
+
+      // Convert slot assignments back to free ImageElements
+      if (page.slotAssignments && layout) {
+        const newElements = [...page.elements];
+        for (const [indexStr, assetPath] of Object.entries(page.slotAssignments)) {
+          const slotIndex = parseInt(indexStr, 10);
+          const slot = layout.slots[slotIndex];
+          if (!slot) continue;
+          const element: ImageElement = {
+            id: uuidv4(),
+            type: 'image',
+            x: Math.round(slot.x),
+            y: Math.round(slot.y),
+            width: Math.round(slot.width),
+            height: Math.round(slot.height),
+            rotation: 0,
+            zIndex: newElements.length,
+            src: assetPath,
+          };
+          newElements.push(element);
+        }
+        page.elements = newElements;
+      }
+
+      delete page.layoutId;
+      delete page.slotAssignments;
+      pages[state.currentPageIndex] = page;
+
+      return {
+        project: { ...state.project, pages },
+        selectedSlotIndex: null,
+        selectedElementId: null,
+      };
+    }),
+
+  // --- Add image (slot-aware) ---
 
   addImageFromFile: async (file) => {
+    const page = get().currentPage();
+    if (!page) return;
+
     const id = uuidv4();
     const assetPath = `assets/${id}_${file.name}`;
     const blob = file.slice();
 
-    const dimensions = await new Promise<{ w: number; h: number }>((resolve) => {
-      const url = URL.createObjectURL(blob);
-      const img = new window.Image();
-      img.onload = () => {
-        resolve({ w: img.naturalWidth, h: img.naturalHeight });
-        URL.revokeObjectURL(url);
-      };
-      img.onerror = () => {
-        resolve({ w: 300, h: 200 });
-        URL.revokeObjectURL(url);
-      };
-      img.src = url;
-    });
+    if (page.layoutId) {
+      // Layout mode: assign to slot
+      const layout = getLayoutById(page.layoutId);
+      if (!layout) return;
 
-    const maxW = 600;
-    const maxH = 450;
-    let { w, h } = dimensions;
-    if (w > maxW || h > maxH) {
-      const scale = Math.min(maxW / w, maxH / h);
-      w = Math.round(w * scale);
-      h = Math.round(h * scale);
+      let targetSlot = get().selectedSlotIndex;
+      if (targetSlot === null) {
+        // Find next empty slot
+        const assignments = page.slotAssignments ?? {};
+        const emptyIdx = layout.slots.findIndex((_, i) => !assignments[i]);
+        if (emptyIdx === -1) return; // all slots full
+        targetSlot = emptyIdx;
+      }
+
+      const finalSlot = targetSlot;
+      set((state) => {
+        const pages = [...state.project.pages];
+        const p = { ...pages[state.currentPageIndex] };
+        p.slotAssignments = { ...(p.slotAssignments ?? {}), [finalSlot]: assetPath };
+        pages[state.currentPageIndex] = p;
+        return {
+          project: { ...state.project, pages },
+          assetBlobs: { ...state.assetBlobs, [assetPath]: blob },
+          selectedSlotIndex: null,
+        };
+      });
+    } else {
+      // Free mode: create ImageElement
+      const dimensions = await new Promise<{ w: number; h: number }>((resolve) => {
+        const url = URL.createObjectURL(blob);
+        const img = new window.Image();
+        img.onload = () => {
+          resolve({ w: img.naturalWidth, h: img.naturalHeight });
+          URL.revokeObjectURL(url);
+        };
+        img.onerror = () => {
+          resolve({ w: 300, h: 200 });
+          URL.revokeObjectURL(url);
+        };
+        img.src = url;
+      });
+
+      let { w, h } = dimensions;
+      if (w > 600 || h > 450) {
+        const scale = Math.min(600 / w, 450 / h);
+        w = Math.round(w * scale);
+        h = Math.round(h * scale);
+      }
+
+      const element: ImageElement = {
+        id,
+        type: 'image',
+        x: Math.round((800 - w) / 2),
+        y: Math.round((600 - h) / 2),
+        width: w,
+        height: h,
+        rotation: 0,
+        zIndex: get().currentPage()?.elements.length ?? 0,
+        src: assetPath,
+      };
+
+      get().addAsset(assetPath, blob);
+      get().addElement(element);
     }
-
-    const element: ImageElement = {
-      id,
-      type: 'image',
-      x: Math.round((800 - w) / 2),
-      y: Math.round((600 - h) / 2),
-      width: w,
-      height: h,
-      rotation: 0,
-      zIndex: get().currentPage()?.elements.length ?? 0,
-      src: assetPath,
-    };
-
-    get().addAsset(assetPath, blob);
-    get().addElement(element);
   },
 
   addTextElement: () => {
@@ -281,6 +385,7 @@ const useProjectStore = create<ProjectState>((set, get) => ({
         assetBlobs,
         currentPageIndex: 0,
         selectedElementId: null,
+        selectedSlotIndex: null,
         fileHandle: result.handle,
       });
     }
@@ -293,6 +398,7 @@ const useProjectStore = create<ProjectState>((set, get) => ({
       assetBlobs,
       currentPageIndex: 0,
       selectedElementId: null,
+      selectedSlotIndex: null,
       fileHandle: handle ?? null,
     });
   },

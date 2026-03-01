@@ -2,9 +2,130 @@ import { Stage, Layer, Rect, Text, Image as KonvaImage, Transformer } from 'reac
 import { useEffect, useRef, useState, useCallback } from 'react';
 import type Konva from 'konva';
 import useProjectStore from '../../store/useProjectStore';
-import type { ImageElement, TextElement, PageElement } from '../../types';
+import type { ImageElement, TextElement, PageElement, LayoutSlot } from '../../types';
+import { getLayoutById } from '../../utils/layouts';
 
-// ─── Image element ───────────────────────────────────────────────────────────
+// ─── Layout slot (for layout mode) ──────────────────────────────────────────
+
+function SlotComponent({
+  slot,
+  slotIndex,
+  assetPath,
+  assetBlobs,
+  isSelected,
+  onSelect,
+}: {
+  slot: LayoutSlot;
+  slotIndex: number;
+  assetPath?: string;
+  assetBlobs: Record<string, Blob>;
+  isSelected: boolean;
+  onSelect: () => void;
+}) {
+  const [image, setImage] = useState<HTMLImageElement | null>(null);
+  const [naturalSize, setNaturalSize] = useState<{ w: number; h: number } | null>(null);
+
+  useEffect(() => {
+    if (!assetPath) {
+      setImage(null);
+      setNaturalSize(null);
+      return;
+    }
+    const blob = assetBlobs[assetPath];
+    if (!blob) {
+      setImage(null);
+      setNaturalSize(null);
+      return;
+    }
+    const url = URL.createObjectURL(blob);
+    const img = new window.Image();
+    img.onload = () => {
+      setImage(img);
+      setNaturalSize({ w: img.naturalWidth, h: img.naturalHeight });
+    };
+    img.src = url;
+    return () => URL.revokeObjectURL(url);
+  }, [assetPath, assetBlobs]);
+
+  // "Cover" crop: fill slot, crop overflow
+  const getCrop = () => {
+    if (!naturalSize) return undefined;
+    const imgAspect = naturalSize.w / naturalSize.h;
+    const slotAspect = slot.width / slot.height;
+    if (imgAspect > slotAspect) {
+      const cropH = naturalSize.h;
+      const cropW = cropH * slotAspect;
+      return { x: (naturalSize.w - cropW) / 2, y: 0, width: cropW, height: cropH };
+    } else {
+      const cropW = naturalSize.w;
+      const cropH = cropW / slotAspect;
+      return { x: 0, y: (naturalSize.h - cropH) / 2, width: cropW, height: cropH };
+    }
+  };
+
+  return (
+    <>
+      {/* Slot background */}
+      <Rect
+        x={slot.x}
+        y={slot.y}
+        width={slot.width}
+        height={slot.height}
+        fill={image ? undefined : '#f0f0f0'}
+        stroke={isSelected ? '#3b82f6' : '#ddd'}
+        strokeWidth={isSelected ? 3 : 2}
+        dash={image ? undefined : [8, 4]}
+        cornerRadius={4}
+        onClick={onSelect}
+        onTap={onSelect}
+      />
+
+      {/* Image filling the slot */}
+      {image && (
+        <KonvaImage
+          image={image}
+          x={slot.x}
+          y={slot.y}
+          width={slot.width}
+          height={slot.height}
+          crop={getCrop()}
+          onClick={onSelect}
+          onTap={onSelect}
+        />
+      )}
+
+      {/* Selected overlay */}
+      {isSelected && (
+        <Rect
+          x={slot.x}
+          y={slot.y}
+          width={slot.width}
+          height={slot.height}
+          stroke="#3b82f6"
+          strokeWidth={3}
+          cornerRadius={4}
+          listening={false}
+        />
+      )}
+
+      {/* Empty slot placeholder */}
+      {!image && (
+        <Text
+          x={slot.x}
+          y={slot.y + slot.height / 2 - 10}
+          width={slot.width}
+          text={`Bild ${slotIndex + 1}`}
+          fontSize={16}
+          fill="#bbb"
+          align="center"
+          listening={false}
+        />
+      )}
+    </>
+  );
+}
+
+// ─── Free Image element (free mode only) ─────────────────────────────────────
 
 function ImageElementComponent({
   element,
@@ -105,7 +226,7 @@ function ImageElementComponent({
   );
 }
 
-// ─── Text element ────────────────────────────────────────────────────────────
+// ─── Text element (both modes) ───────────────────────────────────────────────
 
 function TextElementComponent({
   element,
@@ -188,7 +309,7 @@ function TextElementComponent({
   );
 }
 
-// ─── Element renderer ────────────────────────────────────────────────────────
+// ─── Element renderer (free elements) ────────────────────────────────────────
 
 function ElementRenderer({
   element,
@@ -234,20 +355,30 @@ function EditorCanvas() {
   const currentPage = useProjectStore((s) => s.project.pages[s.currentPageIndex]);
   const assetBlobs = useProjectStore((s) => s.assetBlobs);
   const selectedElementId = useProjectStore((s) => s.selectedElementId);
+  const selectedSlotIndex = useProjectStore((s) => s.selectedSlotIndex);
   const setSelectedElementId = useProjectStore((s) => s.setSelectedElementId);
+  const setSelectedSlotIndex = useProjectStore((s) => s.setSelectedSlotIndex);
   const updateElement = useProjectStore((s) => s.updateElement);
 
+  const layoutId = currentPage?.layoutId;
+  const layout = layoutId ? getLayoutById(layoutId) : null;
+  const isLayoutMode = !!layout;
+
+  // In layout mode: only text elements are free. In free mode: all elements.
   const elements = currentPage?.elements ?? [];
-  const sortedElements = [...elements].sort((a, b) => a.zIndex - b.zIndex);
+  const freeElements = isLayoutMode
+    ? elements.filter((el) => el.type === 'text')
+    : elements;
+  const sortedFreeElements = [...freeElements].sort((a, b) => a.zIndex - b.zIndex);
 
   const handleStageClick = useCallback(
     (e: Konva.KonvaEventObject<MouseEvent>) => {
-      // Clicked on empty area → deselect
       if (e.target === e.target.getStage()) {
         setSelectedElementId(null);
+        setSelectedSlotIndex(null);
       }
     },
-    [setSelectedElementId],
+    [setSelectedElementId, setSelectedSlotIndex],
   );
 
   return (
@@ -255,8 +386,23 @@ function EditorCanvas() {
       <Layer>
         {/* Page background */}
         <Rect x={0} y={0} width={800} height={600} fill={currentPage?.background ?? '#ffffff'} />
-        {/* Render elements */}
-        {sortedElements.map((el) => (
+
+        {/* Layout slots (layout mode only) */}
+        {layout &&
+          layout.slots.map((slot, i) => (
+            <SlotComponent
+              key={i}
+              slot={slot}
+              slotIndex={i}
+              assetPath={currentPage?.slotAssignments?.[i]}
+              assetBlobs={assetBlobs}
+              isSelected={selectedSlotIndex === i}
+              onSelect={() => setSelectedSlotIndex(i)}
+            />
+          ))}
+
+        {/* Free elements (all in free mode, text-only in layout mode) */}
+        {sortedFreeElements.map((el) => (
           <ElementRenderer
             key={el.id}
             element={el}

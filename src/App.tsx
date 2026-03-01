@@ -1,8 +1,8 @@
 import { useRef, useEffect } from 'react';
 import './index.css';
 import EditorCanvas from './components/canvas/EditorCanvas';
+import LayoutPicker from './components/LayoutPicker';
 import useProjectStore from './store/useProjectStore';
-import { LAYOUT_TEMPLATES } from './utils/layouts';
 
 function App() {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -13,19 +13,26 @@ function App() {
   const openProject = useProjectStore((s) => s.openProject);
   const loadFromFile = useProjectStore((s) => s.loadFromFile);
   const resetProject = useProjectStore((s) => s.resetProject);
+  const setProjectName = useProjectStore((s) => s.setProjectName);
   const projectName = useProjectStore((s) => s.project.meta.name);
   const fileHandle = useProjectStore((s) => s.fileHandle);
 
   const addImageFromFile = useProjectStore((s) => s.addImageFromFile);
   const addTextElement = useProjectStore((s) => s.addTextElement);
   const removeElement = useProjectStore((s) => s.removeElement);
+  const removeImageFromSlot = useProjectStore((s) => s.removeImageFromSlot);
   const selectedElementId = useProjectStore((s) => s.selectedElementId);
+  const selectedSlotIndex = useProjectStore((s) => s.selectedSlotIndex);
   const applyLayout = useProjectStore((s) => s.applyLayout);
+  const clearLayout = useProjectStore((s) => s.clearLayout);
 
   const pages = useProjectStore((s) => s.project.pages);
   const currentPageIndex = useProjectStore((s) => s.currentPageIndex);
   const currentLayoutId = useProjectStore(
     (s) => s.project.pages[s.currentPageIndex]?.layoutId,
+  );
+  const currentSlotAssignments = useProjectStore(
+    (s) => s.project.pages[s.currentPageIndex]?.slotAssignments,
   );
   const setCurrentPageIndex = useProjectStore((s) => s.setCurrentPageIndex);
   const addPage = useProjectStore((s) => s.addPage);
@@ -33,18 +40,34 @@ function App() {
 
   const hasFileSystemAccess = 'showOpenFilePicker' in window;
 
+  // Can we delete something?
+  const canDeleteSlot =
+    selectedSlotIndex !== null &&
+    currentSlotAssignments?.[selectedSlotIndex] !== undefined;
+  const canDelete = !!selectedElementId || canDeleteSlot;
+
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement).tagName;
+
       if (e.key === 'Delete' || e.key === 'Backspace') {
-        if (tag === 'INPUT' || tag === 'SELECT') return;
-        const id = useProjectStore.getState().selectedElementId;
-        if (id) {
-          e.preventDefault();
-          removeElement(id);
+        if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+        e.preventDefault();
+
+        const state = useProjectStore.getState();
+        if (
+          state.selectedSlotIndex !== null &&
+          state.project.pages[state.currentPageIndex]?.slotAssignments?.[
+            state.selectedSlotIndex
+          ]
+        ) {
+          removeImageFromSlot(state.selectedSlotIndex);
+        } else if (state.selectedElementId) {
+          removeElement(state.selectedElementId);
         }
       }
+
       // Ctrl+S / Ctrl+Shift+S
       if ((e.ctrlKey || e.metaKey) && e.key === 's') {
         e.preventDefault();
@@ -57,7 +80,7 @@ function App() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [removeElement]);
+  }, [removeElement, removeImageFromSlot]);
 
   const handleOpen = async () => {
     if (hasFileSystemAccess) {
@@ -102,6 +125,13 @@ function App() {
     }
   };
 
+  const handleNewProject = () => {
+    const name = prompt('Projektname:', 'Neues Projekt');
+    if (name !== null) {
+      resetProject(name.trim() || 'Unbenanntes Projekt');
+    }
+  };
+
   const handleAddImage = () => imageInputRef.current?.click();
 
   const handleImageSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -115,9 +145,20 @@ function App() {
     e.target.value = '';
   };
 
-  const handleLayoutChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const layoutId = e.target.value;
-    if (layoutId) applyLayout(layoutId);
+  const handleLayoutSelect = (layoutId: string | null) => {
+    if (layoutId) {
+      applyLayout(layoutId);
+    } else {
+      clearLayout();
+    }
+  };
+
+  const handleDelete = () => {
+    if (canDeleteSlot && selectedSlotIndex !== null) {
+      removeImageFromSlot(selectedSlotIndex);
+    } else if (selectedElementId) {
+      removeElement(selectedElementId);
+    }
   };
 
   const btnBase =
@@ -132,13 +173,21 @@ function App() {
     <div className="flex flex-col w-screen h-screen">
       {/* Toolbar */}
       <div className="flex items-center gap-3 px-4 py-2 bg-[#1a1a1a] border-b border-[#333] shrink-0 flex-wrap">
-        {/* Project name + file indicator */}
-        <span className="text-sm text-neutral-400 font-medium select-none" title={fileHandle?.name}>
-          {projectName}
+        {/* Editable project name */}
+        <div className="flex items-center gap-1">
+          <input
+            type="text"
+            value={projectName}
+            onChange={(e) => setProjectName(e.target.value)}
+            className="text-sm text-neutral-400 font-medium bg-transparent border-b border-transparent
+                       outline-none focus:text-white focus:border-blue-500 w-40 py-0.5
+                       hover:border-neutral-600 transition-colors"
+            title="Projektname bearbeiten"
+          />
           {fileHandle && (
-            <span className="text-neutral-600 ml-1 text-xs">({fileHandle.name})</span>
+            <span className="text-neutral-600 text-xs select-none">({fileHandle.name})</span>
           )}
-        </span>
+        </div>
         <div className="w-px h-5 bg-[#444]" />
 
         {/* File actions */}
@@ -151,7 +200,7 @@ function App() {
         <button onClick={handleOpen} className={btnSecondary}>
           Öffnen
         </button>
-        <button onClick={resetProject} className={btnSecondary}>
+        <button onClick={handleNewProject} className={btnSecondary}>
           Neues Projekt
         </button>
 
@@ -165,32 +214,19 @@ function App() {
           + Text
         </button>
 
-        {selectedElementId && (
-          <button
-            onClick={() => removeElement(selectedElementId)}
-            className={btnDanger}
-          >
+        {canDelete && (
+          <button onClick={handleDelete} className={btnDanger}>
             Löschen
           </button>
         )}
 
         <div className="w-px h-5 bg-[#444]" />
 
-        {/* Layout selector */}
-        <select
-          value={currentLayoutId ?? ''}
-          onChange={handleLayoutChange}
-          className="px-2 py-1.5 text-sm rounded bg-neutral-700 text-white border border-neutral-600 cursor-pointer"
-        >
-          <option value="" disabled>
-            Layout wählen…
-          </option>
-          {LAYOUT_TEMPLATES.map((l) => (
-            <option key={l.id} value={l.id}>
-              {l.name} ({l.slots.length})
-            </option>
-          ))}
-        </select>
+        {/* Layout picker with previews */}
+        <LayoutPicker
+          currentLayoutId={currentLayoutId}
+          onSelect={handleLayoutSelect}
+        />
 
         <div className="w-px h-5 bg-[#444]" />
 

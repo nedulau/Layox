@@ -49,6 +49,7 @@ export interface Page {
   elements: PageElement[];
   background: string;
   layoutId?: string; // ID of the applied layout template
+  slotAssignments?: Record<number, string>; // slot index → asset path
 }
 
 export interface Project {
