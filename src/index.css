@@ -49,3 +49,78 @@ body {
   color: #64748b !important;
 }
 
+.editor-color-input {
+  appearance: none;
+}
+
+.editor-color-input::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.editor-color-input::-webkit-color-swatch {
+  border: none;
+  border-radius: 6px;
+}
+
+.editor-color-input::-moz-color-swatch {
+  border: none;
+  border-radius: 6px;
+}
+
+.editor-ui[data-ui-theme='light'] .editor-color-input {
+  background: #f8fafc !important;
+  border-color: #d8dee9 !important;
+}
+
+.editor-ui[data-ui-theme='light'] .editor-canvas-shell {
+  background: #ffffff !important;
+  border-color: #d8dee9 !important;
+}
+
+.editor-ui[data-ui-theme='light'] .editor-side-nav {
+  background: #ffffff !important;
+  border-color: #cbd5e1 !important;
+  color: #334155 !important;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.12) !important;
+}
+
+.editor-ui[data-ui-theme='light'] .editor-side-nav:hover {
+  background: #f8fafc !important;
+  color: #0f172a !important;
+}
+
+.editor-ui[data-ui-theme='light'] .editor-page-label,
+.editor-ui[data-ui-theme='light'] .editor-page-chip {
+  background: #f8fafc !important;
+  border-color: #d8dee9 !important;
+  color: #334155 !important;
+}
+
+.editor-ui[data-ui-theme='light'] .editor-page-chip:hover {
+  background: #eef2ff !important;
+  border-color: #c7d2fe !important;
+  color: #1e3a8a !important;
+}
+
+.editor-ui[data-ui-theme='light'] .editor-page-chip.is-active {
+  background: #2563eb !important;
+  border-color: #1d4ed8 !important;
+  color: #ffffff !important;
+}
+
+.editor-ui[data-ui-theme='light'] .editor-page-chip.editor-page-chip-danger {
+  background: #fee2e2 !important;
+  border-color: #fca5a5 !important;
+  color: #b91c1c !important;
+}
+
+.editor-ui[data-ui-theme='light'] .editor-page-chip.editor-page-chip-danger:hover {
+  background: #fecaca !important;
+  border-color: #f87171 !important;
+  color: #991b1b !important;
+}
+
+.editor-ui[data-ui-theme='light'] .editor-page-count {
+  color: #475569 !important;
+}
+

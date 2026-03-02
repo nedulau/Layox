@@ -1,9 +1,11 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import useProjectStore from '../store/useProjectStore';
 import { getHandle } from '../utils/handleStore';
+import NewProjectModal from './NewProjectModal';
 
 function StartScreen() {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [showNewProjectModal, setShowNewProjectModal] = useState(false);
 
   const resetProject = useProjectStore((s) => s.resetProject);
   const openProject = useProjectStore((s) => s.openProject);
@@ -13,10 +15,7 @@ function StartScreen() {
   const hasFileSystemAccess = 'showOpenFilePicker' in window;
 
   const handleNewProject = () => {
-    const name = prompt('Projektname:', 'Neues Projekt');
-    if (name !== null) {
-      resetProject(name.trim() || 'Unbenanntes Projekt');
-    }
+    setShowNewProjectModal(true);
   };
 
   const handleOpen = async () => {
@@ -147,6 +146,15 @@ function StartScreen() {
           onChange={handleFileSelected}
         />
       </div>
+
+      <NewProjectModal
+        open={showNewProjectModal}
+        onClose={() => setShowNewProjectModal(false)}
+        onConfirm={(name) => {
+          resetProject(name);
+          setShowNewProjectModal(false);
+        }}
+      />
     </div>
   );
 }

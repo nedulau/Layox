@@ -243,7 +243,7 @@ function SlotComponent({
         const ratio = Math.min(effectiveNatW / slot.width, effectiveNatH / slot.height);
         if (ratio >= 1) return null;
         const qualityPercent = Math.max(1, Math.round(ratio * 100));
-        const tooltipX = Math.max(slot.x + 6, slot.x + slot.width - 220);
+        const tooltipX = Math.max(slot.x + 8, slot.x + slot.width - 314);
         return (
           <>
             <Group
@@ -252,19 +252,21 @@ function SlotComponent({
               onTap={() => setShowResolutionHint((v) => !v)}
             >
               <Rect
-                x={slot.x + slot.width - 30}
+                x={slot.x + slot.width - 46}
                 y={slot.y + 4}
-                width={26}
-                height={20}
-                fill="rgba(0,0,0,0.55)"
-                cornerRadius={4}
+                width={40}
+                height={30}
+                fill="rgba(0,0,0,0.7)"
+                stroke="#f59e0b"
+                strokeWidth={1.5}
+                cornerRadius={6}
               />
               <Text
-                x={slot.x + slot.width - 30}
-                y={slot.y + 5}
-                width={26}
+                x={slot.x + slot.width - 46}
+                y={slot.y + 10}
+                width={40}
                 text="⚠"
-                fontSize={14}
+                fontSize={20}
                 fill="#fbbf24"
                 align="center"
               />
@@ -274,9 +276,9 @@ function SlotComponent({
               <Group listening={false}>
                 <Rect
                   x={tooltipX}
-                  y={slot.y + 28}
-                  width={214}
-                  height={46}
+                  y={slot.y + 38}
+                  width={308}
+                  height={84}
                   fill="rgba(10,10,10,0.88)"
                   stroke="#525252"
                   strokeWidth={1}
@@ -284,11 +286,11 @@ function SlotComponent({
                 />
                 <Text
                   x={tooltipX + 10}
-                  y={slot.y + 34}
-                  width={194}
+                  y={slot.y + 47}
+                  width={288}
                   text={`Niedrige Auflösung – kann pixelig wirken\nCa. ${qualityPercent}% der empfohlenen Größe`}
-                  fontSize={11}
-                  lineHeight={1.25}
+                  fontSize={14}
+                  lineHeight={1.35}
                   fill="#e5e5e5"
                 />
               </Group>
