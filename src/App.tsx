@@ -547,8 +547,6 @@ function Editor() {
           />
         </div>
 
-        <div className="w-px h-5 bg-neutral-700/80" />
-
         {/* Undo / Redo */}
         <button onClick={handleUndo} disabled={!canUndo} className={`${btnIcon} editor-surface-control editor-toolbar-icon border-neutral-700 bg-neutral-900 text-neutral-300 hover:bg-neutral-800`} title="Rückgängig (Ctrl+Z)">
           <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -599,6 +597,19 @@ function Editor() {
                   <MenuItem label="Beschnitt zurücksetzen" onClick={handleClearCrop} disabled={!slotHasCrop} />
                 </>
               )}
+            </div>
+          )}
+        </div>
+
+        {/* ── Einfügen menu ── */}
+        <div className="relative" data-menu>
+          <MenuButton label="Einfügen" isOpen={openMenu === 'einfuegen'} onClick={() => toggleMenu('einfuegen')} />
+          {openMenu === 'einfuegen' && (
+            <div className="editor-dropdown absolute top-full left-0 mt-2 min-w-[220px] bg-neutral-900 border border-neutral-700 rounded-xl shadow-2xl z-[90] p-1">
+              <MenuItem label="Bild einfügen" shortcut="Ctrl+I" onClick={handleAddImage} />
+              <MenuItem label="Text einfügen" shortcut="Ctrl+T" onClick={handleAddText} />
+              <MenuDivider />
+              <MenuItem label="Deckblatt hinzufügen" onClick={handleAddCoverPage} disabled={hasCoverPage} />
             </div>
           )}
         </div>
