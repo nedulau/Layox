@@ -554,7 +554,15 @@ function ElementRenderer({
 
 // ─── Main canvas ─────────────────────────────────────────────────────────────
 
-function EditorCanvas() {
+function EditorCanvas({
+  zoomMode = 'fit',
+  manualZoom = 1,
+  onDisplayScaleChange,
+}: {
+  zoomMode?: 'fit' | 'manual';
+  manualZoom?: number;
+  onDisplayScaleChange?: (scale: number) => void;
+}) {
   const currentPage = useProjectStore((s) => s.project.pages[s.currentPageIndex]);
   const assetBlobs = useProjectStore((s) => s.assetBlobs);
   const selectedElementId = useProjectStore((s) => s.selectedElementId);
@@ -627,15 +635,18 @@ function EditorCanvas() {
     const updateScale = () => {
       const rect = container.getBoundingClientRect();
       const scaleX = rect.width / CANVAS_W;
-      const scaleY = rect.height / CANVAS_H;
-      setDisplayScale(Math.min(scaleX, scaleY));
+      const fitScale = Math.min(1, Math.max(0.12, scaleX));
+      const manualScale = Math.min(3, Math.max(0.2, manualZoom));
+      const nextScale = zoomMode === 'fit' ? fitScale : manualScale;
+      setDisplayScale(nextScale);
+      onDisplayScaleChange?.(nextScale);
     };
 
     updateScale();
     const observer = new ResizeObserver(updateScale);
     observer.observe(container);
     return () => observer.disconnect();
-  }, []);
+  }, [manualZoom, onDisplayScaleChange, zoomMode]);
 
   // ─── Drag & drop ─────────────────────────────────────────────────────────
   const [dragOver, setDragOver] = useState(false);

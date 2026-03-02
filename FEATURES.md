@@ -7,17 +7,22 @@ Alle Funktionen des lokalen Fotoalbum-Editors im Detail.
 ## Projekt-Verwaltung
 
 - **Startbildschirm** mit zuletzt geöffneten Projekten
+- **Sprache umschaltbar** (Deutsch / Englisch) im Startbildschirm und in den Einstellungen
+- **UI-Theme umschaltbar** (Dark / Light) im Startbildschirm und in den Einstellungen
 - **Doppelklick** auf ein kürzlich geöffnetes Projekt öffnet es direkt (Pfad wird gespeichert)
 - **Neues Projekt erstellen** — Deckblatt wird automatisch als erste Seite angelegt
 - **Speichern / Speichern unter** — nativer File System Access API oder Fallback-Download
 - **Projekt öffnen** — `.layox`-Dateien (ZIP-Format) laden
-- **Automatisches Speichern** — aktivierbar mit wählbarem Intervall (10 s – 5 min), im Datei-Menü konfigurierbar
+- **Automatisches Speichern** — aktivierbar mit wählbarem Intervall (10 s – 5 min), in den Einstellungen konfigurierbar
 - **Zuletzt geöffnete Projekte** — werden im Startbildschirm angezeigt (localStorage + IndexedDB für Dateipfade)
 
 ## Seiten & Navigation
 
 - **Mehrseitige Projekte** — Seiten hinzufügen, entfernen, frei navigieren
 - **Seitennavigation** mit nummerierten Buttons und ◀/▶ neben dem Canvas
+- **Seitenübersicht-Modal** über „Seiten“ mit Vorschaubildern, fester Vorschaugröße und dynamischem Grid
+- **Seitenübersicht zeigt Kapitel/Unterkapitel** je Seite (falls vorhanden)
+- **Seitenübersicht schließen** per Escape, Klick außerhalb oder Schließen-Button
 - **Rechter Pfeil wird zu +** wenn man auf der letzten Seite ist → fügt direkt eine neue Seite hinzu
 - **Pfeiltasten (← →)** zum Seitenwechsel
 - **Deckblatt-System** — spezielle Deckblatt-Seiten mit Titel & Untertitel-Overlay
@@ -74,8 +79,9 @@ Alle Funktionen des lokalen Fotoalbum-Editors im Detail.
 
 ## Canvas
 
-- **Responsives Skalieren** — Canvas passt sich automatisch an die Fenstergröße an
-- **800 × 600 internes Koordinatensystem** mit CSS-Transform-Skalierung
+- **Responsives Skalieren** — Canvas nutzt bei wenig horizontalem Platz die verfügbare Breite
+- **Expliziter Zoom-Regler** mit `100%`, `Anpassen`, `+`, `−`
+- **1200 × 900 internes Koordinatensystem** mit CSS-Transform-Skalierung
 
 ## Bearbeitung
 

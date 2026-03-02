@@ -30,6 +30,7 @@ function createDefaultProject(name: string = 'Unbenanntes Projekt'): Project {
     background: '#ffffff',
     isCover: true,
     coverTitle: name,
+    chapterTitle: name,
     coverSubtitle: '',
     showCoverSubtitle: true,
     coverTitleFontSize: DEFAULT_COVER_TITLE_FONT_SIZE,
@@ -56,8 +57,10 @@ function normalizeProject(project: Project): Project {
     ...project,
     pages: project.pages.map((page) => {
       if (!page.isCover) return page;
+      const normalizedCoverTitle = page.coverTitle ?? '';
       return {
         ...page,
+        chapterTitle: page.chapterTitle ?? normalizedCoverTitle,
         showCoverSubtitle: page.showCoverSubtitle ?? true,
         coverTitleFontSize: page.coverTitleFontSize ?? DEFAULT_COVER_TITLE_FONT_SIZE,
         coverTitleFontFamily: page.coverTitleFontFamily ?? DEFAULT_COVER_TITLE_FONT_FAMILY,
@@ -462,6 +465,11 @@ const useProjectStore = create<ProjectState>((set, get) => ({
       const pages = [...state.project.pages];
       const page = { ...pages[state.currentPageIndex] };
       page.coverTitle = title;
+      if (page.isCover) {
+        const trimmed = title.trim();
+        if (trimmed) page.chapterTitle = trimmed;
+        else delete page.chapterTitle;
+      }
       pages[state.currentPageIndex] = page;
       return { project: { ...state.project, pages } };
     }),
@@ -558,6 +566,7 @@ const useProjectStore = create<ProjectState>((set, get) => ({
         background: '#ffffff',
         isCover: true,
         coverTitle: state.project.meta.name,
+        chapterTitle: state.project.meta.name,
         coverSubtitle: '',
         showCoverSubtitle: true,
         coverTitleFontSize: DEFAULT_COVER_TITLE_FONT_SIZE,

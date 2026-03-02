@@ -8,14 +8,37 @@ import NewProjectModal from './components/NewProjectModal';
 import useProjectStore from './store/useProjectStore';
 import { exportAsPdf, exportCurrentPageAsPng, exportCurrentPageAsJpeg, PDF_COMPRESSION_PRESETS } from './utils/exportProject';
 import type { PdfCompressionLevel } from './utils/exportProject';
+import { tr, type Language } from './i18n';
+import type { Page } from './types';
+import { computeLayoutSlots } from './utils/layouts';
+import { CANVAS_H, CANVAS_W } from './constants/canvas';
 
 const FONTS = ['Arial', 'Times New Roman', 'Georgia', 'Verdana', 'Courier New', 'Trebuchet MS', 'Impact', 'Comic Sans MS'];
 type UiTheme = 'dark' | 'light';
 
 function App() {
+  const [uiTheme, setUiTheme] = useState<UiTheme>(() => {
+    const saved = localStorage.getItem('layox_uiTheme');
+    return saved === 'light' ? 'light' : 'dark';
+  });
+  const [language, setLanguage] = useState<Language>(() => {
+    const saved = localStorage.getItem('layox_language');
+    return saved === 'en' ? 'en' : 'de';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('layox_uiTheme', uiTheme);
+  }, [uiTheme]);
+
+  useEffect(() => {
+    localStorage.setItem('layox_language', language);
+  }, [language]);
+
   const showEditor = useProjectStore((s) => s.showEditor);
-  if (!showEditor) return <StartScreen />;
-  return <Editor />;
+  if (!showEditor) {
+    return <StartScreen uiTheme={uiTheme} setUiTheme={setUiTheme} language={language} setLanguage={setLanguage} />;
+  }
+  return <Editor uiTheme={uiTheme} setUiTheme={setUiTheme} language={language} setLanguage={setLanguage} />;
 }
 
 // ─── Dropdown menu helper ────────────────────────────────────────────────────
@@ -35,8 +58,8 @@ function MenuButton({
       data-menu
       className={`editor-surface-control px-3 py-1 text-[13px] rounded-lg border transition-all duration-150 cursor-pointer select-none ${
         isOpen
-          ? 'bg-neutral-800 border-neutral-600 text-white shadow-sm'
-          : 'bg-transparent border-transparent text-neutral-300 hover:bg-neutral-800/80 hover:border-neutral-700 hover:text-white'
+          ? 'bg-neutral-800 border-neutral-500 text-white shadow-sm'
+          : 'bg-neutral-900 border-neutral-700 text-neutral-200 hover:bg-neutral-800 hover:border-neutral-600 hover:text-white'
       }`}
     >
       {label}
@@ -74,17 +97,266 @@ function MenuDivider() {
   return <div className="h-px bg-neutral-700/80 my-1" />;
 }
 
-// ─── Editor ──────────────────────────────────────────────────────────────────
+function PagePreviewCard({
+  page,
+  assetBlobs,
+  pageIndex,
+  active,
+  onClick,
+  noPreviewLabel,
+  metaLabel,
+}: {
+  page: Page;
+  assetBlobs: Record<string, Blob>;
+  pageIndex: number;
+  active: boolean;
+  onClick: () => void;
+  noPreviewLabel: string;
+  metaLabel: string;
+}) {
+  const [previewUrls, setPreviewUrls] = useState<Record<string, string>>({});
 
-function Editor() {
-    const [uiTheme, setUiTheme] = useState<UiTheme>(() => {
-      const saved = localStorage.getItem('layox_uiTheme');
-      return saved === 'light' ? 'light' : 'dark';
+  useEffect(() => {
+    const paths = new Set<string>();
+    Object.values(page.slotAssignments ?? {}).forEach((slot) => {
+      if (slot?.assetPath) paths.add(slot.assetPath);
+    });
+    page.elements.forEach((element) => {
+      if (element.type === 'image') paths.add(element.src);
     });
 
-    useEffect(() => {
-      localStorage.setItem('layox_uiTheme', uiTheme);
-    }, [uiTheme]);
+    const nextUrls: Record<string, string> = {};
+    paths.forEach((path) => {
+      const blob = assetBlobs[path];
+      if (!blob) return;
+      nextUrls[path] = URL.createObjectURL(blob);
+    });
+    setPreviewUrls(nextUrls);
+
+    return () => {
+      Object.values(nextUrls).forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, [assetBlobs, page]);
+
+  const slots = useMemo(() => {
+    if (!page.layoutId) return [];
+    const padding = page.layoutPadding ?? 20;
+    const gap = page.layoutGap ?? 10;
+    return computeLayoutSlots(page.layoutId, padding, gap);
+  }, [page.layoutGap, page.layoutId, page.layoutPadding]);
+
+  const hasPreview =
+    slots.some((_, slotIndex) => {
+      const assignment = page.slotAssignments?.[slotIndex];
+      return !!assignment && !!previewUrls[assignment.assetPath];
+    }) ||
+    page.elements.some((element) => element.type === 'image' && !!previewUrls[element.src]);
+
+  return (
+    <button
+      onClick={onClick}
+      className={`group text-left rounded-xl border overflow-hidden transition-colors cursor-pointer select-none ${
+        active
+          ? 'border-blue-500 bg-blue-500/10'
+          : 'border-neutral-700 bg-neutral-900/80 hover:bg-neutral-800/90'
+      }`}
+      style={{ width: 220 }}
+      title={`Seite ${pageIndex + 1}`}
+    >
+      <div
+        className="relative bg-neutral-950"
+        style={{ width: 220, height: 165 }}
+      >
+        <div className="absolute inset-0" style={{ background: page.background || '#111111' }} />
+
+        {slots.map((slot, slotIndex) => {
+          const assignment = page.slotAssignments?.[slotIndex];
+          const src = assignment ? previewUrls[assignment.assetPath] : undefined;
+
+          return (
+            <div
+              key={`${page.id}-slot-${slotIndex}`}
+              className="absolute overflow-hidden rounded-[2px] border border-white/15"
+              style={{
+                left: `${(slot.x / CANVAS_W) * 100}%`,
+                top: `${(slot.y / CANVAS_H) * 100}%`,
+                width: `${(slot.width / CANVAS_W) * 100}%`,
+                height: `${(slot.height / CANVAS_H) * 100}%`,
+                background: src ? '#0f172a' : 'rgba(255,255,255,0.08)',
+              }}
+            >
+              {src && (
+                <img
+                  src={src}
+                  alt=""
+                  className="w-full h-full object-cover"
+                  draggable={false}
+                />
+              )}
+            </div>
+          );
+        })}
+
+        {page.elements
+          .slice()
+          .sort((firstElement, secondElement) => firstElement.zIndex - secondElement.zIndex)
+          .map((element) => {
+            if (element.type === 'image') {
+              const src = previewUrls[element.src];
+              if (!src) return null;
+              return (
+                <img
+                  key={element.id}
+                  src={src}
+                  alt=""
+                  draggable={false}
+                  className="absolute object-cover rounded-[2px]"
+                  style={{
+                    left: `${(element.x / CANVAS_W) * 100}%`,
+                    top: `${(element.y / CANVAS_H) * 100}%`,
+                    width: `${(element.width / CANVAS_W) * 100}%`,
+                    height: `${(element.height / CANVAS_H) * 100}%`,
+                    transform: `rotate(${element.rotation}deg)`,
+                    transformOrigin: 'top left',
+                  }}
+                />
+              );
+            }
+
+            return (
+              <div
+                key={element.id}
+                className="absolute whitespace-nowrap truncate"
+                style={{
+                  left: `${(element.x / CANVAS_W) * 100}%`,
+                  top: `${(element.y / CANVAS_H) * 100}%`,
+                  width: `${(((element.width ?? 240) / CANVAS_W) * 100)}%`,
+                  color: element.color,
+                  fontFamily: element.fontFamily,
+                  fontSize: `${Math.max(7, element.fontSize * 0.15)}px`,
+                  transform: `rotate(${element.rotation}deg)`,
+                  transformOrigin: 'top left',
+                }}
+              >
+                {element.content}
+              </div>
+            );
+          })}
+
+        {!hasPreview && (
+          <div className="absolute inset-0 flex items-center justify-center text-[11px] text-neutral-400">
+            {noPreviewLabel}
+          </div>
+        )}
+      </div>
+
+      <div className="px-2 py-1.5 text-xs text-neutral-300 border-t border-neutral-700/80">
+        <div className="font-medium">{pageIndex + 1}</div>
+        <div className="text-[11px] text-neutral-500 truncate mt-0.5">{metaLabel}</div>
+      </div>
+    </button>
+  );
+}
+
+function PageOverviewModal({
+  open,
+  pages,
+  assetBlobs,
+  currentPageIndex,
+  onSelectPage,
+  onClose,
+  title,
+  closeLabel,
+  noPreviewLabel,
+  getMetaLabel,
+}: {
+  open: boolean;
+  pages: Page[];
+  assetBlobs: Record<string, Blob>;
+  currentPageIndex: number;
+  onSelectPage: (index: number) => void;
+  onClose: () => void;
+  title: string;
+  closeLabel: string;
+  noPreviewLabel: string;
+  getMetaLabel: (page: Page) => string;
+}) {
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-[110] bg-black/60 backdrop-blur-[1px] flex items-center justify-center px-6 py-6"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <div
+        className="editor-dropdown w-[min(96vw,1400px)] h-[min(90vh,860px)] bg-neutral-900 border border-neutral-700 rounded-2xl shadow-2xl flex flex-col overflow-hidden"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-4 py-3 border-b border-neutral-700/80">
+          <h3 className="text-sm font-semibold text-neutral-100">{title}</h3>
+          <button
+            onClick={onClose}
+            className="editor-surface-control px-2.5 py-1 rounded-md border border-neutral-600 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 text-xs"
+          >
+            {closeLabel}
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-auto p-4">
+          <div
+            className="grid gap-3 justify-center"
+            style={{
+              gridTemplateColumns: 'repeat(auto-fill, 220px)',
+              gridAutoRows: 'min-content',
+            }}
+          >
+            {pages.map((page, index) => (
+              <PagePreviewCard
+                key={page.id}
+                page={page}
+                assetBlobs={assetBlobs}
+                pageIndex={index}
+                active={index === currentPageIndex}
+                noPreviewLabel={noPreviewLabel}
+                metaLabel={getMetaLabel(page)}
+                onClick={() => {
+                  onSelectPage(index);
+                  onClose();
+                }}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Editor ──────────────────────────────────────────────────────────────────
+
+function Editor({
+  uiTheme,
+  setUiTheme,
+  language,
+  setLanguage,
+}: {
+  uiTheme: UiTheme;
+  setUiTheme: (theme: UiTheme) => void;
+  language: Language;
+  setLanguage: (language: Language) => void;
+}) {
+  const t = (key: string) => tr(language, key);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -123,7 +395,6 @@ function Editor() {
   const setCoverTitleStyle = useProjectStore((s) => s.setCoverTitleStyle);
   const setCoverSubtitleStyle = useProjectStore((s) => s.setCoverSubtitleStyle);
   const setCurrentPageChapterTitle = useProjectStore((s) => s.setCurrentPageChapterTitle);
-  const setCurrentPageSubchapterTitle = useProjectStore((s) => s.setCurrentPageSubchapterTitle);
   const setCoverTitle = useProjectStore((s) => s.setCoverTitle);
   const setCoverSubtitle = useProjectStore((s) => s.setCoverSubtitle);
   const addCoverPage = useProjectStore((s) => s.addCoverPage);
@@ -185,15 +456,12 @@ function Editor() {
     (s) => s.project.pages[s.currentPageIndex]?.showCoverSubtitle ?? true,
   );
   const currentChapterTitle = useProjectStore(
-    (s) => s.project.pages[s.currentPageIndex]?.chapterTitle ?? '',
+    (s) => {
+      const page = s.project.pages[s.currentPageIndex];
+      if (!page) return '';
+      return page.chapterTitle ?? (page.isCover ? (page.coverTitle ?? '') : '');
+    },
   );
-  const currentSubchapterTitle = useProjectStore(
-    (s) => s.project.pages[s.currentPageIndex]?.subchapterTitle ?? '',
-  );
-  const hasCoverPage = useProjectStore(
-    (s) => s.project.pages[0]?.isCover ?? false,
-  );
-
   const autoSaveEnabled = useProjectStore((s) => s.autoSaveEnabled);
   const autoSaveInterval = useProjectStore((s) => s.autoSaveInterval);
   const setAutoSaveEnabled = useProjectStore((s) => s.setAutoSaveEnabled);
@@ -224,6 +492,10 @@ function Editor() {
   // ─── Dropdown menu state ────────────────────────────────────────────────
   const [openMenu, setOpenMenu] = useState<string | null>(null);
   const [showNewProjectModal, setShowNewProjectModal] = useState(false);
+  const [showPageOverview, setShowPageOverview] = useState(false);
+  const [canvasZoomMode, setCanvasZoomMode] = useState<'fit' | 'manual'>('fit');
+  const [canvasManualZoom, setCanvasManualZoom] = useState(1);
+  const [canvasDisplayScale, setCanvasDisplayScale] = useState(1);
 
   const toggleMenu = useCallback(
     (name: string) => setOpenMenu((prev) => (prev === name ? null : name)),
@@ -362,8 +634,8 @@ function Editor() {
     closeMenu();
     if (hasFileSystemAccess) {
       try { await openProject(); } catch (err) {
-        console.error('Fehler beim Öffnen:', err);
-        alert(`Fehler beim Öffnen: ${err instanceof Error ? err.message : err}`);
+        console.error(t('openError'), err);
+        alert(`${t('openError')}: ${err instanceof Error ? err.message : err}`);
       }
     } else {
       fileInputRef.current?.click();
@@ -374,14 +646,14 @@ function Editor() {
     const file = e.target.files?.[0];
     if (!file) return;
     try { await loadFromFile(file); } catch (err) {
-      console.error('Fehler beim Laden:', err);
-      alert(`Fehler beim Laden: ${err instanceof Error ? err.message : err}`);
+      console.error(t('loadError'), err);
+      alert(`${t('loadError')}: ${err instanceof Error ? err.message : err}`);
     }
     e.target.value = '';
   };
 
-  const handleSave = async () => { closeMenu(); try { await saveCurrentProject(); } catch (err) { alert(`Fehler: ${err}`); } };
-  const handleSaveAs = async () => { closeMenu(); try { await saveCurrentProjectAs(); } catch (err) { alert(`Fehler: ${err}`); } };
+  const handleSave = async () => { closeMenu(); try { await saveCurrentProject(); } catch (err) { alert(`${t('saveError')}: ${err}`); } };
+  const handleSaveAs = async () => { closeMenu(); try { await saveCurrentProjectAs(); } catch (err) { alert(`${t('saveError')}: ${err}`); } };
 
   const handleNewProject = () => {
     closeMenu();
@@ -399,6 +671,7 @@ function Editor() {
 
   const handleAddText = () => { closeMenu(); snapshot(); addTextElement(); };
   const handleAddCoverPage = () => { closeMenu(); snapshot(); addCoverPage(); };
+  const handleAddPageFromMenu = () => { closeMenu(); snapshot(); addPage(); };
 
   const handleLayoutSelect = (layoutId: string | null) => {
     snapshot();
@@ -446,7 +719,7 @@ function Editor() {
 
   const handleGoHome = () => {
     closeMenu();
-    const confirmed = window.confirm('Möchtest du wirklich zur Startseite zurückkehren? Nicht gespeicherte Änderungen gehen verloren.');
+    const confirmed = window.confirm(t('homeConfirm'));
     if (confirmed) setShowEditor(false);
   };
 
@@ -512,89 +785,99 @@ function Editor() {
           const coverLabel = (page.coverTitle ?? '').trim();
           return {
             pageIndex: index,
-            label: coverLabel ? `Deckblatt • ${coverLabel}` : 'Deckblatt',
+            label: coverLabel ? `${t('deckblatt')} • ${coverLabel}` : t('deckblatt'),
           };
         }
 
         const chapter = (page.chapterTitle ?? '').trim();
-        const subchapter = (page.subchapterTitle ?? '').trim();
-        if (!chapter && !subchapter) return null;
-        const key = `${chapter}__${subchapter}`;
+        if (!chapter) return null;
+        const key = chapter;
         if (seen.has(key)) return null;
         seen.add(key);
-        const label = chapter && subchapter
-          ? `${chapter} • ${subchapter}`
-          : chapter || `Unterkapitel: ${subchapter}`;
+        const label = chapter;
         return { pageIndex: index, label };
       })
       .filter((item): item is { pageIndex: number; label: string } => item !== null);
-  }, [pages]);
+  }, [pages, t]);
+
+  const getPageOverviewMetaLabel = useCallback((page: Page) => {
+    if (page.isCover) {
+      const coverLabel = (page.coverTitle ?? '').trim();
+      return coverLabel ? `${t('deckblatt')} • ${coverLabel}` : t('deckblatt');
+    }
+
+    const chapter = (page.chapterTitle ?? '').trim();
+    if (chapter) return chapter;
+    return '—';
+  }, [t]);
 
   return (
     <div className="editor-ui relative isolate flex flex-col w-screen h-screen bg-neutral-950 text-neutral-100" data-ui-theme={uiTheme}>
       {/* ─── Menu Bar ─── */}
       <div className="editor-topbar relative z-40 flex flex-wrap items-center gap-1.5 px-3 py-1.5 bg-neutral-900/95 border border-neutral-800 rounded-xl shadow-lg mx-4 mt-4 shrink-0 backdrop-blur-sm">
 
-        <div className="absolute left-1/2 -translate-x-1/2 top-1.5 w-[300px] pointer-events-none">
+        <div className="order-first basis-full flex justify-center xl:order-none xl:basis-full xl:absolute xl:inset-x-0 xl:inset-y-0 xl:flex xl:items-center xl:justify-center xl:pointer-events-none">
           <input
             type="text"
             value={projectName}
             onChange={(e) => setProjectName(e.target.value)}
             onFocus={() => snapshot()}
-            className="editor-input pointer-events-auto w-full text-center text-sm text-neutral-300 font-semibold bg-neutral-900 border border-neutral-700 rounded-lg
+            className="editor-input xl:pointer-events-auto w-full max-w-[380px] xl:w-[320px] xl:max-w-[320px] text-center text-sm text-neutral-300 font-semibold bg-neutral-900 border border-neutral-700 rounded-lg
                        outline-none focus:text-white focus:border-blue-500 py-0.5 px-2 hover:border-neutral-500 transition-colors"
-            title="Projektname bearbeiten"
+            title={t('projectNameEdit')}
           />
         </div>
 
         {/* Undo / Redo */}
-        <button onClick={handleUndo} disabled={!canUndo} className={`${btnIcon} editor-surface-control editor-toolbar-icon border-neutral-700 bg-neutral-900 text-neutral-300 hover:bg-neutral-800`} title="Rückgängig (Ctrl+Z)">
+        <button onClick={handleUndo} disabled={!canUndo} className={`${btnIcon} editor-surface-control editor-toolbar-icon border-neutral-700 bg-neutral-900 text-neutral-300 hover:bg-neutral-800`} title={`${t('undo')} (Ctrl+Z)`}>
           <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M9 7H4v5" />
             <path d="M4 12c1.6-3.8 4.8-5.8 8.7-5.8 5.1 0 8.3 3.6 8.3 8.8" />
           </svg>
         </button>
-        <button onClick={handleRedo} disabled={!canRedo} className={`${btnIcon} editor-surface-control editor-toolbar-icon border-neutral-700 bg-neutral-900 text-neutral-300 hover:bg-neutral-800`} title="Wiederherstellen (Ctrl+Y)">
+        <button onClick={handleRedo} disabled={!canRedo} className={`${btnIcon} editor-surface-control editor-toolbar-icon border-neutral-700 bg-neutral-900 text-neutral-300 hover:bg-neutral-800`} title={`${t('redo')} (Ctrl+Y)`}>
           <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M15 7h5v5" />
             <path d="M20 12c-1.6-3.8-4.8-5.8-8.7-5.8-5.1 0-8.3 3.6-8.3 8.8" />
           </svg>
         </button>
 
+        <div className="w-px h-5 bg-neutral-700/80" />
+
         {/* ── Datei menu ── */}
         <div className="relative" data-menu>
-          <MenuButton label="Datei" isOpen={openMenu === 'datei'} onClick={() => toggleMenu('datei')} />
+          <MenuButton label={t('file')} isOpen={openMenu === 'datei'} onClick={() => toggleMenu('datei')} />
           {openMenu === 'datei' && (
             <div className="editor-dropdown absolute top-full left-0 mt-2 min-w-[230px] bg-neutral-900 border border-neutral-700 rounded-xl shadow-2xl z-[90] p-1">
-              <MenuItem label="Neues Projekt" shortcut="Ctrl+N" onClick={handleNewProject} />
-              <MenuItem label="Öffnen" shortcut="Ctrl+O" onClick={handleOpen} />
+              <MenuItem label={t('newProject')} shortcut="Ctrl+N" onClick={handleNewProject} />
+              <MenuItem label={t('open')} shortcut="Ctrl+O" onClick={handleOpen} />
               <MenuDivider />
-              <MenuItem label="Speichern" shortcut="Ctrl+S" onClick={handleSave} />
-              <MenuItem label="Speichern unter" shortcut="Ctrl+Shift+S" onClick={handleSaveAs} />
+              <MenuItem label={t('save')} shortcut="Ctrl+S" onClick={handleSave} />
+              <MenuItem label={t('saveAs')} shortcut="Ctrl+Shift+S" onClick={handleSaveAs} />
               <MenuDivider />
-              <MenuItem label="Exportieren als PDF" onClick={handleExportPdfPrompt} />
-              <MenuItem label="Seite als PNG" onClick={handleExportPng} />
-              <MenuItem label="Seite als JPEG" onClick={handleExportJpeg} />
+              <MenuItem label={t('exportPdf')} onClick={handleExportPdfPrompt} />
+              <MenuItem label={t('exportPng')} onClick={handleExportPng} />
+              <MenuItem label={t('exportJpeg')} onClick={handleExportJpeg} />
               <MenuDivider />
-              <MenuItem label="Startseite" onClick={handleGoHome} />
+              <MenuItem label={t('home')} onClick={handleGoHome} />
             </div>
           )}
         </div>
 
         {/* ── Bearbeiten menu ── */}
         <div className="relative" data-menu>
-          <MenuButton label="Bearbeiten" isOpen={openMenu === 'bearbeiten'} onClick={() => toggleMenu('bearbeiten')} />
+          <MenuButton label={t('edit')} isOpen={openMenu === 'bearbeiten'} onClick={() => toggleMenu('bearbeiten')} />
           {openMenu === 'bearbeiten' && (
             <div className="editor-dropdown absolute top-full left-0 mt-2 min-w-[230px] bg-neutral-900 border border-neutral-700 rounded-xl shadow-2xl z-[90] p-1">
-              <MenuItem label="Rückgängig" shortcut="Ctrl+Z" onClick={handleUndo} disabled={!canUndo} />
-              <MenuItem label="Wiederherstellen" shortcut="Ctrl+Y" onClick={handleRedo} disabled={!canRedo} />
+              <MenuItem label={t('undo')} shortcut="Ctrl+Z" onClick={handleUndo} disabled={!canUndo} />
+              <MenuItem label={t('redo')} shortcut="Ctrl+Y" onClick={handleRedo} disabled={!canRedo} />
               <MenuDivider />
-              <MenuItem label="Löschen" shortcut="Entf" onClick={handleDelete} disabled={!canDelete} danger />
+              <MenuItem label={t('delete')} shortcut="Entf" onClick={handleDelete} disabled={!canDelete} danger />
               {canDeleteSlot && (
                 <>
                   <MenuDivider />
-                  <MenuItem label="Beschneiden" onClick={handleStartCrop} disabled={!canDeleteSlot} />
-                  <MenuItem label="Beschnitt zurücksetzen" onClick={handleClearCrop} disabled={!slotHasCrop} />
+                  <MenuItem label={t('crop')} onClick={handleStartCrop} disabled={!canDeleteSlot} />
+                  <MenuItem label={t('resetCrop')} onClick={handleClearCrop} disabled={!slotHasCrop} />
                 </>
               )}
             </div>
@@ -603,20 +886,22 @@ function Editor() {
 
         {/* ── Einfügen menu ── */}
         <div className="relative" data-menu>
-          <MenuButton label="Einfügen" isOpen={openMenu === 'einfuegen'} onClick={() => toggleMenu('einfuegen')} />
+          <MenuButton label={t('insert')} isOpen={openMenu === 'einfuegen'} onClick={() => toggleMenu('einfuegen')} />
           {openMenu === 'einfuegen' && (
             <div className="editor-dropdown absolute top-full left-0 mt-2 min-w-[220px] bg-neutral-900 border border-neutral-700 rounded-xl shadow-2xl z-[90] p-1">
-              <MenuItem label="Bild einfügen" shortcut="Ctrl+I" onClick={handleAddImage} />
-              <MenuItem label="Text einfügen" shortcut="Ctrl+T" onClick={handleAddText} />
+              <MenuItem label={t('pageNew')} onClick={handleAddPageFromMenu} />
               <MenuDivider />
-              <MenuItem label="Deckblatt hinzufügen" onClick={handleAddCoverPage} disabled={hasCoverPage} />
+              <MenuItem label={t('addImageLabel')} shortcut="Ctrl+I" onClick={handleAddImage} />
+              <MenuItem label={t('addTextLabel')} shortcut="Ctrl+T" onClick={handleAddText} />
+              <MenuDivider />
+              <MenuItem label={t('addCoverLabel')} onClick={handleAddCoverPage} />
             </div>
           )}
         </div>
 
         {/* ── Layout menu ── */}
         <div className="relative" data-menu>
-          <MenuButton label="Layout" isOpen={openMenu === 'layout'} onClick={() => toggleMenu('layout')} />
+          <MenuButton label={t('layout')} isOpen={openMenu === 'layout'} onClick={() => toggleMenu('layout')} />
           {openMenu === 'layout' && (
             <div className="editor-dropdown absolute top-full left-0 mt-2 bg-neutral-900 border border-neutral-700 rounded-xl shadow-2xl z-[90] py-3 px-3 min-w-[280px]">
               <div className="mb-2">
@@ -624,7 +909,7 @@ function Editor() {
               </div>
               {currentLayoutId && (
                 <div className="flex items-center gap-2 mt-2 pt-2 border-t border-neutral-700">
-                  <label className="text-xs text-neutral-500">Rand</label>
+                  <label className="text-xs text-neutral-500">{t('margin')}</label>
                   <input
                     type="number" min={0} max={100} value={currentLayoutPadding}
                     onFocus={() => snapshot()}
@@ -633,7 +918,7 @@ function Editor() {
                   />
                   {showGap && (
                     <>
-                      <label className="text-xs text-neutral-500">Abstand</label>
+                      <label className="text-xs text-neutral-500">{t('gap')}</label>
                       <input
                         type="number" min={0} max={100} value={currentLayoutGap}
                         onFocus={() => snapshot()}
@@ -646,9 +931,9 @@ function Editor() {
               )}
 
               <div className="mt-3 pt-3 border-t border-neutral-700 space-y-2">
-                <div className="text-xs text-neutral-400">Projekt-Standard</div>
+                <div className="text-xs text-neutral-400">{t('projectDefault')}</div>
                 <div className="flex items-center gap-2">
-                  <label className="text-xs text-neutral-500">Rand</label>
+                  <label className="text-xs text-neutral-500">{t('margin')}</label>
                   <input
                     type="number"
                     min={0}
@@ -658,7 +943,7 @@ function Editor() {
                     onChange={(e) => setDefaultLayoutPadding(Math.max(0, parseInt(e.target.value) || 0))}
                     className="editor-input w-16 px-2 py-1 text-sm rounded-md bg-neutral-800 text-white border border-neutral-600"
                   />
-                  <label className="text-xs text-neutral-500">Abstand</label>
+                  <label className="text-xs text-neutral-500">{t('gap')}</label>
                   <input
                     type="number"
                     min={0}
@@ -672,9 +957,9 @@ function Editor() {
                 <button
                   onClick={() => { snapshot(); applyLayoutDefaultsToAllPages(); }}
                   className="editor-surface-control w-full mt-1 px-2.5 py-1.5 text-xs rounded-md border border-neutral-600 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 transition-colors cursor-pointer select-none"
-                  title="Standard-Rand und -Abstand auf alle Seiten anwenden"
+                  title={t('applyToAllPages')}
                 >
-                  Auf alle Seiten anwenden
+                  {t('applyToAllPages')}
                 </button>
               </div>
             </div>
@@ -683,76 +968,62 @@ function Editor() {
 
         {/* ── Struktur menu ── */}
         <div className="relative" data-menu>
-          <MenuButton label="Struktur" isOpen={openMenu === 'struktur'} onClick={() => toggleMenu('struktur')} />
+          <MenuButton label={t('structure')} isOpen={openMenu === 'struktur'} onClick={() => toggleMenu('struktur')} />
           {openMenu === 'struktur' && (
             <div className="editor-dropdown absolute top-full left-0 mt-2 min-w-[290px] bg-neutral-900 border border-neutral-700 rounded-xl shadow-2xl z-[90] p-1">
               <MenuItem
-                label="Deckblatt hinzufügen"
+                label={t('addCoverLabel')}
                 onClick={handleAddCoverPage}
-                disabled={hasCoverPage}
               />
 
               <MenuDivider />
 
+              <div className="px-3 py-2">
+                <label className="text-xs text-neutral-400 flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={currentShowCoverSubtitle}
+                    onChange={(e) => {
+                      snapshot();
+                      setCoverSubtitleVisible(e.target.checked);
+                    }}
+                    className="accent-blue-500"
+                  />
+                  {t('showSubtitleOnCover')}
+                </label>
+              </div>
+
+              <MenuDivider />
+
               <div className="px-3 py-2 space-y-2">
-                <div className="text-xs text-neutral-400">Aktuelle Seite</div>
+                <div className="text-xs text-neutral-400">{t('currentPage')}</div>
                 <input
                   type="text"
-                  placeholder="Kapitel"
+                  placeholder={t('chapter')}
                   value={currentChapterTitle}
                   onFocus={() => snapshot()}
                   onChange={(e) => setCurrentPageChapterTitle(e.target.value)}
                   className="editor-input w-full px-2 py-1 text-xs rounded-md bg-neutral-800 text-white border border-neutral-600"
-                  title="Kapitel für aktuelle Seite"
+                  title={t('chapter')}
                 />
-                <input
-                  type="text"
-                  placeholder="Unterkapitel"
-                  value={currentSubchapterTitle}
-                  onFocus={() => snapshot()}
-                  onChange={(e) => setCurrentPageSubchapterTitle(e.target.value)}
-                  className="editor-input w-full px-2 py-1 text-xs rounded-md bg-neutral-800 text-white border border-neutral-600"
-                  title="Unterkapitel für aktuelle Seite"
-                />
-                {(currentChapterTitle || currentSubchapterTitle) && (
+                {currentChapterTitle && (
                   <button
                     onClick={() => {
                       snapshot();
                       setCurrentPageChapterTitle('');
-                      setCurrentPageSubchapterTitle('');
                     }}
                     className="editor-surface-control w-full px-2 py-1 text-xs rounded-md border border-neutral-600 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 transition-colors cursor-pointer select-none"
                   >
-                    Kapitel/Unterkapitel entfernen
+                    {t('chapter')} entfernen
                   </button>
                 )}
               </div>
-
-              {currentIsCover && (
-                <>
-                  <MenuDivider />
-                  <div className="px-3 py-2">
-                    <label className="text-xs text-neutral-400 flex items-center gap-2 cursor-pointer select-none">
-                      <input
-                        type="checkbox"
-                        checked={currentShowCoverSubtitle}
-                        onChange={(e) => {
-                          snapshot();
-                          setCoverSubtitleVisible(e.target.checked);
-                        }}
-                        className="accent-blue-500"
-                      />
-                      Untertitel auf Deckblatt anzeigen
-                    </label>
-                  </div>
-                </>
-              )}
 
               {chapterJumpTargets.length > 0 && (
                 <>
                   <MenuDivider />
                   <div className="px-3 py-2 space-y-1">
-                    <div className="text-xs text-neutral-400">Kapitel wechseln</div>
+                    <div className="text-xs text-neutral-400">{t('jumpChapter')}</div>
                     <select
                       value=""
                       onChange={(e) => {
@@ -762,7 +1033,7 @@ function Editor() {
                       }}
                       className="editor-input w-full px-2 py-1 text-xs rounded-md bg-neutral-800 text-white border border-neutral-600"
                     >
-                      <option value="">Kapitel wählen…</option>
+                      <option value="">{t('chooseChapter')}</option>
                       {chapterJumpTargets.map((target) => (
                         <option key={`${target.pageIndex}-${target.label}`} value={target.pageIndex}>
                           {target.label} (S. {target.pageIndex + 1})
@@ -776,21 +1047,6 @@ function Editor() {
           )}
         </div>
 
-        <div className="w-px h-5 bg-neutral-700/80" />
-
-        {/* ── Quick insert buttons (Bild + Text + Deckblatt) ── */}
-        <button onClick={handleAddImage} className="editor-surface-control px-3 py-1 text-sm rounded-lg border border-neutral-700 bg-neutral-900 text-neutral-200 hover:bg-neutral-800 transition-colors cursor-pointer select-none" title="Bild einfügen">
-          + Bild
-        </button>
-        <button onClick={handleAddText} className="editor-surface-control px-3 py-1 text-sm rounded-lg border border-neutral-700 bg-neutral-900 text-neutral-200 hover:bg-neutral-800 transition-colors cursor-pointer select-none" title="Text einfügen (Ctrl+T)">
-          + Text
-        </button>
-        {!hasCoverPage && (
-          <button onClick={handleAddCoverPage} className="editor-surface-control px-3 py-1 text-sm rounded-lg border border-neutral-700 bg-neutral-900 text-neutral-200 hover:bg-neutral-800 transition-colors cursor-pointer select-none" title="Deckblatt hinzufügen">
-            + Deckblatt
-          </button>
-        )}
-
         {/* ── Spacer ── */}
         <div className="flex-1" />
 
@@ -799,8 +1055,8 @@ function Editor() {
           <button
             onClick={() => toggleMenu('quick-settings')}
             className={`${btnPageNav} editor-surface-control mr-1.5 border-neutral-700 bg-neutral-900 text-neutral-300 hover:bg-neutral-800`}
-            title="Schnelleinstellungen"
-            aria-label="Schnelleinstellungen"
+            title={t('settingsQuick')}
+            aria-label={t('settingsQuick')}
           >
             <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <circle cx="12" cy="12" r="3" />
@@ -811,14 +1067,28 @@ function Editor() {
           {openMenu === 'quick-settings' && (
             <div className="editor-dropdown absolute top-full left-0 mt-2 min-w-[250px] bg-neutral-900 border border-neutral-700 rounded-xl shadow-2xl z-[90] p-2">
               <div className="px-2 pt-1 pb-2">
-                <div className="text-xs text-neutral-400 mb-1.5">UI-Modus</div>
+                <div className="text-xs text-neutral-400 mb-1.5">{t('uiMode')}</div>
                 <select
                   value={uiTheme}
                   onChange={(e) => setUiTheme(e.target.value === 'light' ? 'light' : 'dark')}
                   className="editor-input w-full px-2 py-1 text-xs rounded-md bg-neutral-800 text-white border border-neutral-600"
                 >
-                  <option value="dark">Dark</option>
-                  <option value="light">Light</option>
+                  <option value="dark">{t('dark')}</option>
+                  <option value="light">{t('light')}</option>
+                </select>
+              </div>
+
+              <MenuDivider />
+
+              <div className="px-2 pt-1 pb-2">
+                <div className="text-xs text-neutral-400 mb-1.5">{t('language')}</div>
+                <select
+                  value={language}
+                  onChange={(e) => setLanguage(e.target.value === 'en' ? 'en' : 'de')}
+                  className="editor-input w-full px-2 py-1 text-xs rounded-md bg-neutral-800 text-white border border-neutral-600"
+                >
+                  <option value="de">{t('german')}</option>
+                  <option value="en">{t('english')}</option>
                 </select>
               </div>
 
@@ -832,12 +1102,12 @@ function Editor() {
                     onChange={(e) => setAutoSaveEnabled(e.target.checked)}
                     className="accent-blue-500"
                   />
-                  Auto-Save aktivieren
+                  {t('autoSaveEnable')}
                 </label>
 
                 {autoSaveEnabled && (
                   <div className="mt-2 flex items-center gap-2">
-                    <span className="text-xs text-neutral-500">Intervall</span>
+                    <span className="text-xs text-neutral-500">{t('interval')}</span>
                     <select
                       value={autoSaveInterval}
                       onChange={(e) => setAutoSaveInterval(parseInt(e.target.value, 10))}
@@ -852,14 +1122,69 @@ function Editor() {
                   </div>
                 )}
               </div>
+
+              <MenuDivider />
+
+              <div className="px-2 pt-1 pb-2">
+                <div className="text-xs text-neutral-400 mb-1.5">{t('zoomLevel')}</div>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => { setCanvasZoomMode('manual'); setCanvasManualZoom(1); }}
+                    className="editor-surface-control px-2 py-0.5 text-xs rounded-md border border-neutral-600 bg-neutral-800 hover:bg-neutral-700 text-neutral-200"
+                    title={t('zoom100')}
+                  >
+                    {t('zoom100')}
+                  </button>
+                  <button
+                    onClick={() => setCanvasZoomMode('fit')}
+                    className="editor-surface-control px-2 py-0.5 text-xs rounded-md border border-neutral-600 bg-neutral-800 hover:bg-neutral-700 text-neutral-200"
+                    title={t('zoomFit')}
+                  >
+                    {t('zoomFit')}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setCanvasZoomMode('manual');
+                      setCanvasManualZoom((prev) => {
+                        const base = canvasZoomMode === 'fit' ? canvasDisplayScale : prev;
+                        return Math.max(0.2, Math.min(3, Math.round((base - 0.1) * 100) / 100));
+                      });
+                    }}
+                    className="editor-surface-control w-7 h-7 flex items-center justify-center text-sm rounded-md border border-neutral-600 bg-neutral-800 hover:bg-neutral-700 text-neutral-200"
+                    title={t('zoomOut')}
+                  >
+                    −
+                  </button>
+                  <button
+                    onClick={() => {
+                      setCanvasZoomMode('manual');
+                      setCanvasManualZoom((prev) => {
+                        const base = canvasZoomMode === 'fit' ? canvasDisplayScale : prev;
+                        return Math.max(0.2, Math.min(3, Math.round((base + 0.1) * 100) / 100));
+                      });
+                    }}
+                    className="editor-surface-control w-7 h-7 flex items-center justify-center text-sm rounded-md border border-neutral-600 bg-neutral-800 hover:bg-neutral-700 text-neutral-200"
+                    title={t('zoomIn')}
+                  >
+                    +
+                  </button>
+                  <span className="text-xs text-neutral-300 min-w-12 text-right" title={t('zoomLevel')}>
+                    {Math.round(canvasDisplayScale * 100)}%
+                  </span>
+                </div>
+              </div>
             </div>
           )}
 
           <div className="w-px h-5 bg-neutral-700/80 mx-1" />
 
-          <div className="editor-page-label mr-2 px-2.5 py-1 rounded-md border border-neutral-700 bg-neutral-900 text-[11px] uppercase tracking-wide text-neutral-400 select-none">
-            Seiten
-          </div>
+          <button
+            onClick={() => setShowPageOverview(true)}
+            className="editor-page-label mr-2 px-2.5 py-1 rounded-md border border-neutral-700 bg-neutral-900 text-[11px] uppercase tracking-wide text-neutral-400 hover:bg-neutral-800 transition-colors cursor-pointer select-none"
+            title={t('openPageOverview')}
+          >
+            {t('pages')}
+          </button>
 
           <div className="flex items-center gap-1">
             {pageItems.map((item) => {
@@ -894,7 +1219,7 @@ function Editor() {
             <button
               onClick={() => { snapshot(); addPage(); }}
               className={`editor-page-chip ${btnPageNav} bg-neutral-900 border-neutral-700 hover:bg-neutral-800 text-neutral-300`}
-              title="Neue Seite"
+              title={t('pageNew')}
             >
               +
             </button>
@@ -902,7 +1227,7 @@ function Editor() {
               <button
                 onClick={() => { snapshot(); removePage(currentPageIndex); }}
                 className={`editor-page-chip editor-page-chip-danger ${btnPageNav} bg-red-900/60 border-red-800 hover:bg-red-800/70 text-red-200`}
-                title="Seite löschen"
+                title={t('pageDelete')}
               >
                 −
               </button>
@@ -918,7 +1243,7 @@ function Editor() {
           <div className="editor-context-bar basis-full mt-2 pt-2 border-t border-neutral-800/90 flex items-center gap-3 px-1 pb-1 text-sm">
             {selectedTextElement ? (
               <>
-            <label className="text-xs text-neutral-500">Schriftart</label>
+            <label className="text-xs text-neutral-500">{t('font')}</label>
             <select
               value={selectedTextElement.fontFamily}
               onChange={(e) => { snapshot(); updateElement(selectedTextElement.id, { fontFamily: e.target.value }); }}
@@ -928,14 +1253,14 @@ function Editor() {
                 <option key={f} value={f} style={{ fontFamily: f }}>{f}</option>
               ))}
             </select>
-            <label className="text-xs text-neutral-500">Größe</label>
+            <label className="text-xs text-neutral-500">{t('size')}</label>
             <input
               type="number" min={1} max={200} value={selectedTextElement.fontSize}
               onFocus={() => snapshot()}
               onChange={(e) => updateElement(selectedTextElement.id, { fontSize: Math.max(1, parseInt(e.target.value) || 24) })}
               className="editor-input w-16 px-2 py-0.5 text-sm rounded-md bg-neutral-800 text-white border border-neutral-600"
             />
-            <label className="text-xs text-neutral-500">Farbe</label>
+            <label className="text-xs text-neutral-500">{t('color')}</label>
             <input
               type="color" value={selectedTextElement.color}
               onFocus={() => snapshot()}
@@ -945,13 +1270,13 @@ function Editor() {
               </>
             ) : currentIsCover ? (
               <>
-            <label className="text-[11px] text-neutral-500">Titel</label>
+            <label className="text-[11px] text-neutral-500">{t('title')}</label>
             <input
               type="text" value={currentCoverTitle}
               onFocus={() => snapshot()}
               onChange={(e) => setCoverTitle(e.target.value)}
               className="editor-input w-36 px-2 py-0.5 text-xs rounded-md bg-neutral-800 text-white border border-neutral-600"
-              placeholder="Titel"
+              placeholder={t('title')}
             />
             <select
               value={currentCoverTitleFontFamily}
@@ -989,18 +1314,18 @@ function Editor() {
                 }}
                 className="accent-blue-500"
               />
-              Untertitel anzeigen
+              {t('showSubtitle')}
             </label>
 
             {currentShowCoverSubtitle && (
               <>
-                <label className="text-[11px] text-neutral-500">Untertitel</label>
+                <label className="text-[11px] text-neutral-500">{t('subtitle')}</label>
                 <input
                   type="text" value={currentCoverSubtitle}
                   onFocus={() => snapshot()}
                   onChange={(e) => setCoverSubtitle(e.target.value)}
                   className="editor-input w-28 px-2 py-0.5 text-xs rounded-md bg-neutral-800 text-white border border-neutral-600"
-                  placeholder="Untertitel"
+                  placeholder={t('subtitle')}
                 />
                 <select
                   value={currentCoverSubtitleFontFamily}
@@ -1036,7 +1361,7 @@ function Editor() {
       </div>
 
       {/* ─── Canvas area with page arrows on sides ─── */}
-      <div className="relative z-0 flex-1 flex items-center justify-center overflow-hidden gap-3 px-4 pb-4 pt-3">
+      <div className="relative z-0 flex-1 flex items-center justify-center overflow-auto gap-3 px-3 pb-3 pt-2">
         {/* Left arrow */}
         <button
           onClick={goPrevPage}
@@ -1044,7 +1369,7 @@ function Editor() {
           className="editor-side-nav shrink-0 w-11 h-11 flex items-center justify-center rounded-2xl border border-neutral-600
                      bg-gradient-to-b from-neutral-800 to-neutral-900 hover:from-neutral-700 hover:to-neutral-800 text-neutral-200 disabled:opacity-25
                      disabled:cursor-not-allowed transition-all shadow-[0_8px_18px_rgba(0,0,0,0.35)] cursor-pointer select-none"
-          title="Vorherige Seite (←)"
+          title={t('pagePrev')}
         >
           <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M20 12H6" />
@@ -1052,8 +1377,12 @@ function Editor() {
           </svg>
         </button>
 
-        <div className="editor-canvas-shell p-2 rounded-2xl border border-neutral-800 bg-neutral-900/80 shadow-2xl">
-          <EditorCanvas />
+        <div className="editor-canvas-shell flex-1 min-w-0 h-full p-2 rounded-2xl border border-neutral-800 bg-neutral-900/80 shadow-2xl">
+          <EditorCanvas
+            zoomMode={canvasZoomMode}
+            manualZoom={canvasManualZoom}
+            onDisplayScaleChange={setCanvasDisplayScale}
+          />
         </div>
 
         {/* Right arrow / Add page */}
@@ -1063,7 +1392,7 @@ function Editor() {
             className="editor-side-nav shrink-0 w-11 h-11 flex items-center justify-center rounded-xl border border-green-700/50
                        bg-neutral-900 hover:bg-green-900/40 text-green-300
                        transition-all cursor-pointer select-none text-2xl leading-none"
-            title="Neue Seite hinzufügen"
+            title={t('pageAdd')}
           >
             +
           </button>
@@ -1073,7 +1402,7 @@ function Editor() {
             className="editor-side-nav shrink-0 w-11 h-11 flex items-center justify-center rounded-2xl border border-neutral-600
                        bg-gradient-to-b from-neutral-800 to-neutral-900 hover:from-neutral-700 hover:to-neutral-800 text-neutral-200
                        transition-all shadow-[0_8px_18px_rgba(0,0,0,0.35)] cursor-pointer select-none"
-            title="Nächste Seite (→)"
+            title={t('pageNext')}
           >
             <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M4 12h14" />
@@ -1097,7 +1426,7 @@ function Editor() {
       {showPdfDialog && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60">
           <div className="editor-dropdown bg-neutral-900 border border-neutral-700 rounded-2xl shadow-2xl p-5 w-80">
-            <h3 className="text-white font-semibold text-base mb-3">PDF-Kompression</h3>
+            <h3 className="text-white font-semibold text-base mb-3">{t('pdfCompression')}</h3>
             <div className="flex flex-col gap-2">
               {PDF_COMPRESSION_PRESETS.map((preset) => (
                 <button
@@ -1117,15 +1446,33 @@ function Editor() {
               className="mt-3 w-full py-1.5 text-sm rounded-lg bg-neutral-800 hover:bg-neutral-700
                          text-neutral-300 border border-neutral-600 cursor-pointer select-none transition-colors"
             >
-              Abbrechen
+              {t('cancel')}
             </button>
           </div>
         </div>
       )}
 
+      <PageOverviewModal
+        open={showPageOverview}
+        pages={pages}
+        assetBlobs={assetBlobs}
+        currentPageIndex={currentPageIndex}
+        onSelectPage={(index) => setCurrentPageIndex(index)}
+        onClose={() => setShowPageOverview(false)}
+        title={t('pageOverview')}
+        closeLabel={t('close')}
+        noPreviewLabel={t('noPreview')}
+        getMetaLabel={getPageOverviewMetaLabel}
+      />
+
       <NewProjectModal
         open={showNewProjectModal}
         onClose={() => setShowNewProjectModal(false)}
+        title={t('newProject')}
+        description={t('enterProjectName')}
+        cancelLabel={t('cancel')}
+        confirmLabel={t('create')}
+        placeholder={t('projectNamePlaceholder')}
         onConfirm={(name) => {
           resetProject(name);
           setShowNewProjectModal(false);

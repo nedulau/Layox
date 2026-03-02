@@ -9,12 +9,16 @@ A local-first, privacy-focused photo album creator. No cloud, no server — ever
 - **Drag & Drop** Bilder auf den Canvas ziehen
 - **14 Layout-Vorlagen** — von Einzelbild bis Mosaik, plus freie Anordnung
 - **Mehrseitige Projekte** mit Deckblatt, Seitennavigation und Inline-Textbearbeitung
+- **Seitenübersicht mit Vorschaubildern** (klickbar, feste Thumbnail-Größe, dynamisches Grid)
 - **Crop & Zoom** — Bilder frei beschneiden von allen Seiten, Scroll-Zoom in Slots
+- **Canvas-Zoomsteuerung** mit `100%`, `Anpassen`, `+`, `−`
 - **Pixelwarnung** — Hinweis wenn ein Bild eine zu niedrige Auflösung hat
 - **PDF-Export** mit wählbarer Kompression (keine / gering / mittel / stark)
 - **PNG- & JPEG-Export** der aktuellen Seite
 - **Rückgängig / Wiederherstellen** — bis zu 50 Schritte
-- **Auto-Save** — konfigurierbar im Datei-Menü
+- **Auto-Save** — konfigurierbar in den Einstellungen
+- **UI Dark/Light Mode** — umschaltbar im Startscreen und im Editor
+- **Deutsch / Englisch** — umschaltbar im Startscreen und in den Einstellungen
 - **Offline-first** — `.layox`-Dateien (ZIP) lokal speichern und laden
 
 ## Tech Stack

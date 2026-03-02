@@ -2,10 +2,21 @@ import { useRef, useState } from 'react';
 import useProjectStore from '../store/useProjectStore';
 import { getHandle } from '../utils/handleStore';
 import NewProjectModal from './NewProjectModal';
+import { tr, type Language } from '../i18n';
 
-function StartScreen() {
+type UiTheme = 'dark' | 'light';
+
+type StartScreenProps = {
+  uiTheme: UiTheme;
+  setUiTheme: (theme: UiTheme) => void;
+  language: Language;
+  setLanguage: (language: Language) => void;
+};
+
+function StartScreen({ uiTheme, setUiTheme, language, setLanguage }: StartScreenProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showNewProjectModal, setShowNewProjectModal] = useState(false);
+  const t = (key: string) => tr(language, key);
 
   const resetProject = useProjectStore((s) => s.resetProject);
   const openProject = useProjectStore((s) => s.openProject);
@@ -23,8 +34,8 @@ function StartScreen() {
       try {
         await openProject();
       } catch (err) {
-        console.error('Fehler beim Öffnen:', err);
-        alert(`Fehler beim Öffnen: ${err instanceof Error ? err.message : err}`);
+        console.error(t('openError'), err);
+        alert(`${t('openError')}: ${err instanceof Error ? err.message : err}`);
       }
     } else {
       fileInputRef.current?.click();
@@ -37,8 +48,8 @@ function StartScreen() {
     try {
       await loadFromFile(file);
     } catch (err) {
-      console.error('Fehler beim Laden:', err);
-      alert(`Fehler beim Laden: ${err instanceof Error ? err.message : err}`);
+      console.error(t('loadError'), err);
+      alert(`${t('loadError')}: ${err instanceof Error ? err.message : err}`);
     }
     e.target.value = '';
   };
@@ -76,13 +87,34 @@ function StartScreen() {
   };
 
   return (
-    <div className="w-screen h-screen bg-[#111] flex items-center justify-center">
+    <div className="app-ui start-ui w-screen h-screen flex items-center justify-center" data-ui-theme={uiTheme}>
       <div className="flex flex-col items-center gap-8 max-w-lg w-full px-6">
+        <div className="w-full flex items-center justify-end gap-2">
+          <select
+            value={language}
+            onChange={(e) => setLanguage(e.target.value === 'en' ? 'en' : 'de')}
+            className="editor-input px-2 py-1 text-xs rounded-md bg-neutral-800 text-white border border-neutral-600"
+            title={t('language')}
+          >
+            <option value="de">{t('german')}</option>
+            <option value="en">{t('english')}</option>
+          </select>
+          <select
+            value={uiTheme}
+            onChange={(e) => setUiTheme(e.target.value === 'light' ? 'light' : 'dark')}
+            className="editor-input px-2 py-1 text-xs rounded-md bg-neutral-800 text-white border border-neutral-600"
+            title={t('uiMode')}
+          >
+            <option value="dark">{t('dark')}</option>
+            <option value="light">{t('light')}</option>
+          </select>
+        </div>
+
         {/* Logo / Title */}
         <div className="text-center">
-          <h1 className="text-5xl font-bold text-white tracking-tight">Layox</h1>
-          <p className="text-neutral-400 mt-2 text-sm">
-            Lokaler Fotoalbum-Editor — privat &amp; ohne Cloud
+          <h1 className="text-5xl font-bold start-title tracking-tight">Layox</h1>
+          <p className="start-subtitle mt-2 text-sm">
+            {t('startSubtitle')}
           </p>
         </div>
 
@@ -93,22 +125,22 @@ function StartScreen() {
             className="px-5 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-medium
                        transition-colors cursor-pointer select-none"
           >
-            Neues Projekt
+            {t('newProject')}
           </button>
           <button
             onClick={handleOpen}
-            className="px-5 py-2.5 rounded-lg bg-neutral-700 hover:bg-neutral-600 text-white font-medium
+            className="start-open-btn px-5 py-2.5 rounded-lg bg-neutral-700 hover:bg-neutral-600 text-white font-medium
                        transition-colors cursor-pointer select-none"
           >
-            Projekt öffnen
+            {t('openProject')}
           </button>
         </div>
 
         {/* Recent projects */}
         {recentProjects.length > 0 && (
           <div className="w-full">
-            <h2 className="text-sm text-neutral-500 font-medium mb-2 uppercase tracking-wider">
-              Zuletzt geöffnet
+            <h2 className="text-sm start-recent-title font-medium mb-2 uppercase tracking-wider">
+              {t('recentOpened')}
             </h2>
             <div className="flex flex-col gap-1">
               {recentProjects.map((rp, i) => (
@@ -116,12 +148,12 @@ function StartScreen() {
                   key={`${rp.fileName}-${i}`}
                   onDoubleClick={() => handleRecentDoubleClick(rp.fileName)}
                   className="flex items-center justify-between px-4 py-2.5 rounded-lg
-                             bg-neutral-800/60 hover:bg-neutral-700/80 transition-colors
+                             start-recent-item bg-neutral-800/60 hover:bg-neutral-700/80 transition-colors
                              cursor-pointer select-none"
-                  title="Doppelklick zum Öffnen"
+                  title={t('doubleClickOpen')}
                 >
                   <div className="flex flex-col min-w-0">
-                    <span className="text-white text-sm font-medium truncate">
+                    <span className="start-recent-name text-sm font-medium truncate">
                       {rp.name}
                     </span>
                     <span className="text-neutral-500 text-xs truncate">
@@ -150,6 +182,11 @@ function StartScreen() {
       <NewProjectModal
         open={showNewProjectModal}
         onClose={() => setShowNewProjectModal(false)}
+        title={t('newProject')}
+        description={t('enterProjectName')}
+        cancelLabel={t('cancel')}
+        confirmLabel={t('create')}
+        placeholder={t('projectNamePlaceholder')}
         onConfirm={(name) => {
           resetProject(name);
           setShowNewProjectModal(false);

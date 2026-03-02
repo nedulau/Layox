@@ -15,37 +15,43 @@ body {
 }
 
 /* ─── Editor UI Themes (canvas content intentionally untouched) ─────────── */
-.editor-ui[data-ui-theme='light'] {
+.editor-ui[data-ui-theme='light'],
+.app-ui[data-ui-theme='light'] {
   background: #eef2f7 !important;
   color: #0f172a !important;
 }
 
 .editor-ui[data-ui-theme='light'] .editor-topbar,
 .editor-ui[data-ui-theme='light'] .editor-context-bar,
-.editor-ui[data-ui-theme='light'] .editor-dropdown {
+.editor-ui[data-ui-theme='light'] .editor-dropdown,
+.app-ui[data-ui-theme='light'] .editor-dropdown {
   background: #ffffff !important;
   border-color: #d8dee9 !important;
   color: #0f172a !important;
 }
 
-.editor-ui[data-ui-theme='light'] .editor-surface-control {
+.editor-ui[data-ui-theme='light'] .editor-surface-control,
+.app-ui[data-ui-theme='light'] .editor-surface-control {
   background: #f8fafc !important;
   border-color: #d8dee9 !important;
   color: #1e293b !important;
 }
 
-.editor-ui[data-ui-theme='light'] .editor-surface-control:hover {
+.editor-ui[data-ui-theme='light'] .editor-surface-control:hover,
+.app-ui[data-ui-theme='light'] .editor-surface-control:hover {
   background: #f1f5f9 !important;
   color: #0f172a !important;
 }
 
-.editor-ui[data-ui-theme='light'] .editor-input {
+.editor-ui[data-ui-theme='light'] .editor-input,
+.app-ui[data-ui-theme='light'] .editor-input {
   background: #f8fafc !important;
   border-color: #d8dee9 !important;
   color: #0f172a !important;
 }
 
-.editor-ui[data-ui-theme='light'] .editor-input::placeholder {
+.editor-ui[data-ui-theme='light'] .editor-input::placeholder,
+.app-ui[data-ui-theme='light'] .editor-input::placeholder {
   color: #64748b !important;
 }
 
@@ -70,6 +76,80 @@ body {
 .editor-ui[data-ui-theme='light'] .editor-color-input {
   background: #f8fafc !important;
   border-color: #d8dee9 !important;
+}
+
+.start-ui {
+  background: #111;
+}
+
+.start-ui .start-title {
+  color: #fff;
+}
+
+.start-ui .start-subtitle {
+  color: #a3a3a3;
+}
+
+.start-ui .start-open-btn {
+  background: #404040;
+  color: #fff;
+}
+
+.start-ui .start-open-btn:hover {
+  background: #525252;
+}
+
+.start-ui .start-recent-title {
+  color: #737373;
+}
+
+.start-ui .start-recent-item {
+  background: rgba(38, 38, 38, 0.6);
+}
+
+.start-ui .start-recent-item:hover {
+  background: rgba(64, 64, 64, 0.8);
+}
+
+.start-ui .start-recent-name {
+  color: #fff;
+}
+
+.app-ui.start-ui[data-ui-theme='light'] {
+  background: #eef2f7;
+}
+
+.app-ui.start-ui[data-ui-theme='light'] .start-title {
+  color: #0f172a;
+}
+
+.app-ui.start-ui[data-ui-theme='light'] .start-subtitle {
+  color: #475569;
+}
+
+.app-ui.start-ui[data-ui-theme='light'] .start-open-btn {
+  background: #e2e8f0;
+  color: #0f172a;
+}
+
+.app-ui.start-ui[data-ui-theme='light'] .start-open-btn:hover {
+  background: #cbd5e1;
+}
+
+.app-ui.start-ui[data-ui-theme='light'] .start-recent-title {
+  color: #64748b;
+}
+
+.app-ui.start-ui[data-ui-theme='light'] .start-recent-item {
+  background: rgba(226, 232, 240, 0.7);
+}
+
+.app-ui.start-ui[data-ui-theme='light'] .start-recent-item:hover {
+  background: rgba(203, 213, 225, 0.85);
+}
+
+.app-ui.start-ui[data-ui-theme='light'] .start-recent-name {
+  color: #0f172a;
 }
 
 .editor-ui[data-ui-theme='light'] .editor-canvas-shell {
