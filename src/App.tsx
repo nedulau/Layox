@@ -816,7 +816,7 @@ function Editor({
       {/* ─── Menu Bar ─── */}
       <div className="editor-topbar relative z-40 flex flex-wrap items-center gap-1.5 px-3 py-1.5 bg-neutral-900/95 border border-neutral-800 rounded-xl shadow-lg mx-4 mt-4 shrink-0 backdrop-blur-sm">
 
-        <div className="order-first basis-full flex justify-center xl:order-none xl:basis-full xl:absolute xl:inset-x-0 xl:inset-y-0 xl:flex xl:items-center xl:justify-center xl:pointer-events-none">
+        <div className="order-first basis-full flex justify-center xl:order-none xl:basis-full xl:absolute xl:inset-x-0 xl:top-[21px] xl:-translate-y-1/2 xl:flex xl:justify-center xl:pointer-events-none">
           <input
             type="text"
             value={projectName}
@@ -971,30 +971,6 @@ function Editor({
           <MenuButton label={t('structure')} isOpen={openMenu === 'struktur'} onClick={() => toggleMenu('struktur')} />
           {openMenu === 'struktur' && (
             <div className="editor-dropdown absolute top-full left-0 mt-2 min-w-[290px] bg-neutral-900 border border-neutral-700 rounded-xl shadow-2xl z-[90] p-1">
-              <MenuItem
-                label={t('addCoverLabel')}
-                onClick={handleAddCoverPage}
-              />
-
-              <MenuDivider />
-
-              <div className="px-3 py-2">
-                <label className="text-xs text-neutral-400 flex items-center gap-2 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={currentShowCoverSubtitle}
-                    onChange={(e) => {
-                      snapshot();
-                      setCoverSubtitleVisible(e.target.checked);
-                    }}
-                    className="accent-blue-500"
-                  />
-                  {t('showSubtitleOnCover')}
-                </label>
-              </div>
-
-              <MenuDivider />
-
               <div className="px-3 py-2 space-y-2">
                 <div className="text-xs text-neutral-400">{t('currentPage')}</div>
                 <input
