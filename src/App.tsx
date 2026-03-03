@@ -264,10 +264,13 @@ function PageOverviewModal({
   assetBlobs,
   currentPageIndex,
   onSelectPage,
+  onMovePage,
   onClose,
   title,
   closeLabel,
   noPreviewLabel,
+  dragToReorderLabel,
+  searchPlaceholder,
   getMetaLabel,
 }: {
   open: boolean;
@@ -275,12 +278,27 @@ function PageOverviewModal({
   assetBlobs: Record<string, Blob>;
   currentPageIndex: number;
   onSelectPage: (index: number) => void;
+  onMovePage: (fromIndex: number, toIndex: number) => void;
   onClose: () => void;
   title: string;
   closeLabel: string;
   noPreviewLabel: string;
+  dragToReorderLabel: string;
+  searchPlaceholder: string;
   getMetaLabel: (page: Page) => string;
 }) {
+  const [dragFromIndex, setDragFromIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+
+  const visibleItems = useMemo(() => {
+    const needle = searchTerm.trim().toLowerCase();
+    if (!needle) return pages.map((page, index) => ({ page, index }));
+    return pages
+      .map((page, index) => ({ page, index }))
+      .filter(({ page }) => getMetaLabel(page).toLowerCase().includes(needle));
+  }, [getMetaLabel, pages, searchTerm]);
+
   useEffect(() => {
     if (!open) return;
     const onKeyDown = (event: KeyboardEvent) => {
@@ -304,13 +322,25 @@ function PageOverviewModal({
         onMouseDown={(event) => event.stopPropagation()}
       >
         <div className="flex items-center justify-between px-4 py-3 border-b border-neutral-700/80">
-          <h3 className="text-sm font-semibold text-neutral-100">{title}</h3>
-          <button
-            onClick={onClose}
-            className="editor-surface-control px-2.5 py-1 rounded-md border border-neutral-600 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 text-xs"
-          >
-            {closeLabel}
-          </button>
+          <div>
+            <h3 className="text-sm font-semibold text-neutral-100">{title}</h3>
+            <div className="text-[11px] text-neutral-400 mt-0.5">{dragToReorderLabel}</div>
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              placeholder={searchPlaceholder}
+              className="editor-input w-52 px-2 py-1 text-xs rounded-md bg-neutral-800 text-white border border-neutral-600"
+            />
+            <button
+              onClick={onClose}
+              className="editor-surface-control px-2.5 py-1 rounded-md border border-neutral-600 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 text-xs"
+            >
+              {closeLabel}
+            </button>
+          </div>
         </div>
 
         <div className="flex-1 overflow-auto p-4">
@@ -321,22 +351,137 @@ function PageOverviewModal({
               gridAutoRows: 'min-content',
             }}
           >
-            {pages.map((page, index) => (
-              <PagePreviewCard
+            {visibleItems.map(({ page, index }) => (
+              <div
                 key={page.id}
-                page={page}
-                assetBlobs={assetBlobs}
-                pageIndex={index}
-                active={index === currentPageIndex}
-                noPreviewLabel={noPreviewLabel}
-                metaLabel={getMetaLabel(page)}
-                onClick={() => {
-                  onSelectPage(index);
-                  onClose();
+                draggable
+                onDragStart={() => {
+                  setDragFromIndex(index);
+                  setDragOverIndex(index);
                 }}
-              />
+                onDragOver={(event) => {
+                  event.preventDefault();
+                  setDragOverIndex(index);
+                }}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  if (dragFromIndex === null || dragFromIndex === index) return;
+                  onMovePage(dragFromIndex, index);
+                  setDragFromIndex(null);
+                  setDragOverIndex(null);
+                }}
+                onDragEnd={() => {
+                  setDragFromIndex(null);
+                  setDragOverIndex(null);
+                }}
+                className={dragOverIndex === index && dragFromIndex !== index ? 'ring-2 ring-blue-500 rounded-xl' : ''}
+              >
+                <PagePreviewCard
+                  page={page}
+                  assetBlobs={assetBlobs}
+                  pageIndex={index}
+                  active={index === currentPageIndex}
+                  noPreviewLabel={noPreviewLabel}
+                  metaLabel={getMetaLabel(page)}
+                  onClick={() => {
+                    onSelectPage(index);
+                    onClose();
+                  }}
+                />
+              </div>
             ))}
           </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AssetLibraryModal({
+  open,
+  assetBlobs,
+  title,
+  closeLabel,
+  emptyLabel,
+  onInsert,
+  onClose,
+}: {
+  open: boolean;
+  assetBlobs: Record<string, Blob>;
+  title: string;
+  closeLabel: string;
+  emptyLabel: string;
+  onInsert: (assetPath: string) => void;
+  onClose: () => void;
+}) {
+  const assetPaths = useMemo(() => Object.keys(assetBlobs).sort(), [assetBlobs]);
+  const [previewUrls, setPreviewUrls] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (!open) return;
+    const nextUrls: Record<string, string> = {};
+    assetPaths.forEach((path) => {
+      const blob = assetBlobs[path];
+      if (!blob) return;
+      nextUrls[path] = URL.createObjectURL(blob);
+    });
+    setPreviewUrls(nextUrls);
+    return () => {
+      Object.values(nextUrls).forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, [open, assetBlobs, assetPaths]);
+
+  if (!open) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-[112] bg-black/60 backdrop-blur-[1px] flex items-center justify-center px-6 py-6"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <div
+        className="editor-dropdown w-[min(94vw,980px)] h-[min(86vh,760px)] bg-neutral-900 border border-neutral-700 rounded-2xl shadow-2xl flex flex-col overflow-hidden"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-4 py-3 border-b border-neutral-700/80">
+          <h3 className="text-sm font-semibold text-neutral-100">{title}</h3>
+          <button
+            onClick={onClose}
+            className="editor-surface-control px-2.5 py-1 rounded-md border border-neutral-600 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 text-xs"
+          >
+            {closeLabel}
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-auto p-4">
+          {assetPaths.length === 0 ? (
+            <div className="h-full flex items-center justify-center text-sm text-neutral-400">{emptyLabel}</div>
+          ) : (
+            <div className="grid gap-3 justify-center" style={{ gridTemplateColumns: 'repeat(auto-fill, 180px)' }}>
+              {assetPaths.map((assetPath) => (
+                <button
+                  key={assetPath}
+                  onClick={() => {
+                    onInsert(assetPath);
+                    onClose();
+                  }}
+                  className="group text-left rounded-xl border border-neutral-700 bg-neutral-900/80 hover:bg-neutral-800/90 transition-colors overflow-hidden"
+                >
+                  <div className="w-[180px] h-[135px] bg-neutral-950 flex items-center justify-center overflow-hidden">
+                    {previewUrls[assetPath] ? (
+                      <img src={previewUrls[assetPath]} alt="" className="w-full h-full object-cover" draggable={false} />
+                    ) : (
+                      <span className="text-xs text-neutral-500">…</span>
+                    )}
+                  </div>
+                  <div className="px-2 py-1.5 border-t border-neutral-700/80 text-[11px] text-neutral-400 truncate">
+                    {assetPath.split('/').pop() || assetPath}
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -366,6 +511,7 @@ function Editor({
   const saveCurrentProjectAs = useProjectStore((s) => s.saveCurrentProjectAs);
   const openProject = useProjectStore((s) => s.openProject);
   const loadFromFile = useProjectStore((s) => s.loadFromFile);
+  const project = useProjectStore((s) => s.project);
   const resetProject = useProjectStore((s) => s.resetProject);
   const setProjectName = useProjectStore((s) => s.setProjectName);
   const projectName = useProjectStore((s) => s.project.meta.name);
@@ -376,6 +522,7 @@ function Editor({
   const canRedo = useProjectStore((s) => s.historyFuture.length > 0);
 
   const addImageFromFile = useProjectStore((s) => s.addImageFromFile);
+  const addImageFromAsset = useProjectStore((s) => s.addImageFromAsset);
   const addTextElement = useProjectStore((s) => s.addTextElement);
   const removeElement = useProjectStore((s) => s.removeElement);
   const removeImageFromSlot = useProjectStore((s) => s.removeImageFromSlot);
@@ -424,6 +571,7 @@ function Editor({
   const setCurrentPageIndex = useProjectStore((s) => s.setCurrentPageIndex);
   const addPage = useProjectStore((s) => s.addPage);
   const removePage = useProjectStore((s) => s.removePage);
+  const movePage = useProjectStore((s) => s.movePage);
 
   const currentIsCover = useProjectStore(
     (s) => s.project.pages[s.currentPageIndex]?.isCover ?? false,
@@ -493,9 +641,56 @@ function Editor({
   const [openMenu, setOpenMenu] = useState<string | null>(null);
   const [showNewProjectModal, setShowNewProjectModal] = useState(false);
   const [showPageOverview, setShowPageOverview] = useState(false);
+  const [showAssetLibrary, setShowAssetLibrary] = useState(false);
+  const [chapterPanelCollapsed, setChapterPanelCollapsed] = useState(false);
   const [canvasZoomMode, setCanvasZoomMode] = useState<'fit' | 'manual'>('fit');
   const [canvasManualZoom, setCanvasManualZoom] = useState(1);
   const [canvasDisplayScale, setCanvasDisplayScale] = useState(1);
+  const [lastChangedAt, setLastChangedAt] = useState<number | null>(null);
+  const [lastAutoSavedAt, setLastAutoSavedAt] = useState<number | null>(null);
+  const [nowTick, setNowTick] = useState(() => Date.now());
+  const [pdfDefaultLevel, setPdfDefaultLevel] = useState<PdfCompressionLevel>(() => {
+    const saved = localStorage.getItem('layox_pdfDefaultLevel');
+    if (saved && PDF_COMPRESSION_PRESETS.some((preset) => preset.id === saved)) {
+      return saved as PdfCompressionLevel;
+    }
+    return 'medium';
+  });
+  const didMountRef = useRef(false);
+
+  useEffect(() => {
+    localStorage.setItem('layox_pdfDefaultLevel', pdfDefaultLevel);
+  }, [pdfDefaultLevel]);
+
+  useEffect(() => {
+    if (!didMountRef.current) {
+      didMountRef.current = true;
+      return;
+    }
+    setLastChangedAt(Date.now());
+  }, [project]);
+
+  useEffect(() => {
+    const id = setInterval(() => setNowTick(Date.now()), 5000);
+    return () => clearInterval(id);
+  }, []);
+
+  const formatRelativeSeconds = useCallback((timestamp: number | null) => {
+    if (!timestamp) return '—';
+    const seconds = Math.max(0, Math.round((nowTick - timestamp) / 1000));
+    if (seconds < 5) return '0s';
+    if (seconds < 60) return `${seconds}s`;
+    const minutes = Math.round(seconds / 60);
+    if (minutes < 60) return `${minutes}m`;
+    const hours = Math.round(minutes / 60);
+    return `${hours}h`;
+  }, [nowTick]);
+
+  const autoSaveStatus = !autoSaveEnabled
+    ? t('autoSaveOff')
+    : lastAutoSavedAt
+      ? `${t('autoSavedNow')} (${formatRelativeSeconds(lastAutoSavedAt)})`
+      : t('autoSaveReady');
 
   const toggleMenu = useCallback(
     (name: string) => setOpenMenu((prev) => (prev === name ? null : name)),
@@ -621,9 +816,9 @@ function Editor({
     const id = setInterval(() => {
       const state = useProjectStore.getState();
       if (state.fileHandle) {
-        state.saveCurrentProject().catch((err) =>
-          console.error('Auto-save Fehler:', err),
-        );
+        state.saveCurrentProject()
+          .then(() => setLastAutoSavedAt(Date.now()))
+          .catch((err) => console.error('Auto-save Fehler:', err));
       }
     }, autoSaveInterval * 1000);
     return () => clearInterval(id);
@@ -670,6 +865,11 @@ function Editor({
   };
 
   const handleAddText = () => { closeMenu(); snapshot(); addTextElement(); };
+  const handleOpenAssetLibrary = () => { closeMenu(); setShowAssetLibrary(true); };
+  const handleInsertFromAssetLibrary = async (assetPath: string) => {
+    snapshot();
+    await addImageFromAsset(assetPath);
+  };
   const handleAddCoverPage = () => { closeMenu(); snapshot(); addCoverPage(); };
   const handleAddPageFromMenu = () => { closeMenu(); snapshot(); addPage(); };
 
@@ -733,6 +933,7 @@ function Editor({
 
   const handleExportPdfConfirm = async (level: PdfCompressionLevel) => {
     setShowPdfDialog(false);
+    setPdfDefaultLevel(level);
     await exportAsPdf(pages.length, setCurrentPageIndex, projectName, level);
   };
 
@@ -798,6 +999,24 @@ function Editor({
         return { pageIndex: index, label };
       })
       .filter((item): item is { pageIndex: number; label: string } => item !== null);
+  }, [pages, t]);
+
+  const chapterPanelItems = useMemo(() => {
+    return pages.map((page, index) => {
+      if (page.isCover) {
+        const coverLabel = (page.coverTitle ?? '').trim();
+        return {
+          pageIndex: index,
+          label: coverLabel ? `${t('deckblatt')} • ${coverLabel}` : t('deckblatt'),
+        };
+      }
+
+      const chapter = (page.chapterTitle ?? '').trim();
+      return {
+        pageIndex: index,
+        label: chapter || `${t('pageLabel')} ${index + 1}`,
+      };
+    });
   }, [pages, t]);
 
   const getPageOverviewMetaLabel = useCallback((page: Page) => {
@@ -892,6 +1111,7 @@ function Editor({
               <MenuItem label={t('pageNew')} onClick={handleAddPageFromMenu} />
               <MenuDivider />
               <MenuItem label={t('addImageLabel')} shortcut="Ctrl+I" onClick={handleAddImage} />
+              <MenuItem label={t('insertFromLibrary')} onClick={handleOpenAssetLibrary} />
               <MenuItem label={t('addTextLabel')} shortcut="Ctrl+T" onClick={handleAddText} />
               <MenuDivider />
               <MenuItem label={t('addCoverLabel')} onClick={handleAddCoverPage} />
@@ -1209,6 +1429,11 @@ function Editor({
               </button>
             )}
           </div>
+
+          <div className="ml-auto flex items-center gap-3 pl-3 border-l border-neutral-700/80 text-[11px] text-neutral-400 tabular-nums">
+            <span>{t('lastChanged')}: {formatRelativeSeconds(lastChangedAt)}</span>
+            <span>{autoSaveStatus}</span>
+          </div>
         </div>
 
         {/* Hidden file inputs */}
@@ -1338,6 +1563,38 @@ function Editor({
 
       {/* ─── Canvas area with page arrows on sides ─── */}
       <div className="relative z-0 flex-1 flex items-center justify-center overflow-auto gap-3 px-3 pb-3 pt-2">
+        <aside className={`shrink-0 ${chapterPanelCollapsed ? 'w-14' : 'w-56'} h-full rounded-2xl border border-neutral-800 bg-neutral-900/80 shadow-2xl overflow-hidden flex flex-col transition-[width] duration-200`}>
+          <div className="px-2.5 py-2 border-b border-neutral-800 flex items-center justify-between gap-2">
+            {!chapterPanelCollapsed && (
+              <span className="text-xs text-neutral-400 uppercase tracking-wide">{t('chapterPanel')}</span>
+            )}
+            <button
+              onClick={() => setChapterPanelCollapsed((prev) => !prev)}
+              className="w-7 h-7 rounded-md border border-neutral-700 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-sm flex items-center justify-center cursor-pointer"
+              title={chapterPanelCollapsed ? t('expand') : t('collapse')}
+            >
+              {chapterPanelCollapsed ? '»' : '«'}
+            </button>
+          </div>
+          <div className={`flex-1 overflow-auto p-2 ${chapterPanelCollapsed ? 'space-y-1.5' : 'space-y-1'}`}>
+            {chapterPanelItems.map((item) => (
+              <button
+                key={`chapter-nav-${item.pageIndex}`}
+                onClick={() => setCurrentPageIndex(item.pageIndex)}
+                className={`w-full ${chapterPanelCollapsed ? 'text-center px-1.5 py-1.5' : 'text-left px-2.5 py-1.5'} rounded-lg border text-xs transition-colors cursor-pointer select-none ${
+                  item.pageIndex === currentPageIndex
+                    ? 'border-blue-500 bg-blue-600/20 text-blue-100'
+                    : 'border-neutral-700 bg-neutral-900 text-neutral-300 hover:bg-neutral-800 hover:text-neutral-100'
+                }`}
+                title={item.label}
+              >
+                <span className={chapterPanelCollapsed ? '' : 'mr-1.5 text-neutral-500'}>{item.pageIndex + 1}{chapterPanelCollapsed ? '' : '.'}</span>
+                {!chapterPanelCollapsed && item.label}
+              </button>
+            ))}
+          </div>
+        </aside>
+
         {/* Left arrow */}
         <button
           onClick={goPrevPage}
@@ -1408,15 +1665,26 @@ function Editor({
                 <button
                   key={preset.id}
                   onClick={() => handleExportPdfConfirm(preset.id)}
-                  className="text-left px-3 py-2.5 rounded-lg bg-neutral-800 hover:bg-blue-600/20
-                             border border-neutral-600 hover:border-blue-500 transition-colors
-                             cursor-pointer select-none"
+                  className={`text-left px-3 py-2.5 rounded-lg border transition-colors
+                             cursor-pointer select-none ${
+                               preset.id === pdfDefaultLevel
+                                 ? 'bg-blue-600/15 border-blue-500'
+                                 : 'bg-neutral-800 border-neutral-600 hover:bg-blue-600/20 hover:border-blue-500'
+                             }`}
                 >
-                  <div className="text-sm text-white font-medium">{preset.label}</div>
+                  <div className="text-sm text-white font-medium flex items-center gap-2">
+                    {preset.label}
+                    {preset.id === pdfDefaultLevel && (
+                      <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded border border-blue-500/70 text-blue-200">
+                        {t('pdfDefault')}
+                      </span>
+                    )}
+                  </div>
                   <div className="text-xs text-neutral-400 mt-0.5">{preset.description}</div>
                 </button>
               ))}
             </div>
+            <div className="mt-2 text-[11px] text-neutral-500">{t('pdfRemembered')}</div>
             <button
               onClick={() => setShowPdfDialog(false)}
               className="mt-3 w-full py-1.5 text-sm rounded-lg bg-neutral-800 hover:bg-neutral-700
@@ -1434,11 +1702,27 @@ function Editor({
         assetBlobs={assetBlobs}
         currentPageIndex={currentPageIndex}
         onSelectPage={(index) => setCurrentPageIndex(index)}
+        onMovePage={(fromIndex, toIndex) => {
+          snapshot();
+          movePage(fromIndex, toIndex);
+        }}
         onClose={() => setShowPageOverview(false)}
         title={t('pageOverview')}
         closeLabel={t('close')}
         noPreviewLabel={t('noPreview')}
+        dragToReorderLabel={t('dragToReorder')}
+        searchPlaceholder={t('searchChapter')}
         getMetaLabel={getPageOverviewMetaLabel}
+      />
+
+      <AssetLibraryModal
+        open={showAssetLibrary}
+        assetBlobs={assetBlobs}
+        title={t('assetLibrary')}
+        closeLabel={t('close')}
+        emptyLabel={t('noAssets')}
+        onInsert={handleInsertFromAssetLibrary}
+        onClose={() => setShowAssetLibrary(false)}
       />
 
       <NewProjectModal

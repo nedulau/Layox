@@ -110,6 +110,7 @@ interface ProjectState {
   setCurrentPageIndex: (index: number) => void;
   addPage: () => void;
   removePage: (index: number) => void;
+  movePage: (fromIndex: number, toIndex: number) => void;
 
   addElement: (element: PageElement) => void;
   updateElement: (elementId: string, changes: Partial<PageElement>) => void;
@@ -118,6 +119,7 @@ interface ProjectState {
   setSelectedSlotIndex: (index: number | null) => void;
 
   addImageFromFile: (file: File) => Promise<void>;
+  addImageFromAsset: (assetPath: string) => Promise<void>;
   addTextElement: () => void;
   removeImageFromSlot: (slotIndex: number) => void;
   updateSlotOffset: (slotIndex: number, offsetX: number, offsetY: number) => void;
@@ -282,6 +284,39 @@ const useProjectStore = create<ProjectState>((set, get) => ({
       return {
         project: { ...state.project, pages: newPages },
         currentPageIndex: newIndex,
+        selectedElementId: null,
+        selectedSlotIndex: null,
+      };
+    }),
+
+  movePage: (fromIndex, toIndex) =>
+    set((state) => {
+      const pages = [...state.project.pages];
+      if (
+        fromIndex < 0 ||
+        toIndex < 0 ||
+        fromIndex >= pages.length ||
+        toIndex >= pages.length ||
+        fromIndex === toIndex
+      ) {
+        return state;
+      }
+
+      const [moved] = pages.splice(fromIndex, 1);
+      pages.splice(toIndex, 0, moved);
+
+      let nextCurrentPageIndex = state.currentPageIndex;
+      if (state.currentPageIndex === fromIndex) {
+        nextCurrentPageIndex = toIndex;
+      } else if (fromIndex < state.currentPageIndex && toIndex >= state.currentPageIndex) {
+        nextCurrentPageIndex -= 1;
+      } else if (fromIndex > state.currentPageIndex && toIndex <= state.currentPageIndex) {
+        nextCurrentPageIndex += 1;
+      }
+
+      return {
+        project: { ...state.project, pages },
+        currentPageIndex: nextCurrentPageIndex,
         selectedElementId: null,
         selectedSlotIndex: null,
       };
@@ -745,6 +780,79 @@ const useProjectStore = create<ProjectState>((set, get) => ({
       get().addAsset(assetPath, blob);
       get().addElement(element);
     }
+  },
+
+  addImageFromAsset: async (assetPath) => {
+    const page = get().currentPage();
+    if (!page) return;
+
+    const blob = get().assetBlobs[assetPath];
+    if (!blob) return;
+
+    if (page.layoutId) {
+      const layout = getLayoutById(page.layoutId);
+      if (!layout) return;
+
+      let targetSlot = get().selectedSlotIndex;
+      if (targetSlot === null) {
+        const assignments = page.slotAssignments ?? {};
+        const emptyIdx = layout.slots.findIndex((_, i) => !assignments[i]);
+        if (emptyIdx === -1) return;
+        targetSlot = emptyIdx;
+      }
+
+      const finalSlot = targetSlot;
+      set((state) => {
+        const pages = [...state.project.pages];
+        const p = { ...pages[state.currentPageIndex] };
+        p.slotAssignments = {
+          ...(p.slotAssignments ?? {}),
+          [finalSlot]: { assetPath, offsetX: 0, offsetY: 0, scale: 1 },
+        };
+        pages[state.currentPageIndex] = p;
+        return {
+          project: { ...state.project, pages },
+          selectedSlotIndex: null,
+          selectedElementId: null,
+        };
+      });
+      return;
+    }
+
+    const dimensions = await new Promise<{ w: number; h: number }>((resolve) => {
+      const url = URL.createObjectURL(blob);
+      const img = new window.Image();
+      img.onload = () => {
+        resolve({ w: img.naturalWidth, h: img.naturalHeight });
+        URL.revokeObjectURL(url);
+      };
+      img.onerror = () => {
+        resolve({ w: 300, h: 200 });
+        URL.revokeObjectURL(url);
+      };
+      img.src = url;
+    });
+
+    let { w, h } = dimensions;
+    if (w > CANVAS_IMAGE_MAX_W || h > CANVAS_IMAGE_MAX_H) {
+      const scale = Math.min(CANVAS_IMAGE_MAX_W / w, CANVAS_IMAGE_MAX_H / h);
+      w = Math.round(w * scale);
+      h = Math.round(h * scale);
+    }
+
+    const element: ImageElement = {
+      id: uuidv4(),
+      type: 'image',
+      x: Math.round((CANVAS_W - w) / 2),
+      y: Math.round((CANVAS_H - h) / 2),
+      width: w,
+      height: h,
+      rotation: 0,
+      zIndex: get().currentPage()?.elements.length ?? 0,
+      src: assetPath,
+    };
+
+    get().addElement(element);
   },
 
   addTextElement: () => {
