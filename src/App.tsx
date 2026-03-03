@@ -9,12 +9,20 @@ import useProjectStore from './store/useProjectStore';
 import { exportAsPdf, exportCurrentPageAsPng, exportCurrentPageAsJpeg, PDF_COMPRESSION_PRESETS } from './utils/exportProject';
 import type { PdfCompressionLevel } from './utils/exportProject';
 import { tr, type Language } from './i18n';
-import type { Page } from './types';
+import type { Page, Project } from './types';
 import { computeLayoutSlots } from './utils/layouts';
 import { CANVAS_H, CANVAS_W } from './constants/canvas';
 
 const FONTS = ['Arial', 'Times New Roman', 'Georgia', 'Verdana', 'Courier New', 'Trebuchet MS', 'Impact', 'Comic Sans MS'];
 type UiTheme = 'dark' | 'light';
+type AutoSaveRestorePoint = {
+  id: string;
+  createdAt: number;
+  pageIndex: number;
+  pageCount: number;
+  projectName: string;
+  project: Project;
+};
 
 function App() {
   const [uiTheme, setUiTheme] = useState<UiTheme>(() => {
@@ -270,6 +278,7 @@ function PageOverviewModal({
   closeLabel,
   noPreviewLabel,
   dragToReorderLabel,
+  chapterNavLabel,
   searchPlaceholder,
   getMetaLabel,
 }: {
@@ -284,6 +293,7 @@ function PageOverviewModal({
   closeLabel: string;
   noPreviewLabel: string;
   dragToReorderLabel: string;
+  chapterNavLabel: string;
   searchPlaceholder: string;
   getMetaLabel: (page: Page) => string;
 }) {
@@ -298,6 +308,11 @@ function PageOverviewModal({
       .map((page, index) => ({ page, index }))
       .filter(({ page }) => getMetaLabel(page).toLowerCase().includes(needle));
   }, [getMetaLabel, pages, searchTerm]);
+
+  const chapterItems = useMemo(
+    () => pages.map((page, index) => ({ pageIndex: index, label: getMetaLabel(page) })),
+    [getMetaLabel, pages],
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -343,53 +358,79 @@ function PageOverviewModal({
           </div>
         </div>
 
-        <div className="flex-1 overflow-auto p-4">
-          <div
-            className="grid gap-3 justify-center"
-            style={{
-              gridTemplateColumns: 'repeat(auto-fill, 220px)',
-              gridAutoRows: 'min-content',
-            }}
-          >
-            {visibleItems.map(({ page, index }) => (
-              <div
-                key={page.id}
-                draggable
-                onDragStart={() => {
-                  setDragFromIndex(index);
-                  setDragOverIndex(index);
-                }}
-                onDragOver={(event) => {
-                  event.preventDefault();
-                  setDragOverIndex(index);
-                }}
-                onDrop={(event) => {
-                  event.preventDefault();
-                  if (dragFromIndex === null || dragFromIndex === index) return;
-                  onMovePage(dragFromIndex, index);
-                  setDragFromIndex(null);
-                  setDragOverIndex(null);
-                }}
-                onDragEnd={() => {
-                  setDragFromIndex(null);
-                  setDragOverIndex(null);
-                }}
-                className={dragOverIndex === index && dragFromIndex !== index ? 'ring-2 ring-blue-500 rounded-xl' : ''}
-              >
-                <PagePreviewCard
-                  page={page}
-                  assetBlobs={assetBlobs}
-                  pageIndex={index}
-                  active={index === currentPageIndex}
-                  noPreviewLabel={noPreviewLabel}
-                  metaLabel={getMetaLabel(page)}
+        <div className="flex-1 min-h-0 flex">
+          <aside className="w-56 shrink-0 border-r border-neutral-700/80 p-2 overflow-auto">
+            <div className="px-2 py-1 text-[11px] text-neutral-400 uppercase tracking-wide">{chapterNavLabel}</div>
+            <div className="space-y-1 mt-1">
+              {chapterItems.map((item) => (
+                <button
+                  key={`chapter-overview-${item.pageIndex}`}
                   onClick={() => {
-                    onSelectPage(index);
+                    onSelectPage(item.pageIndex);
                     onClose();
                   }}
-                />
-              </div>
-            ))}
+                  className={`w-full text-left px-2.5 py-1.5 rounded-lg border text-xs transition-colors cursor-pointer select-none ${
+                    item.pageIndex === currentPageIndex
+                      ? 'border-blue-500 bg-blue-600/20 text-blue-100'
+                      : 'border-neutral-700 bg-neutral-900 text-neutral-300 hover:bg-neutral-800 hover:text-neutral-100'
+                  }`}
+                  title={item.label}
+                >
+                  <span className="mr-1.5 text-neutral-500">{item.pageIndex + 1}.</span>
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          </aside>
+
+          <div className="flex-1 overflow-auto p-4">
+            <div
+              className="grid gap-3 justify-center"
+              style={{
+                gridTemplateColumns: 'repeat(auto-fill, 220px)',
+                gridAutoRows: 'min-content',
+              }}
+            >
+              {visibleItems.map(({ page, index }) => (
+                <div
+                  key={page.id}
+                  draggable
+                  onDragStart={() => {
+                    setDragFromIndex(index);
+                    setDragOverIndex(index);
+                  }}
+                  onDragOver={(event) => {
+                    event.preventDefault();
+                    setDragOverIndex(index);
+                  }}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    if (dragFromIndex === null || dragFromIndex === index) return;
+                    onMovePage(dragFromIndex, index);
+                    setDragFromIndex(null);
+                    setDragOverIndex(null);
+                  }}
+                  onDragEnd={() => {
+                    setDragFromIndex(null);
+                    setDragOverIndex(null);
+                  }}
+                  className={dragOverIndex === index && dragFromIndex !== index ? 'ring-2 ring-blue-500 rounded-xl' : ''}
+                >
+                  <PagePreviewCard
+                    page={page}
+                    assetBlobs={assetBlobs}
+                    pageIndex={index}
+                    active={index === currentPageIndex}
+                    noPreviewLabel={noPreviewLabel}
+                    metaLabel={getMetaLabel(page)}
+                    onClick={() => {
+                      onSelectPage(index);
+                      onClose();
+                    }}
+                  />
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </div>
@@ -511,6 +552,7 @@ function Editor({
   const saveCurrentProjectAs = useProjectStore((s) => s.saveCurrentProjectAs);
   const openProject = useProjectStore((s) => s.openProject);
   const loadFromFile = useProjectStore((s) => s.loadFromFile);
+  const setProject = useProjectStore((s) => s.setProject);
   const project = useProjectStore((s) => s.project);
   const resetProject = useProjectStore((s) => s.resetProject);
   const setProjectName = useProjectStore((s) => s.setProjectName);
@@ -642,13 +684,22 @@ function Editor({
   const [showNewProjectModal, setShowNewProjectModal] = useState(false);
   const [showPageOverview, setShowPageOverview] = useState(false);
   const [showAssetLibrary, setShowAssetLibrary] = useState(false);
-  const [chapterPanelCollapsed, setChapterPanelCollapsed] = useState(false);
   const [canvasZoomMode, setCanvasZoomMode] = useState<'fit' | 'manual'>('fit');
   const [canvasManualZoom, setCanvasManualZoom] = useState(1);
   const [canvasDisplayScale, setCanvasDisplayScale] = useState(1);
   const [lastChangedAt, setLastChangedAt] = useState<number | null>(null);
-  const [lastAutoSavedAt, setLastAutoSavedAt] = useState<number | null>(null);
   const [nowTick, setNowTick] = useState(() => Date.now());
+  const [autoSaveTimeline, setAutoSaveTimeline] = useState<AutoSaveRestorePoint[]>(() => {
+    try {
+      const raw = localStorage.getItem('layox_autoSaveTimeline');
+      if (!raw) return [];
+      const parsed = JSON.parse(raw) as AutoSaveRestorePoint[];
+      if (!Array.isArray(parsed)) return [];
+      return parsed.filter((item) => !!item && typeof item.createdAt === 'number' && item.project && typeof item.pageIndex === 'number');
+    } catch {
+      return [];
+    }
+  });
   const [pdfDefaultLevel, setPdfDefaultLevel] = useState<PdfCompressionLevel>(() => {
     const saved = localStorage.getItem('layox_pdfDefaultLevel');
     if (saved && PDF_COMPRESSION_PRESETS.some((preset) => preset.id === saved)) {
@@ -661,6 +712,10 @@ function Editor({
   useEffect(() => {
     localStorage.setItem('layox_pdfDefaultLevel', pdfDefaultLevel);
   }, [pdfDefaultLevel]);
+
+  useEffect(() => {
+    localStorage.setItem('layox_autoSaveTimeline', JSON.stringify(autoSaveTimeline));
+  }, [autoSaveTimeline]);
 
   useEffect(() => {
     if (!didMountRef.current) {
@@ -686,11 +741,27 @@ function Editor({
     return `${hours}h`;
   }, [nowTick]);
 
-  const autoSaveStatus = !autoSaveEnabled
-    ? t('autoSaveOff')
-    : lastAutoSavedAt
-      ? `${t('autoSavedNow')} (${formatRelativeSeconds(lastAutoSavedAt)})`
-      : t('autoSaveReady');
+  const pushAutoSaveRestorePoint = useCallback((projectSnapshot: Project, pageIndex: number) => {
+    const clone = JSON.parse(JSON.stringify(projectSnapshot)) as Project;
+    const point: AutoSaveRestorePoint = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      createdAt: Date.now(),
+      pageIndex,
+      pageCount: clone.pages.length,
+      projectName: clone.meta.name,
+      project: clone,
+    };
+
+    setAutoSaveTimeline((prev) => [point, ...prev].slice(0, 12));
+  }, []);
+
+  const handleRestoreAutoSavePoint = useCallback((point: AutoSaveRestorePoint) => {
+    snapshot();
+    setProject(point.project);
+    setCurrentPageIndex(Math.max(0, Math.min(point.pageIndex, point.project.pages.length - 1)));
+    setOpenMenu(null);
+    setLastChangedAt(Date.now());
+  }, [setCurrentPageIndex, setProject, snapshot]);
 
   const toggleMenu = useCallback(
     (name: string) => setOpenMenu((prev) => (prev === name ? null : name)),
@@ -817,12 +888,17 @@ function Editor({
       const state = useProjectStore.getState();
       if (state.fileHandle) {
         state.saveCurrentProject()
-          .then(() => setLastAutoSavedAt(Date.now()))
+          .then(() => {
+            pushAutoSaveRestorePoint(state.project, state.currentPageIndex);
+          })
           .catch((err) => console.error('Auto-save Fehler:', err));
+        return;
       }
+
+      pushAutoSaveRestorePoint(state.project, state.currentPageIndex);
     }, autoSaveInterval * 1000);
     return () => clearInterval(id);
-  }, [autoSaveEnabled, autoSaveInterval]);
+  }, [autoSaveEnabled, autoSaveInterval, pushAutoSaveRestorePoint]);
 
   // ─── Handlers ─────────────────────────────────────────────────────────
   const handleOpen = async () => {
@@ -999,24 +1075,6 @@ function Editor({
         return { pageIndex: index, label };
       })
       .filter((item): item is { pageIndex: number; label: string } => item !== null);
-  }, [pages, t]);
-
-  const chapterPanelItems = useMemo(() => {
-    return pages.map((page, index) => {
-      if (page.isCover) {
-        const coverLabel = (page.coverTitle ?? '').trim();
-        return {
-          pageIndex: index,
-          label: coverLabel ? `${t('deckblatt')} • ${coverLabel}` : t('deckblatt'),
-        };
-      }
-
-      const chapter = (page.chapterTitle ?? '').trim();
-      return {
-        pageIndex: index,
-        label: chapter || `${t('pageLabel')} ${index + 1}`,
-      };
-    });
   }, [pages, t]);
 
   const getPageOverviewMetaLabel = useCallback((page: Page) => {
@@ -1248,20 +1306,27 @@ function Editor({
 
         {/* ── Page navigation (numbers + add/delete) ── */}
         <div className="relative flex items-center" data-menu>
-          <button
-            onClick={() => toggleMenu('quick-settings')}
-            className={`${btnPageNav} editor-surface-control mr-1.5 border-neutral-700 bg-neutral-900 text-neutral-300 hover:bg-neutral-800`}
-            title={t('settingsQuick')}
-            aria-label={t('settingsQuick')}
-          >
-            <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <circle cx="12" cy="12" r="3" />
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33h0A1.65 1.65 0 0 0 10 3.09V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-            </svg>
-          </button>
+          <span className="mr-1.5 text-[11px] text-neutral-400 tabular-nums select-none">
+            {t('lastChanged')}: {formatRelativeSeconds(lastChangedAt)}
+          </span>
 
-          {openMenu === 'quick-settings' && (
-            <div className="editor-dropdown absolute top-full left-0 mt-2 min-w-[250px] bg-neutral-900 border border-neutral-700 rounded-xl shadow-2xl z-[90] p-2">
+          <div className="w-px h-5 bg-neutral-700/80 mr-1.5" />
+
+          <div className="relative mr-1.5">
+            <button
+              onClick={() => toggleMenu('quick-settings')}
+              className={`${btnPageNav} editor-surface-control border-neutral-700 bg-neutral-900 text-neutral-300 hover:bg-neutral-800`}
+              title={t('settingsQuick')}
+              aria-label={t('settingsQuick')}
+            >
+              <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="3" />
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33h0A1.65 1.65 0 0 0 10 3.09V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+              </svg>
+            </button>
+
+            {openMenu === 'quick-settings' && (
+              <div className="editor-dropdown absolute top-full left-0 mt-2 w-64 max-w-[calc(100vw-2rem)] bg-neutral-900 border border-neutral-700 rounded-xl shadow-2xl z-[90] p-2">
               <div className="px-2 pt-1 pb-2">
                 <div className="text-xs text-neutral-400 mb-1.5">{t('uiMode')}</div>
                 <select
@@ -1317,6 +1382,27 @@ function Editor({
                     </select>
                   </div>
                 )}
+
+                <div className="mt-2 pt-2 border-t border-neutral-700/70">
+                  <div className="text-xs text-neutral-400 mb-1.5">{t('autoSaveHistory')}</div>
+                  {autoSaveTimeline.length === 0 ? (
+                    <div className="text-[11px] text-neutral-500">{t('noRestorePoints')}</div>
+                  ) : (
+                    <div className="max-h-36 overflow-auto space-y-1 pr-1">
+                      {autoSaveTimeline.map((point) => (
+                        <button
+                          key={point.id}
+                          onClick={() => handleRestoreAutoSavePoint(point)}
+                          className="editor-surface-control w-full px-2 py-1.5 rounded-md border border-neutral-700 bg-neutral-800 hover:bg-neutral-700 text-left transition-colors cursor-pointer"
+                          title={t('restorePoint')}
+                        >
+                          <div className="text-[11px] text-neutral-200">{new Date(point.createdAt).toLocaleTimeString(language === 'de' ? 'de-DE' : 'en-US')}</div>
+                          <div className="text-[10px] text-neutral-500 truncate">{point.projectName} • {point.pageCount} {t('pages')}</div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
 
               <MenuDivider />
@@ -1369,8 +1455,9 @@ function Editor({
                   </span>
                 </div>
               </div>
-            </div>
-          )}
+              </div>
+            )}
+          </div>
 
           <div className="w-px h-5 bg-neutral-700/80 mx-1" />
 
@@ -1430,10 +1517,6 @@ function Editor({
             )}
           </div>
 
-          <div className="ml-auto flex items-center gap-3 pl-3 border-l border-neutral-700/80 text-[11px] text-neutral-400 tabular-nums">
-            <span>{t('lastChanged')}: {formatRelativeSeconds(lastChangedAt)}</span>
-            <span>{autoSaveStatus}</span>
-          </div>
         </div>
 
         {/* Hidden file inputs */}
@@ -1563,38 +1646,6 @@ function Editor({
 
       {/* ─── Canvas area with page arrows on sides ─── */}
       <div className="relative z-0 flex-1 flex items-center justify-center overflow-auto gap-3 px-3 pb-3 pt-2">
-        <aside className={`shrink-0 ${chapterPanelCollapsed ? 'w-14' : 'w-56'} h-full rounded-2xl border border-neutral-800 bg-neutral-900/80 shadow-2xl overflow-hidden flex flex-col transition-[width] duration-200`}>
-          <div className="px-2.5 py-2 border-b border-neutral-800 flex items-center justify-between gap-2">
-            {!chapterPanelCollapsed && (
-              <span className="text-xs text-neutral-400 uppercase tracking-wide">{t('chapterPanel')}</span>
-            )}
-            <button
-              onClick={() => setChapterPanelCollapsed((prev) => !prev)}
-              className="w-7 h-7 rounded-md border border-neutral-700 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-sm flex items-center justify-center cursor-pointer"
-              title={chapterPanelCollapsed ? t('expand') : t('collapse')}
-            >
-              {chapterPanelCollapsed ? '»' : '«'}
-            </button>
-          </div>
-          <div className={`flex-1 overflow-auto p-2 ${chapterPanelCollapsed ? 'space-y-1.5' : 'space-y-1'}`}>
-            {chapterPanelItems.map((item) => (
-              <button
-                key={`chapter-nav-${item.pageIndex}`}
-                onClick={() => setCurrentPageIndex(item.pageIndex)}
-                className={`w-full ${chapterPanelCollapsed ? 'text-center px-1.5 py-1.5' : 'text-left px-2.5 py-1.5'} rounded-lg border text-xs transition-colors cursor-pointer select-none ${
-                  item.pageIndex === currentPageIndex
-                    ? 'border-blue-500 bg-blue-600/20 text-blue-100'
-                    : 'border-neutral-700 bg-neutral-900 text-neutral-300 hover:bg-neutral-800 hover:text-neutral-100'
-                }`}
-                title={item.label}
-              >
-                <span className={chapterPanelCollapsed ? '' : 'mr-1.5 text-neutral-500'}>{item.pageIndex + 1}{chapterPanelCollapsed ? '' : '.'}</span>
-                {!chapterPanelCollapsed && item.label}
-              </button>
-            ))}
-          </div>
-        </aside>
-
         {/* Left arrow */}
         <button
           onClick={goPrevPage}
@@ -1711,6 +1762,7 @@ function Editor({
         closeLabel={t('close')}
         noPreviewLabel={t('noPreview')}
         dragToReorderLabel={t('dragToReorder')}
+        chapterNavLabel={t('chapterPanel')}
         searchPlaceholder={t('searchChapter')}
         getMetaLabel={getPageOverviewMetaLabel}
       />
