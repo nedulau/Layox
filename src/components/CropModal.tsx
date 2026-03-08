@@ -59,9 +59,10 @@ export default function CropModal({
   const [dragging, setDragging] = useState<HandleType | null>(null);
   const [dragStart, setDragStart] = useState({ mx: 0, my: 0, crop: { x: 0, y: 0, w: 0, h: 0 } });
 
-  const handleMouseDown = (type: HandleType, e: React.MouseEvent) => {
+  const handlePointerDown = (type: HandleType, e: React.PointerEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     setDragging(type);
     setDragStart({ mx: e.clientX, my: e.clientY, crop: { ...crop } });
   };
@@ -69,7 +70,7 @@ export default function CropModal({
   useEffect(() => {
     if (!dragging || !naturalSize) return;
 
-    const handleMouseMove = (e: MouseEvent) => {
+    const handlePointerMove = (e: PointerEvent) => {
       const dx = (e.clientX - dragStart.mx) / imgScale;
       const dy = (e.clientY - dragStart.my) / imgScale;
       const sc = dragStart.crop;
@@ -132,13 +133,13 @@ export default function CropModal({
       }
     };
 
-    const handleMouseUp = () => setDragging(null);
+    const handlePointerUp = () => setDragging(null);
 
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('mouseup', handleMouseUp);
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
     return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
     };
   }, [dragging, dragStart, imgScale, naturalSize]);
 
@@ -213,8 +214,8 @@ export default function CropModal({
         {/* Crop rectangle */}
         <div
           className="absolute border-2 border-white cursor-move"
-          style={{ left: cd.x, top: cd.y, width: cd.w, height: cd.h }}
-          onMouseDown={(e) => handleMouseDown('move', e)}
+          onPointerDown={(e) => handlePointerDown('move', e)}
+          style={{ left: cd.x, top: cd.y, width: cd.w, height: cd.h, touchAction: 'none' }}
         >
           {/* Rule of thirds grid */}
           <div className="absolute inset-0 pointer-events-none">
@@ -226,16 +227,16 @@ export default function CropModal({
         </div>
 
         {/* Corner handles */}
-        <div className={`absolute cursor-nw-resize ${cornerHandle}`} style={{ left: cd.x - 8, top: cd.y - 8 }} onMouseDown={(e) => handleMouseDown('nw', e)} />
-        <div className={`absolute cursor-ne-resize ${cornerHandle}`} style={{ left: cd.x + cd.w - 8, top: cd.y - 8 }} onMouseDown={(e) => handleMouseDown('ne', e)} />
-        <div className={`absolute cursor-sw-resize ${cornerHandle}`} style={{ left: cd.x - 8, top: cd.y + cd.h - 8 }} onMouseDown={(e) => handleMouseDown('sw', e)} />
-        <div className={`absolute cursor-se-resize ${cornerHandle}`} style={{ left: cd.x + cd.w - 8, top: cd.y + cd.h - 8 }} onMouseDown={(e) => handleMouseDown('se', e)} />
+        <div className={`absolute cursor-nw-resize ${cornerHandle}`} style={{ left: cd.x - 8, top: cd.y - 8, touchAction: 'none' }} onPointerDown={(e) => handlePointerDown('nw', e)} />
+        <div className={`absolute cursor-ne-resize ${cornerHandle}`} style={{ left: cd.x + cd.w - 8, top: cd.y - 8, touchAction: 'none' }} onPointerDown={(e) => handlePointerDown('ne', e)} />
+        <div className={`absolute cursor-sw-resize ${cornerHandle}`} style={{ left: cd.x - 8, top: cd.y + cd.h - 8, touchAction: 'none' }} onPointerDown={(e) => handlePointerDown('sw', e)} />
+        <div className={`absolute cursor-se-resize ${cornerHandle}`} style={{ left: cd.x + cd.w - 8, top: cd.y + cd.h - 8, touchAction: 'none' }} onPointerDown={(e) => handlePointerDown('se', e)} />
 
         {/* Edge handles */}
-        <div className={`absolute cursor-n-resize ${edgeHandleH}`} style={{ left: cd.x + cd.w / 2 - 16, top: cd.y - 6, width: 32 }} onMouseDown={(e) => handleMouseDown('n', e)} />
-        <div className={`absolute cursor-s-resize ${edgeHandleH}`} style={{ left: cd.x + cd.w / 2 - 16, top: cd.y + cd.h - 6, width: 32 }} onMouseDown={(e) => handleMouseDown('s', e)} />
-        <div className={`absolute cursor-w-resize ${edgeHandleV}`} style={{ left: cd.x - 6, top: cd.y + cd.h / 2 - 16, height: 32 }} onMouseDown={(e) => handleMouseDown('w', e)} />
-        <div className={`absolute cursor-e-resize ${edgeHandleV}`} style={{ left: cd.x + cd.w - 6, top: cd.y + cd.h / 2 - 16, height: 32 }} onMouseDown={(e) => handleMouseDown('e', e)} />
+        <div className={`absolute cursor-n-resize ${edgeHandleH}`} style={{ left: cd.x + cd.w / 2 - 16, top: cd.y - 6, width: 32, touchAction: 'none' }} onPointerDown={(e) => handlePointerDown('n', e)} />
+        <div className={`absolute cursor-s-resize ${edgeHandleH}`} style={{ left: cd.x + cd.w / 2 - 16, top: cd.y + cd.h - 6, width: 32, touchAction: 'none' }} onPointerDown={(e) => handlePointerDown('s', e)} />
+        <div className={`absolute cursor-w-resize ${edgeHandleV}`} style={{ left: cd.x - 6, top: cd.y + cd.h / 2 - 16, height: 32, touchAction: 'none' }} onPointerDown={(e) => handlePointerDown('w', e)} />
+        <div className={`absolute cursor-e-resize ${edgeHandleV}`} style={{ left: cd.x + cd.w - 6, top: cd.y + cd.h / 2 - 16, height: 32, touchAction: 'none' }} onPointerDown={(e) => handlePointerDown('e', e)} />
 
         {/* Dimension display */}
         <div className="absolute pointer-events-none text-white/70 text-xs bg-black/50 px-1.5 py-0.5 rounded"

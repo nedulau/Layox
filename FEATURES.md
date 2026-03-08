@@ -104,6 +104,21 @@ Alle Funktionen des lokalen Fotoalbum-Editors im Detail.
 | ← / → | Seite wechseln |
 | Escape | Auswahl aufheben |
 
+## Touch-Unterstützung
+
+- **Seitenübersicht** — Seiten per Touch (Finger) verschieben und umsortieren (Pointer Events)
+- **Crop-Modal** — Crop-Bereich und alle Griffe per Touch bedienbar
+- **Canvas-Elemente** — Bilder und Text per Touch verschieben, skalieren, drehen (über Konva)
+- **Optimiert für iPad / Tablet-Nutzung** in der PWA
+
+## PWA (Progressive Web App)
+
+- **Installierbar** auf dem Home-Bildschirm (iOS, Android, Desktop)
+- **Standalone-Modus** — App läuft im Fullscreen ohne Browser-UI
+- **Service Worker** — Offline-Caching aller App-Dateien
+- **Web App Manifest** mit Name, Icons und Theme-Color
+- **Auto-Update** — neue Versionen werden automatisch aktiviert
+
 ## Dateiformat
 
 - **`.layox`-Dateien** — ZIP-Container mit `project.json` und `assets/`-Ordner

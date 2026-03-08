@@ -56,6 +56,14 @@ Inline-Editor in `EditorCanvas.tsx`:
   - File Handles in IndexedDB (`src/utils/handleStore.ts`)
 - Doppelklick auf zuletzt geöffnetes Projekt versucht direkten Reopen über gespeicherten Handle
 
+## PWA
+
+- Konfiguriert über `vite-plugin-pwa` in `vite.config.ts`
+- Manifest, Service Worker und Icons werden beim Build automatisch generiert
+- Icons liegen in `public/icon-192.png` und `public/icon-512.png`
+- Meta-Tags (`apple-touch-icon`, `theme-color`) in `index.html`
+- Touch-Support: Pointer Events statt HTML5 Drag & Drop (PageOverviewModal) und statt Mouse Events (CropModal)
+
 ## Tests & Qualität
 
 - Unit/Integration: Vitest
@@ -64,6 +72,7 @@ Inline-Editor in `EditorCanvas.tsx`:
   - `npm run test:run`
   - `npx tsc -b`
   - `npm run build`
+  - `npm run preview -- --host` (PWA lokal testen)
 
 ## Änderungsprinzipien
 

@@ -300,6 +300,7 @@ function PageOverviewModal({
   const [dragFromIndex, setDragFromIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const pointerActiveRef = useRef(false);
 
   const visibleItems = useMemo(() => {
     const needle = searchTerm.trim().toLowerCase();
@@ -394,27 +395,40 @@ function PageOverviewModal({
               {visibleItems.map(({ page, index }) => (
                 <div
                   key={page.id}
-                  draggable
-                  onDragStart={() => {
+                  onPointerDown={(event) => {
+                    if (event.button !== 0) return;
+                    pointerActiveRef.current = true;
                     setDragFromIndex(index);
                     setDragOverIndex(index);
+                    (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
                   }}
-                  onDragOver={(event) => {
-                    event.preventDefault();
-                    setDragOverIndex(index);
+                  onPointerMove={(event) => {
+                    if (!pointerActiveRef.current || dragFromIndex === null) return;
+                    const el = document.elementFromPoint(event.clientX, event.clientY);
+                    if (!el) return;
+                    const card = el.closest<HTMLElement>('[data-page-index]');
+                    if (card) {
+                      const overIdx = Number(card.dataset.pageIndex);
+                      if (!Number.isNaN(overIdx)) setDragOverIndex(overIdx);
+                    }
                   }}
-                  onDrop={(event) => {
-                    event.preventDefault();
-                    if (dragFromIndex === null || dragFromIndex === index) return;
-                    onMovePage(dragFromIndex, index);
+                  onPointerUp={() => {
+                    if (!pointerActiveRef.current) return;
+                    pointerActiveRef.current = false;
+                    if (dragFromIndex !== null && dragOverIndex !== null && dragFromIndex !== dragOverIndex) {
+                      onMovePage(dragFromIndex, dragOverIndex);
+                    }
                     setDragFromIndex(null);
                     setDragOverIndex(null);
                   }}
-                  onDragEnd={() => {
+                  onPointerCancel={() => {
+                    pointerActiveRef.current = false;
                     setDragFromIndex(null);
                     setDragOverIndex(null);
                   }}
-                  className={dragOverIndex === index && dragFromIndex !== index ? 'ring-2 ring-blue-500 rounded-xl' : ''}
+                  data-page-index={index}
+                  style={{ touchAction: 'none' }}
+                  className={dragOverIndex === index && dragFromIndex !== null && dragFromIndex !== index ? 'ring-2 ring-blue-500 rounded-xl' : ''}
                 >
                   <PagePreviewCard
                     page={page}
@@ -586,7 +600,7 @@ function Editor({
   const setCurrentPageChapterTitle = useProjectStore((s) => s.setCurrentPageChapterTitle);
   const setCoverTitle = useProjectStore((s) => s.setCoverTitle);
   const setCoverSubtitle = useProjectStore((s) => s.setCoverSubtitle);
-  const addCoverPage = useProjectStore((s) => s.addCoverPage);
+  const toggleCover = useProjectStore((s) => s.toggleCover);
   const assetBlobs = useProjectStore((s) => s.assetBlobs);
   const setShowEditor = useProjectStore((s) => s.setShowEditor);
 
@@ -946,7 +960,8 @@ function Editor({
     snapshot();
     await addImageFromAsset(assetPath);
   };
-  const handleAddCoverPage = () => { closeMenu(); snapshot(); addCoverPage(); };
+  const handleRemoveCover = () => { closeMenu(); snapshot(); toggleCover(false); };
+  const handleMakeCover = () => { closeMenu(); snapshot(); toggleCover(true); };
   const handleAddPageFromMenu = () => { closeMenu(); snapshot(); addPage(); };
 
   const handleLayoutSelect = (layoutId: string | null) => {
@@ -1172,7 +1187,11 @@ function Editor({
               <MenuItem label={t('insertFromLibrary')} onClick={handleOpenAssetLibrary} />
               <MenuItem label={t('addTextLabel')} shortcut="Ctrl+T" onClick={handleAddText} />
               <MenuDivider />
-              <MenuItem label={t('addCoverLabel')} onClick={handleAddCoverPage} />
+              {currentIsCover ? (
+                <MenuItem label={t('removeCoverLabel')} onClick={handleRemoveCover} danger />
+              ) : (
+                <MenuItem label={t('addCoverLabel')} onClick={handleMakeCover} />
+              )}
             </div>
           )}
         </div>
@@ -1638,6 +1657,14 @@ function Editor({
                 />
               </>
             )}
+
+            <button
+              onClick={() => { snapshot(); toggleCover(false); }}
+              className="ml-auto px-2 py-0.5 text-[11px] rounded-md border border-red-800 bg-red-900/50 hover:bg-red-800/60 text-red-200 transition-colors cursor-pointer select-none"
+              title={t('removeCoverLabel')}
+            >
+              {t('removeCoverLabel')}
+            </button>
               </>
             ) : null}
           </div>
