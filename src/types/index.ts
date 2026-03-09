@@ -73,9 +73,13 @@ export interface Page {
   coverTitleFontSize?: number;
   coverTitleFontFamily?: string;
   coverTitleColor?: string;
+  coverTitleX?: number;
+  coverTitleY?: number;
   coverSubtitleFontSize?: number;
   coverSubtitleFontFamily?: string;
   coverSubtitleColor?: string;
+  coverSubtitleX?: number;
+  coverSubtitleY?: number;
   chapterTitle?: string;
   subchapterTitle?: string;
 }

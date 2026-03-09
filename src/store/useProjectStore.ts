@@ -137,6 +137,8 @@ interface ProjectState {
   setCoverSubtitleVisible: (visible: boolean) => void;
   setCoverTitleStyle: (changes: { fontSize?: number; fontFamily?: string; color?: string }) => void;
   setCoverSubtitleStyle: (changes: { fontSize?: number; fontFamily?: string; color?: string }) => void;
+  setCoverTitlePosition: (x: number, y: number) => void;
+  setCoverSubtitlePosition: (x: number, y: number) => void;
   setCurrentPageChapterTitle: (title: string) => void;
   setCurrentPageSubchapterTitle: (title: string) => void;
   toggleCover: (isCover: boolean) => void;
@@ -557,6 +559,26 @@ const useProjectStore = create<ProjectState>((set, get) => ({
       if (changes.color !== undefined) {
         page.coverSubtitleColor = changes.color;
       }
+      pages[state.currentPageIndex] = page;
+      return { project: { ...state.project, pages } };
+    }),
+
+  setCoverTitlePosition: (x, y) =>
+    set((state) => {
+      const pages = [...state.project.pages];
+      const page = { ...pages[state.currentPageIndex] };
+      page.coverTitleX = x;
+      page.coverTitleY = y;
+      pages[state.currentPageIndex] = page;
+      return { project: { ...state.project, pages } };
+    }),
+
+  setCoverSubtitlePosition: (x, y) =>
+    set((state) => {
+      const pages = [...state.project.pages];
+      const page = { ...pages[state.currentPageIndex] };
+      page.coverSubtitleX = x;
+      page.coverSubtitleY = y;
       pages[state.currentPageIndex] = page;
       return { project: { ...state.project, pages } };
     }),

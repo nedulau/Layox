@@ -575,6 +575,8 @@ function EditorCanvas({
   const addImageFromFile = useProjectStore((s) => s.addImageFromFile);
   const setCoverTitle = useProjectStore((s) => s.setCoverTitle);
   const setCoverSubtitle = useProjectStore((s) => s.setCoverSubtitle);
+  const setCoverTitlePosition = useProjectStore((s) => s.setCoverTitlePosition);
+  const setCoverSubtitlePosition = useProjectStore((s) => s.setCoverSubtitlePosition);
   const updateSlotCrop = useProjectStore((s) => s.updateSlotCrop);
   const snapshot = useProjectStore((s) => s.snapshot);
   const defaultLayoutPadding = useProjectStore((s) => s.project.meta.defaultLayoutPadding ?? 20);
@@ -601,9 +603,13 @@ function EditorCanvas({
   const coverTitleFontSize = currentPage?.coverTitleFontSize ?? 48;
   const coverTitleFontFamily = currentPage?.coverTitleFontFamily ?? 'Arial';
   const coverTitleColor = currentPage?.coverTitleColor ?? '#ffffff';
+  const coverTitleX = currentPage?.coverTitleX ?? 0;
+  const coverTitleY = currentPage?.coverTitleY ?? CANVAS_H * 0.35;
   const coverSubtitleFontSize = currentPage?.coverSubtitleFontSize ?? 24;
   const coverSubtitleFontFamily = currentPage?.coverSubtitleFontFamily ?? 'Arial';
   const coverSubtitleColor = currentPage?.coverSubtitleColor ?? '#ffffffcc';
+  const coverSubtitleX = currentPage?.coverSubtitleX ?? 0;
+  const coverSubtitleY = currentPage?.coverSubtitleY ?? CANVAS_H * 0.35 + 60;
 
   // ─── Inline editing state ────────────────────────────────────────────────
   const [inlineEdit, setInlineEdit] = useState<{
@@ -722,8 +728,8 @@ function EditorCanvas({
       setInlineEdit({
         type: field,
         text: isTitle ? coverTitle : coverSubtitle,
-        x: 0,
-        y: isTitle ? CANVAS_H * 0.35 : CANVAS_H * 0.35 + 60,
+        x: isTitle ? coverTitleX : coverSubtitleX,
+        y: isTitle ? coverTitleY : coverSubtitleY,
         width: CANVAS_W,
         fontSize: isTitle ? coverTitleFontSize : coverSubtitleFontSize,
         fontFamily: isTitle ? coverTitleFontFamily : coverSubtitleFontFamily,
@@ -732,7 +738,7 @@ function EditorCanvas({
         fontStyle: isTitle ? 'bold' : undefined,
       });
     },
-    [coverTitle, coverSubtitle, coverTitleFontSize, coverSubtitleFontSize, coverTitleFontFamily, coverSubtitleFontFamily, coverTitleColor, coverSubtitleColor, snapshot],
+    [coverTitle, coverSubtitle, coverTitleX, coverTitleY, coverSubtitleX, coverSubtitleY, coverTitleFontSize, coverSubtitleFontSize, coverTitleFontFamily, coverSubtitleFontFamily, coverTitleColor, coverSubtitleColor, snapshot],
   );
 
   const commitInlineEdit = useCallback(() => {
@@ -870,8 +876,8 @@ function EditorCanvas({
             {isCover && !inlineEdit?.type?.startsWith('cover') && (
               <>
                 <Text
-                  x={0}
-                  y={CANVAS_H * 0.35}
+                  x={coverTitleX}
+                  y={coverTitleY}
                   width={CANVAS_W}
                   text={coverTitle || 'Titel'}
                   fontSize={coverTitleFontSize}
@@ -882,14 +888,17 @@ function EditorCanvas({
                   shadowBlur={8}
                   shadowOpacity={0.7}
                   align="center"
+                  draggable
                   listening={true}
+                  onDragStart={handleDragStart}
+                  onDragEnd={(e) => setCoverTitlePosition(Math.round(e.target.x()), Math.round(e.target.y()))}
                   onDblClick={() => startCoverEdit('coverTitle')}
                   onDblTap={() => startCoverEdit('coverTitle')}
                 />
                 {showCoverSubtitle && (
                   <Text
-                    x={0}
-                    y={CANVAS_H * 0.35 + 60}
+                    x={coverSubtitleX}
+                    y={coverSubtitleY}
                     width={CANVAS_W}
                     text={coverSubtitle || 'Untertitel'}
                     fontSize={coverSubtitleFontSize}
@@ -899,7 +908,10 @@ function EditorCanvas({
                     shadowBlur={6}
                     shadowOpacity={0.5}
                     align="center"
+                    draggable
                     listening={true}
+                    onDragStart={handleDragStart}
+                    onDragEnd={(e) => setCoverSubtitlePosition(Math.round(e.target.x()), Math.round(e.target.y()))}
                     onDblClick={() => startCoverEdit('coverSubtitle')}
                     onDblTap={() => startCoverEdit('coverSubtitle')}
                   />
