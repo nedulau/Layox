@@ -12,6 +12,7 @@ import { tr, type Language } from './i18n';
 import type { Page, Project } from './types';
 import { computeLayoutSlots } from './utils/layouts';
 import { CANVAS_H, CANVAS_W } from './constants/canvas';
+import { Analytics } from '@vercel/analytics/react';
 
 const FONTS = ['Arial', 'Times New Roman', 'Georgia', 'Verdana', 'Courier New', 'Trebuchet MS', 'Impact', 'Comic Sans MS'];
 type UiTheme = 'dark' | 'light';
@@ -44,9 +45,19 @@ function App() {
 
   const showEditor = useProjectStore((s) => s.showEditor);
   if (!showEditor) {
-    return <StartScreen uiTheme={uiTheme} setUiTheme={setUiTheme} language={language} setLanguage={setLanguage} />;
+    return (
+      <>
+        <StartScreen uiTheme={uiTheme} setUiTheme={setUiTheme} language={language} setLanguage={setLanguage} />
+        <Analytics />
+      </>
+    );
   }
-  return <Editor uiTheme={uiTheme} setUiTheme={setUiTheme} language={language} setLanguage={setLanguage} />;
+  return (
+    <>
+      <Editor uiTheme={uiTheme} setUiTheme={setUiTheme} language={language} setLanguage={setLanguage} />
+      <Analytics />
+    </>
+  );
 }
 
 // ─── Dropdown menu helper ────────────────────────────────────────────────────
