@@ -6,7 +6,7 @@ import StartScreen from './components/StartScreen';
 import CropModal from './components/CropModal';
 import NewProjectModal from './components/NewProjectModal';
 import useProjectStore from './store/useProjectStore';
-import { exportAsPdf, exportCurrentPageAsPng, exportCurrentPageAsJpeg, PDF_COMPRESSION_PRESETS } from './utils/exportProject';
+import { exportAsPdf, exportCurrentPageAsPng, exportCurrentPageAsJpeg, exportAllPagesAsZip, PDF_COMPRESSION_PRESETS } from './utils/exportProject';
 import type { PdfCompressionLevel } from './utils/exportProject';
 import { tr, type Language } from './i18n';
 import type { Page, Project } from './types';
@@ -1038,6 +1038,16 @@ function Editor({
     exportCurrentPageAsJpeg(projectName, currentPageIndex);
   };
 
+  const handleExportZipPng = async () => {
+    closeMenu();
+    await exportAllPagesAsZip(pages.length, setCurrentPageIndex, projectName, 'png');
+  };
+
+  const handleExportZipJpeg = async () => {
+    closeMenu();
+    await exportAllPagesAsZip(pages.length, setCurrentPageIndex, projectName, 'jpeg');
+  };
+
   const btnPageNav =
     'min-w-8 h-8 px-2 flex items-center justify-center rounded-lg border text-sm transition-all cursor-pointer select-none';
   const btnIcon =
@@ -1150,6 +1160,8 @@ function Editor({
               <MenuItem label={t('exportPdf')} onClick={handleExportPdfPrompt} />
               <MenuItem label={t('exportPng')} onClick={handleExportPng} />
               <MenuItem label={t('exportJpeg')} onClick={handleExportJpeg} />
+              <MenuItem label={t('exportZipPng')} onClick={handleExportZipPng} />
+              <MenuItem label={t('exportZipJpeg')} onClick={handleExportZipJpeg} />
               <MenuDivider />
               <MenuItem label={t('home')} onClick={handleGoHome} />
             </div>

@@ -1,4 +1,5 @@
 import { jsPDF } from 'jspdf';
+import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 import { CANVAS_H, CANVAS_W } from '../constants/canvas';
 
@@ -138,4 +139,42 @@ function getCurrentPageIndex(): number {
   } catch {
     return 0;
   }
+}
+
+/**
+ * Export ALL pages as individual images packed into a ZIP file.
+ * Each page becomes "Seite_001.png" (or .jpg) inside the ZIP.
+ */
+export async function exportAllPagesAsZip(
+  pageCount: number,
+  setPageIndex: (i: number) => void,
+  projectName: string,
+  format: 'png' | 'jpeg' = 'png',
+): Promise<void> {
+  const mime = format === 'jpeg' ? 'image/jpeg' : 'image/png';
+  const quality = format === 'jpeg' ? 0.92 : 1;
+  const ext = format === 'jpeg' ? 'jpg' : 'png';
+
+  const zip = new JSZip();
+  const originalIndex = getCurrentPageIndex();
+
+  for (let i = 0; i < pageCount; i++) {
+    setPageIndex(i);
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+
+    const dataUrl = getStageDataUrl(mime, quality, 2);
+    if (!dataUrl) continue;
+
+    const blob = dataUrlToBlob(dataUrl);
+    const padded = String(i + 1).padStart(3, '0');
+    zip.file(`Seite_${padded}.${ext}`, blob);
+  }
+
+  // Restore original page
+  setPageIndex(originalIndex);
+  await new Promise((r) => requestAnimationFrame(r));
+
+  const safeName = projectName.replace(/[^a-zA-Z0-9_\-äöüÄÖÜß ]/g, '_');
+  const zipBlob = await zip.generateAsync({ type: 'blob' });
+  saveAs(zipBlob, `${safeName}_Bilder.zip`);
 }
