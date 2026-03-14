@@ -578,7 +578,6 @@ function Editor({
   const openProject = useProjectStore((s) => s.openProject);
   const loadFromFile = useProjectStore((s) => s.loadFromFile);
   const setProject = useProjectStore((s) => s.setProject);
-  const project = useProjectStore((s) => s.project);
   const resetProject = useProjectStore((s) => s.resetProject);
   const setProjectName = useProjectStore((s) => s.setProjectName);
   const projectName = useProjectStore((s) => s.project.meta.name);
@@ -668,7 +667,7 @@ function Editor({
     (s) => s.project.pages[s.currentPageIndex]?.coverSubtitleColor ?? '#ffffffcc',
   );
   const currentShowCoverSubtitle = useProjectStore(
-    (s) => s.project.pages[s.currentPageIndex]?.showCoverSubtitle ?? true,
+    (s) => s.project.pages[s.currentPageIndex]?.showCoverSubtitle ?? false,
   );
   const currentChapterTitle = useProjectStore(
     (s) => {
@@ -709,11 +708,8 @@ function Editor({
   const [showNewProjectModal, setShowNewProjectModal] = useState(false);
   const [showPageOverview, setShowPageOverview] = useState(false);
   const [showAssetLibrary, setShowAssetLibrary] = useState(false);
-  const [canvasZoomMode, setCanvasZoomMode] = useState<'fit' | 'manual'>('fit');
-  const [canvasManualZoom, setCanvasManualZoom] = useState(1);
-  const [canvasDisplayScale, setCanvasDisplayScale] = useState(1);
-  const [lastChangedAt, setLastChangedAt] = useState<number | null>(null);
-  const [nowTick, setNowTick] = useState(() => Date.now());
+  const [canvasZoomMode] = useState<'fit' | 'manual'>('fit');
+  const [canvasManualZoom] = useState(1);
   const [autoSaveTimeline, setAutoSaveTimeline] = useState<AutoSaveRestorePoint[]>(() => {
     try {
       const raw = localStorage.getItem('layox_autoSaveTimeline');
@@ -732,7 +728,6 @@ function Editor({
     }
     return 'medium';
   });
-  const didMountRef = useRef(false);
 
   useEffect(() => {
     localStorage.setItem('layox_pdfDefaultLevel', pdfDefaultLevel);
@@ -741,30 +736,6 @@ function Editor({
   useEffect(() => {
     localStorage.setItem('layox_autoSaveTimeline', JSON.stringify(autoSaveTimeline));
   }, [autoSaveTimeline]);
-
-  useEffect(() => {
-    if (!didMountRef.current) {
-      didMountRef.current = true;
-      return;
-    }
-    setLastChangedAt(Date.now());
-  }, [project]);
-
-  useEffect(() => {
-    const id = setInterval(() => setNowTick(Date.now()), 5000);
-    return () => clearInterval(id);
-  }, []);
-
-  const formatRelativeSeconds = useCallback((timestamp: number | null) => {
-    if (!timestamp) return '—';
-    const seconds = Math.max(0, Math.round((nowTick - timestamp) / 1000));
-    if (seconds < 5) return '0s';
-    if (seconds < 60) return `${seconds}s`;
-    const minutes = Math.round(seconds / 60);
-    if (minutes < 60) return `${minutes}m`;
-    const hours = Math.round(minutes / 60);
-    return `${hours}h`;
-  }, [nowTick]);
 
   const pushAutoSaveRestorePoint = useCallback((projectSnapshot: Project, pageIndex: number) => {
     const clone = JSON.parse(JSON.stringify(projectSnapshot)) as Project;
@@ -785,7 +756,6 @@ function Editor({
     setProject(point.project);
     setCurrentPageIndex(Math.max(0, Math.min(point.pageIndex, point.project.pages.length - 1)));
     setOpenMenu(null);
-    setLastChangedAt(Date.now());
   }, [setCurrentPageIndex, setProject, snapshot]);
 
   const toggleMenu = useCallback(
@@ -1225,7 +1195,11 @@ function Editor({
           {openMenu === 'layout' && (
             <div className="editor-dropdown absolute top-full left-0 mt-2 bg-neutral-900 border border-neutral-700 rounded-xl shadow-2xl z-[90] py-3 px-3 min-w-[280px]">
               <div className="mb-2">
-                <LayoutPicker currentLayoutId={currentLayoutId} onSelect={(id) => { handleLayoutSelect(id); closeMenu(); }} />
+                <LayoutPicker
+                  currentLayoutId={currentLayoutId}
+                  uiTheme={uiTheme}
+                  onSelect={(id) => { handleLayoutSelect(id); closeMenu(); }}
+                />
               </div>
               {currentLayoutId && (
                 <div className="flex items-center gap-2 mt-2 pt-2 border-t border-neutral-700">
@@ -1348,12 +1322,6 @@ function Editor({
 
         {/* ── Page navigation (numbers + add/delete) ── */}
         <div className="relative flex items-center" data-menu>
-          <span className="mr-1.5 text-[11px] text-neutral-400 tabular-nums select-none">
-            {t('lastChanged')}: {formatRelativeSeconds(lastChangedAt)}
-          </span>
-
-          <div className="w-px h-5 bg-neutral-700/80 mr-1.5" />
-
           <div className="relative mr-1.5">
             <button
               onClick={() => toggleMenu('quick-settings')}
@@ -1447,56 +1415,6 @@ function Editor({
                 </div>
               </div>
 
-              <MenuDivider />
-
-              <div className="px-2 pt-1 pb-2">
-                <div className="text-xs text-neutral-400 mb-1.5">{t('zoomLevel')}</div>
-                <div className="flex items-center gap-1.5">
-                  <button
-                    onClick={() => { setCanvasZoomMode('manual'); setCanvasManualZoom(1); }}
-                    className="editor-surface-control px-2 py-0.5 text-xs rounded-md border border-neutral-600 bg-neutral-800 hover:bg-neutral-700 text-neutral-200"
-                    title={t('zoom100')}
-                  >
-                    {t('zoom100')}
-                  </button>
-                  <button
-                    onClick={() => setCanvasZoomMode('fit')}
-                    className="editor-surface-control px-2 py-0.5 text-xs rounded-md border border-neutral-600 bg-neutral-800 hover:bg-neutral-700 text-neutral-200"
-                    title={t('zoomFit')}
-                  >
-                    {t('zoomFit')}
-                  </button>
-                  <button
-                    onClick={() => {
-                      setCanvasZoomMode('manual');
-                      setCanvasManualZoom((prev) => {
-                        const base = canvasZoomMode === 'fit' ? canvasDisplayScale : prev;
-                        return Math.max(0.2, Math.min(3, Math.round((base - 0.1) * 100) / 100));
-                      });
-                    }}
-                    className="editor-surface-control w-7 h-7 flex items-center justify-center text-sm rounded-md border border-neutral-600 bg-neutral-800 hover:bg-neutral-700 text-neutral-200"
-                    title={t('zoomOut')}
-                  >
-                    −
-                  </button>
-                  <button
-                    onClick={() => {
-                      setCanvasZoomMode('manual');
-                      setCanvasManualZoom((prev) => {
-                        const base = canvasZoomMode === 'fit' ? canvasDisplayScale : prev;
-                        return Math.max(0.2, Math.min(3, Math.round((base + 0.1) * 100) / 100));
-                      });
-                    }}
-                    className="editor-surface-control w-7 h-7 flex items-center justify-center text-sm rounded-md border border-neutral-600 bg-neutral-800 hover:bg-neutral-700 text-neutral-200"
-                    title={t('zoomIn')}
-                  >
-                    +
-                  </button>
-                  <span className="text-xs text-neutral-300 min-w-12 text-right" title={t('zoomLevel')}>
-                    {Math.round(canvasDisplayScale * 100)}%
-                  </span>
-                </div>
-              </div>
               </div>
             )}
           </div>
@@ -1695,7 +1613,7 @@ function Editor({
       </div>
 
       {/* ─── Canvas area with page arrows on sides ─── */}
-      <div className="relative z-0 flex-1 flex items-center justify-center overflow-auto gap-3 px-3 pb-3 pt-2">
+      <div className="relative z-0 flex-1 min-h-0 flex items-center justify-center overflow-hidden gap-2 px-0 py-2">
         {/* Left arrow */}
         <button
           onClick={goPrevPage}
@@ -1711,11 +1629,10 @@ function Editor({
           </svg>
         </button>
 
-        <div className="editor-canvas-shell flex-1 min-w-0 h-full p-2 rounded-2xl border border-neutral-800 bg-neutral-900/80 shadow-2xl">
+        <div className="h-full max-w-full aspect-[4/3] min-w-0">
           <EditorCanvas
             zoomMode={canvasZoomMode}
             manualZoom={canvasManualZoom}
-            onDisplayScaleChange={setCanvasDisplayScale}
           />
         </div>
 

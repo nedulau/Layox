@@ -154,7 +154,6 @@ body {
 
 .editor-ui[data-ui-theme='light'] .editor-canvas-shell {
   background: #ffffff !important;
-  border-color: #d8dee9 !important;
 }
 
 .editor-ui[data-ui-theme='light'] .editor-side-nav {

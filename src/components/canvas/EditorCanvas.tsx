@@ -87,6 +87,25 @@ function SlotComponent({
     onOffsetChange(slotIndex, newOffsetX, newOffsetY);
   };
 
+  const handleCropDragEnd = (e: Konva.KonvaEventObject<DragEvent>) => {
+    if (!assignment || !naturalSize || !hasCrop) return;
+    const dx = e.target.x() - slot.x;
+    const dy = e.target.y() - slot.y;
+    const cropW = assignment.cropW ?? naturalSize.w;
+    const cropH = assignment.cropH ?? naturalSize.h;
+    const pxToCropX = cropW / slot.width;
+    const pxToCropY = cropH / slot.height;
+
+    let newCropX = (assignment.cropX ?? 0) - dx * pxToCropX;
+    let newCropY = (assignment.cropY ?? 0) - dy * pxToCropY;
+
+    newCropX = Math.max(0, Math.min(naturalSize.w - cropW, newCropX));
+    newCropY = Math.max(0, Math.min(naturalSize.h - cropH, newCropY));
+
+    e.target.position({ x: slot.x, y: slot.y });
+    onCropChange(slotIndex, Math.round(newCropX), Math.round(newCropY), Math.round(cropW), Math.round(cropH));
+  };
+
   const dragBoundFunc = (pos: { x: number; y: number }) => {
     if (!coverInfo) return pos;
     return {
@@ -101,17 +120,27 @@ function SlotComponent({
       if (!assignment || !naturalSize) return;
       e.evt.preventDefault();
       if (hasCrop) {
-        // Adjust crop region: zoom in/out about the crop center
-        const cx = (assignment.cropX ?? 0) + (assignment.cropW ?? naturalSize.w) / 2;
-        const cy = (assignment.cropY ?? 0) + (assignment.cropH ?? naturalSize.h) / 2;
+        const cropX = assignment.cropX ?? 0;
+        const cropY = assignment.cropY ?? 0;
+        const cropW = assignment.cropW ?? naturalSize.w;
+        const cropH = assignment.cropH ?? naturalSize.h;
+
+        const stage = e.target.getStage();
+        const pointer = stage?.getPointerPosition();
+        const localX = pointer ? Math.max(0, Math.min(slot.width, pointer.x - slot.x)) : slot.width / 2;
+        const localY = pointer ? Math.max(0, Math.min(slot.height, pointer.y - slot.y)) : slot.height / 2;
+
+        const anchorX = cropX + (localX / slot.width) * cropW;
+        const anchorY = cropY + (localY / slot.height) * cropH;
         const factor = e.evt.deltaY > 0 ? 1.05 : 0.95;
-        let newW = (assignment.cropW ?? naturalSize.w) * factor;
-        let newH = (assignment.cropH ?? naturalSize.h) * factor;
+        let newW = cropW * factor;
+        let newH = cropH * factor;
         // Clamp to image bounds and minimum
         newW = Math.max(20, Math.min(naturalSize.w, newW));
         newH = Math.max(20, Math.min(naturalSize.h, newH));
-        let newX = cx - newW / 2;
-        let newY = cy - newH / 2;
+
+        let newX = anchorX - (localX / slot.width) * newW;
+        let newY = anchorY - (localY / slot.height) * newH;
         newX = Math.max(0, Math.min(naturalSize.w - newW, newX));
         newY = Math.max(0, Math.min(naturalSize.h - newH, newY));
         onCropChange(slotIndex, Math.round(newX), Math.round(newY), Math.round(newW), Math.round(newH));
@@ -186,11 +215,15 @@ function SlotComponent({
               width: assignment!.cropW!,
               height: assignment!.cropH!,
             }}
+            draggable
+            dragBoundFunc={() => ({ x: slot.x, y: slot.y })}
             onClick={onSelect}
             onTap={onSelect}
+            onDragEnd={handleCropDragEnd}
             onWheel={handleWheel}
             onDblClick={handleDblClick}
             onDblTap={handleDblClick}
+            listening
           />
         </Group>
       )}
@@ -599,7 +632,7 @@ function EditorCanvas({
   const isCover = currentPage?.isCover;
   const coverTitle = currentPage?.coverTitle ?? '';
   const coverSubtitle = currentPage?.coverSubtitle ?? '';
-  const showCoverSubtitle = currentPage?.showCoverSubtitle ?? true;
+  const showCoverSubtitle = currentPage?.showCoverSubtitle ?? false;
   const coverTitleFontSize = currentPage?.coverTitleFontSize ?? 48;
   const coverTitleFontFamily = currentPage?.coverTitleFontFamily ?? 'Arial';
   const coverTitleColor = currentPage?.coverTitleColor ?? '#ffffff';
@@ -641,7 +674,8 @@ function EditorCanvas({
     const updateScale = () => {
       const rect = container.getBoundingClientRect();
       const scaleX = rect.width / CANVAS_W;
-      const fitScale = Math.min(1, Math.max(0.12, scaleX));
+      const scaleY = rect.height / CANVAS_H;
+      const fitScale = Math.max(0.12, Math.min(3, Math.min(scaleX, scaleY)));
       const manualScale = Math.min(3, Math.max(0.2, manualZoom));
       const nextScale = zoomMode === 'fit' ? fitScale : manualScale;
       setDisplayScale(nextScale);
@@ -848,7 +882,7 @@ function EditorCanvas({
           transform: `scale(${displayScale})`,
           transformOrigin: 'center center',
         }}
-        className="shrink-0"
+        className="shrink-0 overflow-hidden"
       >
         <Stage width={CANVAS_W} height={CANVAS_H} onClick={handleStageClick} onTap={handleStageClick as any} onDragStart={handleDragStart}>
           <Layer>
