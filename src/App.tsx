@@ -160,7 +160,7 @@ function PagePreviewCard({
   const slots = useMemo(() => {
     if (!page.layoutId) return [];
     const padding = page.layoutPadding ?? 20;
-    const gap = page.layoutGap ?? 10;
+    const gap = page.layoutGap ?? 20;
     return computeLayoutSlots(page.layoutId, padding, gap);
   }, [page.layoutGap, page.layoutId, page.layoutPadding]);
 
@@ -626,13 +626,13 @@ function Editor({
     (s) => s.project.meta.defaultLayoutPadding ?? 20,
   );
   const defaultLayoutGap = useProjectStore(
-    (s) => s.project.meta.defaultLayoutGap ?? 10,
+    (s) => s.project.meta.defaultLayoutGap ?? 20,
   );
   const currentLayoutPadding = useProjectStore(
     (s) => s.project.pages[s.currentPageIndex]?.layoutPadding ?? (s.project.meta.defaultLayoutPadding ?? 20),
   );
   const currentLayoutGap = useProjectStore(
-    (s) => s.project.pages[s.currentPageIndex]?.layoutGap ?? (s.project.meta.defaultLayoutGap ?? 10),
+    (s) => s.project.pages[s.currentPageIndex]?.layoutGap ?? (s.project.meta.defaultLayoutGap ?? 20),
   );
   const setCurrentPageIndex = useProjectStore((s) => s.setCurrentPageIndex);
   const addPage = useProjectStore((s) => s.addPage);

@@ -6,6 +6,99 @@ import type { ImageElement, TextElement, PageElement, LayoutSlot, SlotAssignment
 import { computeLayoutSlots } from '../../utils/layouts';
 import { CANVAS_H, CANVAS_W } from '../../constants/canvas';
 
+type CachedImageEntry = {
+  blob: Blob;
+  image: HTMLImageElement;
+  promise?: Promise<HTMLImageElement>;
+};
+
+const cachedImages = new Map<string, CachedImageEntry>();
+
+function loadCachedBlobImage(path: string, blob: Blob): Promise<HTMLImageElement> {
+  const existing = cachedImages.get(path);
+
+  if (existing && existing.blob === blob) {
+    if (existing.image.complete && existing.image.naturalWidth > 0) {
+      return Promise.resolve(existing.image);
+    }
+    if (existing.promise) {
+      return existing.promise;
+    }
+  }
+
+  const image = new window.Image();
+  const url = URL.createObjectURL(blob);
+
+  const promise = new Promise<HTMLImageElement>((resolve, reject) => {
+    image.onload = () => {
+      URL.revokeObjectURL(url);
+      cachedImages.set(path, { blob, image });
+      resolve(image);
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(url);
+      cachedImages.delete(path);
+      reject(new Error(`Failed to load image for path: ${path}`));
+    };
+  });
+
+  cachedImages.set(path, { blob, image, promise });
+  image.src = url;
+  return promise;
+}
+
+function useCachedBlobImage(
+  assetPath: string | undefined,
+  assetBlobs: Record<string, Blob>,
+): HTMLImageElement | null {
+  const [image, setImage] = useState<HTMLImageElement | null>(null);
+
+  useEffect(() => {
+    if (!assetPath) {
+      setImage(null);
+      return;
+    }
+
+    const blob = assetBlobs[assetPath];
+    if (!blob) {
+      setImage(null);
+      return;
+    }
+
+    let cancelled = false;
+    loadCachedBlobImage(assetPath, blob)
+      .then((loadedImage) => {
+        if (!cancelled) setImage(loadedImage);
+      })
+      .catch(() => {
+        if (!cancelled) setImage(null);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [assetPath, assetBlobs]);
+
+  return image;
+}
+
+function collectImagePathsFromPage(elementPage: {
+  elements: PageElement[];
+  slotAssignments?: Record<number, SlotAssignment>;
+}): string[] {
+  const paths = new Set<string>();
+
+  Object.values(elementPage.slotAssignments ?? {}).forEach((assignment) => {
+    if (assignment?.assetPath) paths.add(assignment.assetPath);
+  });
+
+  elementPage.elements.forEach((element) => {
+    if (element.type === 'image') paths.add(element.src);
+  });
+
+  return [...paths];
+}
+
 // ─── Layout slot (for layout mode) ──────────────────────────────────────────
 
 function SlotComponent({
@@ -33,31 +126,17 @@ function SlotComponent({
   imageLabelPrefix: string;
   lowResolutionHintText: (qualityPercent: number) => string;
 }) {
-  const [image, setImage] = useState<HTMLImageElement | null>(null);
+  const image = useCachedBlobImage(assignment?.assetPath, assetBlobs);
   const [naturalSize, setNaturalSize] = useState<{ w: number; h: number } | null>(null);
   const [showResolutionHint, setShowResolutionHint] = useState(false);
 
   useEffect(() => {
-    if (!assignment?.assetPath) {
-      setImage(null);
+    if (!image) {
       setNaturalSize(null);
       return;
     }
-    const blob = assetBlobs[assignment.assetPath];
-    if (!blob) {
-      setImage(null);
-      setNaturalSize(null);
-      return;
-    }
-    const url = URL.createObjectURL(blob);
-    const img = new window.Image();
-    img.onload = () => {
-      setImage(img);
-      setNaturalSize({ w: img.naturalWidth, h: img.naturalHeight });
-    };
-    img.src = url;
-    return () => URL.revokeObjectURL(url);
-  }, [assignment?.assetPath, assetBlobs]);
+    setNaturalSize({ w: image.naturalWidth, h: image.naturalHeight });
+  }, [image]);
 
   const zoomScale = assignment?.scale ?? 1;
   const hasCrop = assignment?.cropX !== undefined && assignment?.cropW !== undefined;
@@ -368,19 +447,9 @@ function ImageElementComponent({
   onSelect: () => void;
   onChange: (changes: Partial<ImageElement>) => void;
 }) {
-  const [image, setImage] = useState<HTMLImageElement | null>(null);
+  const image = useCachedBlobImage(element.src, assetBlobs);
   const shapeRef = useRef<Konva.Image>(null);
   const trRef = useRef<Konva.Transformer>(null);
-
-  useEffect(() => {
-    const blob = assetBlobs[element.src];
-    if (!blob) return;
-    const url = URL.createObjectURL(blob);
-    const img = new window.Image();
-    img.onload = () => setImage(img);
-    img.src = url;
-    return () => URL.revokeObjectURL(url);
-  }, [element.src, assetBlobs]);
 
   useEffect(() => {
     if (isSelected && trRef.current && shapeRef.current) {
@@ -613,6 +682,8 @@ function EditorCanvas({
   coverSubtitleFallback?: string;
   lowResolutionHintText?: (qualityPercent: number) => string;
 }) {
+  const currentPageIndex = useProjectStore((s) => s.currentPageIndex);
+  const pages = useProjectStore((s) => s.project.pages);
   const currentPage = useProjectStore((s) => s.project.pages[s.currentPageIndex]);
   const assetBlobs = useProjectStore((s) => s.assetBlobs);
   const selectedElementId = useProjectStore((s) => s.selectedElementId);
@@ -630,13 +701,30 @@ function EditorCanvas({
   const updateSlotCrop = useProjectStore((s) => s.updateSlotCrop);
   const snapshot = useProjectStore((s) => s.snapshot);
   const defaultLayoutPadding = useProjectStore((s) => s.project.meta.defaultLayoutPadding ?? 20);
-  const defaultLayoutGap = useProjectStore((s) => s.project.meta.defaultLayoutGap ?? 10);
+  const defaultLayoutGap = useProjectStore((s) => s.project.meta.defaultLayoutGap ?? 20);
 
   const layoutId = currentPage?.layoutId;
   const isLayoutMode = !!layoutId;
   const layoutPadding = currentPage?.layoutPadding ?? defaultLayoutPadding;
   const layoutGap = currentPage?.layoutGap ?? defaultLayoutGap;
   const computedSlots = layoutId ? computeLayoutSlots(layoutId, layoutPadding, layoutGap) : [];
+
+  useEffect(() => {
+    const neighborPages = [pages[currentPageIndex - 1], pages[currentPageIndex + 1]].filter(Boolean);
+    const neighborPaths = new Set<string>();
+
+    neighborPages.forEach((page) => {
+      collectImagePathsFromPage(page).forEach((path) => {
+        neighborPaths.add(path);
+      });
+    });
+
+    neighborPaths.forEach((path) => {
+      const blob = assetBlobs[path];
+      if (!blob) return;
+      void loadCachedBlobImage(path, blob).catch(() => undefined);
+    });
+  }, [assetBlobs, currentPageIndex, pages]);
 
   // In layout mode: only text elements are free. In free mode: all elements.
   const elements = currentPage?.elements ?? [];

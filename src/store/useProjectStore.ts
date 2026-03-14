@@ -7,7 +7,7 @@ import { storeHandle } from '../utils/handleStore';
 import { CANVAS_H, CANVAS_IMAGE_MAX_H, CANVAS_IMAGE_MAX_W, CANVAS_W } from '../constants/canvas';
 
 const DEFAULT_LAYOUT_PADDING = 20;
-const DEFAULT_LAYOUT_GAP = 10;
+const DEFAULT_LAYOUT_GAP = 20;
 const DEFAULT_COVER_TITLE_FONT_SIZE = 48;
 const DEFAULT_COVER_SUBTITLE_FONT_SIZE = 24;
 const DEFAULT_COVER_TITLE_FONT_FAMILY = 'Arial';
@@ -689,7 +689,7 @@ const useProjectStore = create<ProjectState>((set, get) => ({
       if (!page.layoutId) return state;
 
       const padding = page.layoutPadding ?? 20;
-      const gap = page.layoutGap ?? 10;
+      const gap = page.layoutGap ?? DEFAULT_LAYOUT_GAP;
       const slots = computeLayoutSlots(page.layoutId, padding, gap);
 
       // Convert slot assignments back to free ImageElements
