@@ -14,12 +14,12 @@ type NewProjectModalProps = {
 
 function NewProjectModal({
   open,
-  title = 'Neues Projekt',
-  description = 'Gib einen Namen für dein Projekt ein.',
-  initialName = 'Neues Projekt',
-  cancelLabel = 'Abbrechen',
-  confirmLabel = 'Erstellen',
-  placeholder = 'Projektname',
+  title = 'New project',
+  description = 'Enter a name for your project.',
+  initialName = 'New project',
+  cancelLabel = 'Cancel',
+  confirmLabel = 'Create',
+  placeholder = 'Project name',
   onClose,
   onConfirm,
 }: NewProjectModalProps) {
@@ -44,7 +44,7 @@ function NewProjectModal({
           className="mt-4"
           onSubmit={(e) => {
             e.preventDefault();
-            onConfirm(name.trim() || 'Unbenanntes Projekt');
+            onConfirm(name.trim() || 'Untitled Project');
           }}
         >
           <input

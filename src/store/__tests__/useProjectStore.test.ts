@@ -32,14 +32,14 @@ describe('useProjectStore', () => {
   beforeEach(() => {
     localStorageMock.clear();
     // Reset store to default
-    getState().resetProject('Test Projekt');
+    getState().resetProject('Test Project');
     // Clear history
     useProjectStore.setState({ historyPast: [], historyFuture: [] });
   });
 
   describe('initial state', () => {
     it('has a project with a name', () => {
-      expect(getState().project.meta.name).toBe('Test Projekt');
+      expect(getState().project.meta.name).toBe('Test Project');
     });
 
     it('starts on page index 0', () => {
@@ -62,8 +62,8 @@ describe('useProjectStore', () => {
 
   describe('project name', () => {
     it('setProjectName changes the project name', () => {
-      getState().setProjectName('Neuer Name');
-      expect(getState().project.meta.name).toBe('Neuer Name');
+      getState().setProjectName('New Name');
+      expect(getState().project.meta.name).toBe('New Name');
     });
   });
 

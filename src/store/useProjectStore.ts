@@ -23,7 +23,7 @@ function createEmptyPage(): Page {
   };
 }
 
-function createDefaultProject(name: string = 'Unbenanntes Projekt'): Project {
+function createDefaultProject(name: string = 'Untitled Project'): Project {
   const coverPage: Page = {
     id: uuidv4(),
     elements: [],
@@ -195,7 +195,7 @@ const useProjectStore = create<ProjectState>((set, get) => ({
     })),
 
   resetProject: (name) => {
-    const projectName = name || 'Unbenanntes Projekt';
+    const projectName = name || 'Untitled Project';
     set({
       project: createDefaultProject(projectName),
       currentPageIndex: 0,
@@ -885,7 +885,7 @@ const useProjectStore = create<ProjectState>((set, get) => ({
       y: 260,
       rotation: 0,
       zIndex: get().currentPage()?.elements.length ?? 0,
-      content: 'Text bearbeiten',
+      content: 'Edit text',
       fontSize: 24,
       fontFamily: 'Arial',
       color: '#000000',

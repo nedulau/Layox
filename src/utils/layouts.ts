@@ -9,22 +9,22 @@ const IH = H - 2 * P; // inner height
 export const LAYOUT_TEMPLATES: LayoutTemplate[] = [
   {
     id: 'cover-full',
-    name: 'Deckblatt (Vollbild)',
+    name: 'Cover (Full)',
     slots: [{ x: 0, y: 0, width: W, height: H }],
   },
   {
     id: 'cover-center',
-    name: 'Deckblatt (Mitte)',
+    name: 'Cover (Centered)',
     slots: [{ x: P + 80, y: P + 80, width: IW - 160, height: IH - 160 }],
   },
   {
     id: 'single',
-    name: 'Einzelbild',
+    name: 'Single',
     slots: [{ x: P, y: P, width: IW, height: IH }],
   },
   {
     id: 'two-side',
-    name: 'Zwei nebeneinander',
+    name: 'Two side by side',
     slots: [
       { x: P, y: P, width: (IW - G) / 2, height: IH },
       { x: P + (IW - G) / 2 + G, y: P, width: (IW - G) / 2, height: IH },
@@ -32,7 +32,7 @@ export const LAYOUT_TEMPLATES: LayoutTemplate[] = [
   },
   {
     id: 'two-stack',
-    name: 'Zwei übereinander',
+    name: 'Two stacked',
     slots: [
       { x: P, y: P, width: IW, height: (IH - G) / 2 },
       { x: P, y: P + (IH - G) / 2 + G, width: IW, height: (IH - G) / 2 },
@@ -40,7 +40,7 @@ export const LAYOUT_TEMPLATES: LayoutTemplate[] = [
   },
   {
     id: 'three-cols',
-    name: 'Drei Spalten',
+    name: 'Three columns',
     slots: (() => {
       const sw = (IW - 2 * G) / 3;
       return [
@@ -52,7 +52,7 @@ export const LAYOUT_TEMPLATES: LayoutTemplate[] = [
   },
   {
     id: 'grid-4',
-    name: 'Vierer-Raster',
+    name: 'Grid (4)',
     slots: (() => {
       const sw = (IW - G) / 2;
       const sh = (IH - G) / 2;
@@ -66,7 +66,7 @@ export const LAYOUT_TEMPLATES: LayoutTemplate[] = [
   },
   {
     id: 'one-big-two-small',
-    name: '1 groß + 2 klein',
+    name: '1 large + 2 small',
     slots: (() => {
       const bigW = Math.round(IW * 0.6);
       const smallW = IW - bigW - G;
@@ -81,7 +81,7 @@ export const LAYOUT_TEMPLATES: LayoutTemplate[] = [
   // ─── Additional layouts ────────────────────────────────────────────────
   {
     id: 'three-rows',
-    name: 'Drei Zeilen',
+    name: 'Three rows',
     slots: (() => {
       const sh = (IH - 2 * G) / 3;
       return [
@@ -93,7 +93,7 @@ export const LAYOUT_TEMPLATES: LayoutTemplate[] = [
   },
   {
     id: 'grid-6',
-    name: 'Sechser-Raster',
+    name: 'Grid (6)',
     slots: (() => {
       const sw = (IW - 2 * G) / 3;
       const sh = (IH - G) / 2;
@@ -109,7 +109,7 @@ export const LAYOUT_TEMPLATES: LayoutTemplate[] = [
   },
   {
     id: 'one-top-two-bottom',
-    name: '1 oben + 2 unten',
+    name: '1 top + 2 bottom',
     slots: (() => {
       const topH = Math.round(IH * 0.6);
       const botH = IH - topH - G;
@@ -123,7 +123,7 @@ export const LAYOUT_TEMPLATES: LayoutTemplate[] = [
   },
   {
     id: 'two-top-one-bottom',
-    name: '2 oben + 1 unten',
+    name: '2 top + 1 bottom',
     slots: (() => {
       const topH = Math.round(IH * 0.4);
       const botH = IH - topH - G;
@@ -137,7 +137,7 @@ export const LAYOUT_TEMPLATES: LayoutTemplate[] = [
   },
   {
     id: 'sidebar-left',
-    name: 'Seitenleiste links',
+    name: 'Left sidebar',
     slots: (() => {
       const leftW = Math.round(IW * 0.35);
       const rightW = IW - leftW - G;
@@ -151,7 +151,7 @@ export const LAYOUT_TEMPLATES: LayoutTemplate[] = [
   },
   {
     id: 'mosaic-5',
-    name: 'Mosaik (5)',
+    name: 'Mosaic (5)',
     slots: (() => {
       const bigW = Math.round(IW * 0.5);
       const smallW = IW - bigW - G;

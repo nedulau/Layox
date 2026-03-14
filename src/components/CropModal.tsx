@@ -5,6 +5,9 @@ interface CropModalProps {
   initialCrop?: { x: number; y: number; w: number; h: number };
   onConfirm: (crop: { x: number; y: number; w: number; h: number }) => void;
   onCancel: () => void;
+  loadingLabel?: string;
+  doneLabel?: string;
+  cancelLabel?: string;
 }
 
 type HandleType = 'move' | 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';
@@ -14,6 +17,9 @@ export default function CropModal({
   initialCrop,
   onConfirm,
   onCancel,
+  loadingLabel = 'Loading image...',
+  doneLabel = 'Done',
+  cancelLabel = 'Cancel',
 }: CropModalProps) {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [naturalSize, setNaturalSize] = useState<{ w: number; h: number } | null>(null);
@@ -177,7 +183,7 @@ export default function CropModal({
   if (!imageUrl || !naturalSize) {
     return (
       <div className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center">
-        <span className="text-neutral-400 text-sm">Bild wird geladen…</span>
+        <span className="text-neutral-400 text-sm">{loadingLabel}</span>
       </div>
     );
   }
@@ -251,13 +257,13 @@ export default function CropModal({
           onClick={() => onConfirm({ x: Math.round(crop.x), y: Math.round(crop.y), w: Math.round(crop.w), h: Math.round(crop.h) })}
           className="px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg cursor-pointer select-none transition-colors"
         >
-          Fertig
+          {doneLabel}
         </button>
         <button
           onClick={onCancel}
           className="px-5 py-2 bg-neutral-700 hover:bg-neutral-600 text-white rounded-lg cursor-pointer select-none transition-colors"
         >
-          Abbrechen
+          {cancelLabel}
         </button>
       </div>
     </div>

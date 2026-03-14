@@ -33,7 +33,7 @@ describe('layouts', () => {
     it('returns the correct template for a known id', () => {
       const single = getLayoutById('single');
       expect(single).toBeDefined();
-      expect(single!.name).toBe('Einzelbild');
+      expect(single!.name).toBe('Single');
       expect(single!.slots).toHaveLength(1);
     });
 

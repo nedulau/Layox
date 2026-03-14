@@ -30,10 +30,20 @@ function LayoutThumb({ layout, isActive }: { layout: LayoutTemplate; isActive: b
 export default function LayoutPicker({
   currentLayoutId,
   uiTheme,
+  layoutPlaceholder,
+  freeLabel,
+  freeThumbLabel,
+  slotSingularLabel,
+  slotPluralLabel,
   onSelect,
 }: {
   currentLayoutId?: string;
   uiTheme: 'dark' | 'light';
+  layoutPlaceholder: string;
+  freeLabel: string;
+  freeThumbLabel: string;
+  slotSingularLabel: string;
+  slotPluralLabel: string;
   onSelect: (layoutId: string | null) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -67,7 +77,7 @@ export default function LayoutPicker({
             <span className="max-w-24 truncate">{active.name}</span>
           </>
         ) : (
-          <span className={isLight ? 'text-slate-500' : 'text-neutral-400'}>Layout…</span>
+          <span className={isLight ? 'text-slate-500' : 'text-neutral-400'}>{layoutPlaceholder}</span>
         )}
         <span className={`text-[10px] ml-auto ${isLight ? 'text-slate-500' : 'text-neutral-400'}`}>▾</span>
       </button>
@@ -101,10 +111,10 @@ export default function LayoutPicker({
                 fontSize="10"
                 fill="#aaa"
               >
-                Frei
+                {freeThumbLabel}
               </text>
             </svg>
-            <span>Freie Anordnung</span>
+            <span>{freeLabel}</span>
           </button>
 
           <div className={`h-px my-1 ${isLight ? 'bg-slate-200' : 'bg-neutral-700'}`} />
@@ -127,7 +137,7 @@ export default function LayoutPicker({
               <div>
                 <div className="font-medium">{layout.name}</div>
                 <div className={`text-xs ${isLight ? 'text-slate-500' : 'text-neutral-500'}`}>
-                  {layout.slots.length} {layout.slots.length === 1 ? 'Platz' : 'Plätze'}
+                  {layout.slots.length} {layout.slots.length === 1 ? slotSingularLabel : slotPluralLabel}
                 </div>
               </div>
             </button>

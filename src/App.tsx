@@ -180,7 +180,7 @@ function PagePreviewCard({
           : 'border-neutral-700 bg-neutral-900/80 hover:bg-neutral-800/90'
       }`}
       style={{ width: 220 }}
-      title={`Seite ${pageIndex + 1}`}
+      title={`Page ${pageIndex + 1}`}
     >
       <div
         className="relative bg-neutral-950"
@@ -886,7 +886,7 @@ function Editor({
           .then(() => {
             pushAutoSaveRestorePoint(state.project, state.currentPageIndex);
           })
-          .catch((err) => console.error('Auto-save Fehler:', err));
+          .catch((err) => console.error('Auto-save error:', err));
         return;
       }
 
@@ -1127,10 +1127,10 @@ function Editor({
 
         <div className="w-px h-5 bg-neutral-700/80" />
 
-        {/* ── Datei menu ── */}
+        {/* ── File menu ── */}
         <div className="relative" data-menu>
-          <MenuButton label={t('file')} isOpen={openMenu === 'datei'} onClick={() => toggleMenu('datei')} />
-          {openMenu === 'datei' && (
+          <MenuButton label={t('file')} isOpen={openMenu === 'file'} onClick={() => toggleMenu('file')} />
+          {openMenu === 'file' && (
             <div className="editor-dropdown absolute top-full left-0 mt-2 min-w-[230px] bg-neutral-900 border border-neutral-700 rounded-xl shadow-2xl z-[90] p-1">
               <MenuItem label={t('newProject')} shortcut="Ctrl+N" onClick={handleNewProject} />
               <MenuItem label={t('open')} shortcut="Ctrl+O" onClick={handleOpen} />
@@ -1149,15 +1149,15 @@ function Editor({
           )}
         </div>
 
-        {/* ── Bearbeiten menu ── */}
+        {/* ── Edit menu ── */}
         <div className="relative" data-menu>
-          <MenuButton label={t('edit')} isOpen={openMenu === 'bearbeiten'} onClick={() => toggleMenu('bearbeiten')} />
-          {openMenu === 'bearbeiten' && (
+          <MenuButton label={t('edit')} isOpen={openMenu === 'edit'} onClick={() => toggleMenu('edit')} />
+          {openMenu === 'edit' && (
             <div className="editor-dropdown absolute top-full left-0 mt-2 min-w-[230px] bg-neutral-900 border border-neutral-700 rounded-xl shadow-2xl z-[90] p-1">
               <MenuItem label={t('undo')} shortcut="Ctrl+Z" onClick={handleUndo} disabled={!canUndo} />
               <MenuItem label={t('redo')} shortcut="Ctrl+Y" onClick={handleRedo} disabled={!canRedo} />
               <MenuDivider />
-              <MenuItem label={t('delete')} shortcut="Entf" onClick={handleDelete} disabled={!canDelete} danger />
+              <MenuItem label={t('delete')} shortcut="Del" onClick={handleDelete} disabled={!canDelete} danger />
               {canDeleteSlot && (
                 <>
                   <MenuDivider />
@@ -1169,10 +1169,10 @@ function Editor({
           )}
         </div>
 
-        {/* ── Einfügen menu ── */}
+        {/* ── Insert menu ── */}
         <div className="relative" data-menu>
-          <MenuButton label={t('insert')} isOpen={openMenu === 'einfuegen'} onClick={() => toggleMenu('einfuegen')} />
-          {openMenu === 'einfuegen' && (
+          <MenuButton label={t('insert')} isOpen={openMenu === 'insert'} onClick={() => toggleMenu('insert')} />
+          {openMenu === 'insert' && (
             <div className="editor-dropdown absolute top-full left-0 mt-2 min-w-[220px] bg-neutral-900 border border-neutral-700 rounded-xl shadow-2xl z-[90] p-1">
               <MenuItem label={t('pageNew')} onClick={handleAddPageFromMenu} />
               <MenuDivider />
@@ -1198,6 +1198,11 @@ function Editor({
                 <LayoutPicker
                   currentLayoutId={currentLayoutId}
                   uiTheme={uiTheme}
+                  layoutPlaceholder={`${t('layout')}...`}
+                  freeLabel={t('freeArrangement')}
+                  freeThumbLabel={t('freeShort')}
+                  slotSingularLabel={t('slotSingular')}
+                  slotPluralLabel={t('slotPlural')}
                   onSelect={(id) => { handleLayoutSelect(id); closeMenu(); }}
                 />
               </div>
@@ -1260,10 +1265,10 @@ function Editor({
           )}
         </div>
 
-        {/* ── Struktur menu ── */}
+        {/* ── Structure menu ── */}
         <div className="relative" data-menu>
-          <MenuButton label={t('structure')} isOpen={openMenu === 'struktur'} onClick={() => toggleMenu('struktur')} />
-          {openMenu === 'struktur' && (
+          <MenuButton label={t('structure')} isOpen={openMenu === 'structure'} onClick={() => toggleMenu('structure')} />
+          {openMenu === 'structure' && (
             <div className="editor-dropdown absolute top-full left-0 mt-2 min-w-[290px] bg-neutral-900 border border-neutral-700 rounded-xl shadow-2xl z-[90] p-1">
               <div className="px-3 py-2 space-y-2">
                 <div className="text-xs text-neutral-400">{t('currentPage')}</div>
@@ -1284,7 +1289,7 @@ function Editor({
                     }}
                     className="editor-surface-control w-full px-2 py-1 text-xs rounded-md border border-neutral-600 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 transition-colors cursor-pointer select-none"
                   >
-                    {t('chapter')} entfernen
+                    Remove {t('chapter')}
                   </button>
                 )}
               </div>
@@ -1306,7 +1311,7 @@ function Editor({
                       <option value="">{t('chooseChapter')}</option>
                       {chapterJumpTargets.map((target) => (
                         <option key={`${target.pageIndex}-${target.label}`} value={target.pageIndex}>
-                          {target.label} (S. {target.pageIndex + 1})
+                          {target.label} (p. {target.pageIndex + 1})
                         </option>
                       ))}
                     </select>
@@ -1633,6 +1638,14 @@ function Editor({
           <EditorCanvas
             zoomMode={canvasZoomMode}
             manualZoom={canvasManualZoom}
+            dropImagesLabel={t('dropImagesHere')}
+            imageLabelPrefix={t('imageSlotLabel')}
+            editTextPlaceholder={t('editTextPlaceholder')}
+            coverTitleFallback={t('title')}
+            coverSubtitleFallback={t('subtitle')}
+            lowResolutionHintText={(percent) =>
+              t('lowResolutionHint').replace('{percent}', String(percent))
+            }
           />
         </div>
 
@@ -1670,6 +1683,9 @@ function Editor({
           initialCrop={cropModal.initialCrop}
           onConfirm={handleCropConfirm}
           onCancel={handleCropCancel}
+          loadingLabel={t('loadingImage')}
+          doneLabel={t('done')}
+          cancelLabel={t('cancel')}
         />
       )}
 

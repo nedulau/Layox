@@ -43,7 +43,7 @@ async function showSaveAsDialog(
       suggestedName,
       types: [
         {
-          description: 'Layox-Projekt',
+          description: 'Layox Project',
           accept: { 'application/zip': ['.layox'] },
         },
       ],
@@ -68,7 +68,7 @@ export async function showOpenDialog(): Promise<{
     const [handle] = await (window as any).showOpenFilePicker({
       types: [
         {
-          description: 'Layox-Projekt',
+          description: 'Layox Project',
           accept: { 'application/zip': ['.layox'] },
         },
       ],
@@ -104,7 +104,7 @@ export async function saveProject(
 
   // Try File System Access API picker
   const safeName =
-    project.meta.name.replace(/[^a-zA-Z0-9_\-äöüÄÖÜß ]/g, '_') + '.layox';
+    project.meta.name.replace(/[^\p{L}\p{N}_\- ]/gu, '_') + '.layox';
   const newHandle = await showSaveAsDialog(safeName);
   if (newHandle) {
     await saveToHandle(newHandle, blob);
@@ -125,7 +125,7 @@ export async function saveProjectAs(
 ): Promise<FileSystemFileHandleExt | null> {
   const blob = await generateProjectBlob(project, assetBlobs);
   const safeName =
-    project.meta.name.replace(/[^a-zA-Z0-9_\-äöüÄÖÜß ]/g, '_') + '.layox';
+    project.meta.name.replace(/[^\p{L}\p{N}_\- ]/gu, '_') + '.layox';
 
   const handle = await showSaveAsDialog(safeName);
   if (handle) {
@@ -148,7 +148,7 @@ export async function loadProject(
 
   const projectFile = zip.file('project.json');
   if (!projectFile) {
-    throw new Error('Ungültige .layox-Datei: project.json fehlt.');
+    throw new Error('Invalid .layox file: missing project.json.');
   }
 
   const projectJson = await projectFile.async('string');
@@ -156,7 +156,7 @@ export async function loadProject(
 
   if (!project.meta || !project.pages || !Array.isArray(project.pages)) {
     throw new Error(
-      'Ungültige .layox-Datei: project.json hat ein ungültiges Format.',
+      'Invalid .layox file: project.json has an invalid format.',
     );
   }
 

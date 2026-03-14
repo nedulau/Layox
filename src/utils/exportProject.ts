@@ -36,10 +36,10 @@ export const PDF_COMPRESSION_PRESETS: {
   label: string;
   description: string;
 }[] = [
-  { id: 'none', label: 'Keine Kompression', description: 'Maximale Qualität (PNG, große Datei)' },
-  { id: 'low', label: 'Gering', description: 'Sehr hohe Qualität (JPEG 95 %)' },
-  { id: 'medium', label: 'Mittel', description: 'Gute Qualität (JPEG 80 %)' },
-  { id: 'high', label: 'Stark', description: 'Kleine Datei (JPEG 55 %)' },
+  { id: 'none', label: 'No compression', description: 'Maximum quality (PNG, large file)' },
+  { id: 'low', label: 'Low', description: 'Very high quality (JPEG 95%)' },
+  { id: 'medium', label: 'Medium', description: 'Good quality (JPEG 80%)' },
+  { id: 'high', label: 'High', description: 'Small file (JPEG 55%)' },
 ];
 
 function compressionConfig(level: PdfCompressionLevel): {
@@ -104,7 +104,7 @@ export async function exportAsPdf(
   setPageIndex(originalIndex);
   await new Promise((r) => requestAnimationFrame(r));
 
-  const safeName = projectName.replace(/[^a-zA-Z0-9_\-äöüÄÖÜß ]/g, '_');
+  const safeName = projectName.replace(/[^\p{L}\p{N}_\- ]/gu, '_');
   pdf.save(`${safeName}.pdf`);
 }
 
@@ -115,8 +115,8 @@ export function exportCurrentPageAsPng(projectName: string, pageIndex: number): 
   const dataUrl = getStageDataUrl('image/png', 1);
   if (!dataUrl) return;
   const blob = dataUrlToBlob(dataUrl);
-  const safeName = projectName.replace(/[^a-zA-Z0-9_\-äöüÄÖÜß ]/g, '_');
-  saveAs(blob, `${safeName}_Seite${pageIndex + 1}.png`);
+  const safeName = projectName.replace(/[^\p{L}\p{N}_\- ]/gu, '_');
+  saveAs(blob, `${safeName}_Page${pageIndex + 1}.png`);
 }
 
 /**
@@ -126,8 +126,8 @@ export function exportCurrentPageAsJpeg(projectName: string, pageIndex: number):
   const dataUrl = getStageDataUrl('image/jpeg', 0.92);
   if (!dataUrl) return;
   const blob = dataUrlToBlob(dataUrl);
-  const safeName = projectName.replace(/[^a-zA-Z0-9_\-äöüÄÖÜß ]/g, '_');
-  saveAs(blob, `${safeName}_Seite${pageIndex + 1}.jpg`);
+  const safeName = projectName.replace(/[^\p{L}\p{N}_\- ]/gu, '_');
+  saveAs(blob, `${safeName}_Page${pageIndex + 1}.jpg`);
 }
 
 function getCurrentPageIndex(): number {
@@ -143,7 +143,7 @@ function getCurrentPageIndex(): number {
 
 /**
  * Export ALL pages as individual images packed into a ZIP file.
- * Each page becomes "Seite_001.png" (or .jpg) inside the ZIP.
+ * Each page becomes "Page_001.png" (or .jpg) inside the ZIP.
  */
 export async function exportAllPagesAsZip(
   pageCount: number,
@@ -167,14 +167,14 @@ export async function exportAllPagesAsZip(
 
     const blob = dataUrlToBlob(dataUrl);
     const padded = String(i + 1).padStart(3, '0');
-    zip.file(`Seite_${padded}.${ext}`, blob);
+    zip.file(`Page_${padded}.${ext}`, blob);
   }
 
   // Restore original page
   setPageIndex(originalIndex);
   await new Promise((r) => requestAnimationFrame(r));
 
-  const safeName = projectName.replace(/[^a-zA-Z0-9_\-äöüÄÖÜß ]/g, '_');
+  const safeName = projectName.replace(/[^\p{L}\p{N}_\- ]/gu, '_');
   const zipBlob = await zip.generateAsync({ type: 'blob' });
-  saveAs(zipBlob, `${safeName}_Bilder.zip`);
+  saveAs(zipBlob, `${safeName}_Images.zip`);
 }

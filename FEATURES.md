@@ -1,125 +1,109 @@
-# Layox — Feature-Übersicht
+# Layox - Feature Overview
 
-Alle Funktionen des lokalen Fotoalbum-Editors im Detail.
+Detailed feature set of the local photo album editor.
 
----
+## Project Management
 
-## Projekt-Verwaltung
+- Start screen with recently opened projects
+- Switchable language (German / English) on the start screen and in settings
+- Switchable UI theme (Dark / Light) on the start screen and in settings
+- Double-click on a recent project to reopen it directly (path is persisted)
+- Create new projects with an automatic cover page
+- Save / Save As via native File System Access API or fallback download
+- Open existing `.layox` files (ZIP-based format)
+- Optional auto-save with configurable interval (10 s - 5 min)
+- Recent projects persisted via localStorage + IndexedDB handles
 
-- **Startbildschirm** mit zuletzt geöffneten Projekten
-- **Sprache umschaltbar** (Deutsch / Englisch) im Startbildschirm und in den Einstellungen
-- **UI-Theme umschaltbar** (Dark / Light) im Startbildschirm und in den Einstellungen
-- **Doppelklick** auf ein kürzlich geöffnetes Projekt öffnet es direkt (Pfad wird gespeichert)
-- **Neues Projekt erstellen** — Deckblatt wird automatisch als erste Seite angelegt
-- **Speichern / Speichern unter** — nativer File System Access API oder Fallback-Download
-- **Projekt öffnen** — `.layox`-Dateien (ZIP-Format) laden
-- **Automatisches Speichern** — aktivierbar mit wählbarem Intervall (10 s – 5 min), in den Einstellungen konfigurierbar
-- **Zuletzt geöffnete Projekte** — werden im Startbildschirm angezeigt (localStorage + IndexedDB für Dateipfade)
+## Pages and Navigation
 
-## Seiten & Navigation
-
-- **Mehrseitige Projekte** — Seiten hinzufügen, entfernen, frei navigieren
-- **Seitennavigation** mit nummerierten Buttons und ◀/▶ neben dem Canvas
-- **Seitenübersicht-Modal** über „Seiten“ mit Vorschaubildern, fester Vorschaugröße und dynamischem Grid
-- **Seitenübersicht zeigt Kapitel/Unterkapitel** je Seite (falls vorhanden)
-- **Seitenübersicht schließen** per Escape, Klick außerhalb oder Schließen-Button
-- **Rechter Pfeil wird zu +** wenn man auf der letzten Seite ist → fügt direkt eine neue Seite hinzu
-- **Pfeiltasten (← →)** zum Seitenwechsel
-- **Deckblatt-System** — spezielle Deckblatt-Seiten mit Titel & Untertitel-Overlay
-- **Doppelklick auf Deckblatt-Titel / -Untertitel** zum direkten Bearbeiten auf dem Canvas
+- Multi-page project support (add, remove, navigate)
+- Numbered page controls with left/right arrows next to the canvas
+- Page overview modal with thumbnails and responsive grid
+- Chapter/subchapter metadata visible in page overview
+- Close page overview via Escape, outside click, or close button
+- Right arrow turns into `+` on the last page to append a new page
+- Keyboard page navigation with left/right arrow keys
+- Dedicated cover page type with title/subtitle overlay
+- Double-click cover title/subtitle to edit directly on canvas
 
 ## Layouts
 
-- **14 Layout-Vorlagen**:
-  - Deckblatt (Vollbild)
-  - Deckblatt (Mitte)
-  - Einzelbild
-  - Zwei nebeneinander
-  - Zwei übereinander
-  - Drei Spalten
-  - Drei Zeilen
-  - Vierer-Raster
-  - Sechser-Raster
-  - 1 groß + 2 klein
-  - 1 oben + 2 unten
-  - 2 oben + 1 unten
-  - Seitenleiste links
-  - Mosaik (5)
-- **Slot-basiertes System** — Bilder werden in feste Positionen eingefügt
-- **Layout-Picker** mit SVG-Vorschau-Thumbnails
-- **Konfigurierbarer Rand & Abstand** für jedes Layout
-- **Freie Anordnung** als Alternative — Elemente frei positionieren
+- 14 built-in layout templates (cover, single image, grids, mixed mosaics)
+- Slot-based placement for fixed layout positions
+- Layout picker with SVG preview thumbnails
+- Configurable layout margin and spacing
+- Free arrangement mode for manual positioning
 
-## Bilder
+## Images
 
-- **Bilder einfügen** per Button oder Drag & Drop auf den Canvas
-- **Bild-Panning** in Layout-Slots — Bild innerhalb des Slots verschieben
-- **Zoom in Slots** per Scroll-Rad (1×–5×)
-- **Echter Beschnitt (Crop)** — Freihand-Crop von allen 4 Seiten und Ecken; Scroll passt den Crop-Bereich an
-- **Crop zurücksetzen** per Toolbar-Button
-- **Freie Bild-Elemente** — frei positionierbar, skalierbar, drehbar (außerhalb von Layouts)
-- **Pixelwarnung** — ⚠-Icon wenn ein Bild eine zu geringe Auflösung für den Slot hat
+- Insert images via button or drag and drop
+- Pan images inside layout slots
+- Wheel zoom in slots (1x-5x)
+- True crop editing from edges/corners with scroll-assisted crop scaling
+- Reset crop via toolbar action
+- Free image elements: move, scale, rotate (outside slot layouts)
+- Resolution warning icon for low-quality slot images
 
 ## Text
 
-- **Text-Elemente hinzufügen** — frei positionierbar, drehbar
-- **Doppelklick zum Bearbeiten** — Inline-Editing direkt auf dem Canvas
-- **Platzhaltertext** „Text bearbeiten" wird beim Bearbeiten automatisch entfernt
-- **Schriftart, Schriftgröße & Farbe** in der Kontext-Toolbar einstellbar
+- Add free text elements with move/rotate controls
+- Double-click for inline text editing on canvas
+- Default placeholder `Edit text` is removed automatically when editing starts
+- Font family, size, and color controls in contextual toolbar
 
 ## Export
 
-- **PDF-Export** mit wählbarer Kompression:
-  - Keine Kompression (maximale Qualität, PNG)
-  - Gering (JPEG 95 %)
-  - Mittel (JPEG 80 %)
-  - Stark (JPEG 55 %, kleine Datei)
-- **PNG-Export** der aktuellen Seite (2× Retina-Auflösung)
-- **JPEG-Export** der aktuellen Seite
+- PDF export with compression presets:
+  - No compression (max quality, PNG)
+  - Low (JPEG 95%)
+  - Medium (JPEG 80%)
+  - High (JPEG 55%, smaller file)
+- PNG export of current page (2x retina resolution)
+- JPEG export of current page
 
 ## Canvas
 
-- **Responsives Skalieren** — Canvas nutzt bei wenig horizontalem Platz die verfügbare Breite
-- **Expliziter Zoom-Regler** mit `100%`, `Anpassen`, `+`, `−`
-- **1200 × 900 internes Koordinatensystem** mit CSS-Transform-Skalierung
+- Responsive scaling to available horizontal space
+- Explicit zoom controls (`100%`, `Fit`, `+`, `-`)
+- Internal 1200 x 900 coordinate system with CSS transform scaling
 
-## Bearbeitung
+## Editing
 
-- **Rückgängig / Wiederherstellen** — bis zu 50 Schritte (Ctrl+Z / Ctrl+Y)
-- **Schnelleinfüge-Buttons** — + Bild, + Text, + Deckblatt direkt in der Toolbar
-- **Elemente löschen** per Entf / Backspace
+- Undo / redo history up to 50 steps (Ctrl+Z / Ctrl+Y)
+- Quick insert buttons in toolbar (+ image, + text, + cover)
+- Delete selected elements via Delete / Backspace
 
-## Tastenkürzel
+## Keyboard Shortcuts
 
-| Kürzel | Aktion |
+| Shortcut | Action |
 |---|---|
-| Ctrl+S | Speichern |
-| Ctrl+Shift+S | Speichern unter |
-| Ctrl+O | Öffnen |
-| Ctrl+N | Neues Projekt |
-| Ctrl+T | Text hinzufügen |
-| Ctrl+Z | Rückgängig |
-| Ctrl+Y | Wiederherstellen |
-| Entf / Backspace | Element/Bild löschen |
-| ← / → | Seite wechseln |
-| Escape | Auswahl aufheben |
+| Ctrl+S | Save |
+| Ctrl+Shift+S | Save As |
+| Ctrl+O | Open |
+| Ctrl+N | New project |
+| Ctrl+T | Add text |
+| Ctrl+Z | Undo |
+| Ctrl+Y | Redo |
+| Delete / Backspace | Delete selected element/image |
+| Left / Right | Switch page |
+| Escape | Clear selection |
 
-## Touch-Unterstützung
+## Touch Support
 
-- **Seitenübersicht** — Seiten per Touch (Finger) verschieben und umsortieren (Pointer Events)
-- **Crop-Modal** — Crop-Bereich und alle Griffe per Touch bedienbar
-- **Canvas-Elemente** — Bilder und Text per Touch verschieben, skalieren, drehen (über Konva)
-- **Optimiert für iPad / Tablet-Nutzung** in der PWA
+- Page overview supports touch-based reorder (pointer events)
+- Crop modal supports touch interaction for crop box and handles
+- Canvas elements support touch move/scale/rotate (via Konva)
+- Optimized for iPad/tablet usage in PWA mode
 
 ## PWA (Progressive Web App)
 
-- **Installierbar** auf dem Home-Bildschirm (iOS, Android, Desktop)
-- **Standalone-Modus** — App läuft im Fullscreen ohne Browser-UI
-- **Service Worker** — Offline-Caching aller App-Dateien
-- **Web App Manifest** mit Name, Icons und Theme-Color
-- **Auto-Update** — neue Versionen werden automatisch aktiviert
+- Installable on iOS, Android, and desktop
+- Standalone fullscreen app mode
+- Service worker for offline caching
+- Web app manifest with app name, icons, and theme color
+- Automatic activation of new app versions
 
-## Dateiformat
+## File Format
 
-- **`.layox`-Dateien** — ZIP-Container mit `project.json` und `assets/`-Ordner
-- **Offline-first** — kein Server, keine Cloud, alles lokal
+- `.layox` files are ZIP containers with `project.json` and `assets/`
+- Offline-first architecture: no backend, no cloud, all local

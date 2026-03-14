@@ -1,91 +1,91 @@
 # AGENT.md
 
-Diese Datei ist die kompakte technische Orientierung für Entwickler und KI-Agenten in diesem Repository.
+This file is a compact technical orientation for developers and AI agents in this repository.
 
-## Projektziel
+## Project Goal
 
-Layox ist ein lokal arbeitender Fotoalbum-Editor (kein Backend, keine Cloud), basierend auf React + Konva.
+Layox is a local-first photo album editor (no backend, no cloud), built with React + Konva.
 
-## Wichtige Architektur
+## Key Architecture
 
-- UI-Einstieg: `src/App.tsx`
-- Startscreen: `src/components/StartScreen.tsx`
-- Editor-Canvas: `src/components/canvas/EditorCanvas.tsx`
-- State-Management: `src/store/useProjectStore.ts` (Zustand)
-- Layout-Logik: `src/utils/layouts.ts`
-- Datei-I/O (`.layox` ZIP): `src/utils/fileIO.ts`
+- UI entry: `src/App.tsx`
+- Start screen: `src/components/StartScreen.tsx`
+- Editor canvas: `src/components/canvas/EditorCanvas.tsx`
+- State management: `src/store/useProjectStore.ts` (Zustand)
+- Layout logic: `src/utils/layouts.ts`
+- File I/O (`.layox` ZIP): `src/utils/fileIO.ts`
 - Export (PDF/PNG/JPEG): `src/utils/exportProject.ts`
 
-## Canvas-Standard (kritisch)
+## Canvas Baseline (Critical)
 
-- Die **interne Arbeitsfläche** ist zentral definiert in:
+- The **internal working area** is defined centrally in:
   - `src/constants/canvas.ts`
-- Aktuell:
+- Current values:
   - `CANVAS_W = 1200`
   - `CANVAS_H = 900`
-- Diese Werte steuern:
-  - Layout-Berechnung
-  - Konva-Stage-Größe
-  - Export-Skalierung
-  - Positionierung neuer Elemente
+- These values control:
+  - Layout calculation
+  - Konva stage size
+  - Export scaling
+  - Placement of new elements
 
-**Regel:** Keine neuen Hardcodes wie `800/600` einführen. Immer die Konstanten importieren.
+**Rule:** Do not introduce new hardcoded values like `800/600`. Always import the constants.
 
-## UI-/UX-Richtlinien
+## UI/UX Guidelines
 
-- Startseite beibehalten (Nutzer mag das Design).
-- Editor-Ansicht: clean, modern, ruhig.
-- Dropdowns müssen immer über dem Canvas liegen (`z-index` / stacking context beachten).
-- Bei vielen Seiten nicht alle Page-Chips gleichzeitig anzeigen; komprimierte Navigation verwenden.
+- Keep the start page style (the user likes this design).
+- Editor view should stay clean, modern, and calm.
+- Dropdowns must always render above the canvas (`z-index` / stacking context).
+- With many pages, avoid showing all page chips at once; use compressed navigation.
 
-## Textbearbeitung
+## Text Editing
 
 Inline-Editor in `EditorCanvas.tsx`:
 
-- Mehrzeiliges Schreiben erlaubt
-- `Enter` = Zeilenumbruch
+- Multiline writing is allowed
+- `Enter` = line break
 - `Ctrl/Cmd + Enter` = Commit
-- `Escape` = Abbrechen
-- Auto-Resize des Textareas aktiv
+- `Escape` = cancel
+- Textarea auto-resize is enabled
 
-## Persistenz / Dateien
+## Persistence / Files
 
-- Projektformat: `.layox` (ZIP mit `project.json` + `assets/`)
-- Letzte Projekte:
-  - Liste in `localStorage`
+- Project format: `.layox` (ZIP with `project.json` + `assets/`)
+- Recent projects:
+  - List in `localStorage`
   - File Handles in IndexedDB (`src/utils/handleStore.ts`)
-- Doppelklick auf zuletzt geöffnetes Projekt versucht direkten Reopen über gespeicherten Handle
+- Double-clicking a recent project attempts direct reopen using the stored handle
 
 ## PWA
 
-- Konfiguriert über `vite-plugin-pwa` in `vite.config.ts`
-- Manifest, Service Worker und Icons werden beim Build automatisch generiert
-- Icons liegen in `public/icon-192.png` und `public/icon-512.png`
-- Meta-Tags (`apple-touch-icon`, `theme-color`) in `index.html`
-- Touch-Support: Pointer Events statt HTML5 Drag & Drop (PageOverviewModal) und statt Mouse Events (CropModal)
+- Configured via `vite-plugin-pwa` in `vite.config.ts`
+- Manifest, service worker, and icons are generated during build
+- Icons are in `public/icon-192.png` and `public/icon-512.png`
+- Meta tags (`apple-touch-icon`, `theme-color`) are set in `index.html`
+- Touch support uses pointer events instead of HTML5 drag & drop (PageOverviewModal) and mouse events (CropModal)
 
-## Tests & Qualität
+## Tests and Quality
 
 - Unit/Integration: Vitest
-- Wichtige Befehle:
+- Important commands:
   - `npm test`
   - `npm run test:run`
   - `npx tsc -b`
   - `npm run build`
-  - `npm run preview -- --host` (PWA lokal testen)
+  - `npm run preview -- --host` (local PWA testing)
 
-## Änderungsprinzipien
+## Change Principles
 
-- Root-Cause statt Workaround
-- Bestehende UX nicht unnötig erweitern
-- Bestehende Patterns/Benennungen respektieren
-- Kleine, fokussierte Änderungen bevorzugen
-- Nach UI-/Store-Änderungen immer Build + Tests laufen lassen
+- Do root-cause fixes instead of workarounds
+- Do not expand existing UX unnecessarily
+- Respect established patterns and naming
+- Prefer small, focused changes
+- Always run build and tests after UI/store changes
 
-## Hinweise für KI-Agenten
+## Notes for AI Agents
 
-1. Vor größeren Änderungen relevante Dateien vollständig lesen.
-2. Canvas-/Layout-/Export-Anpassungen immer zusammen denken.
-3. Bei neuen Features README + ggf. `FEATURES.md` aktualisieren.
-4. Bei potenziell breaking UI-Änderungen zuerst minimal-invasive Variante wählen.
-5. Keine unnötigen neuen Abhängigkeiten hinzufügen.
+1. Read relevant files fully before larger changes.
+2. Treat canvas/layout/export adjustments as one coupled system.
+3. Update README and, when needed, `FEATURES.md` for new features.
+4. For potentially breaking UI changes, start with the least invasive option.
+5. Avoid unnecessary new dependencies.

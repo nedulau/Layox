@@ -107,6 +107,16 @@ const de: TranslationMap = {
   create: 'Erstellen',
   projectNamePlaceholder: 'Projektname',
   deckblatt: 'Deckblatt',
+  freeArrangement: 'Freie Anordnung',
+  freeShort: 'Frei',
+  imageSlotLabel: 'Bild',
+  slotSingular: 'Platz',
+  slotPlural: 'Plätze',
+  dropImagesHere: 'Bilder hier ablegen',
+  editTextPlaceholder: 'Text bearbeiten',
+  loadingImage: 'Bild wird geladen...',
+  done: 'Fertig',
+  lowResolutionHint: 'Niedrige Auflösung - kann pixelig wirken\nEtwa {percent}% der empfohlenen Größe',
 };
 
 const en: TranslationMap = {
@@ -214,6 +224,16 @@ const en: TranslationMap = {
   create: 'Create',
   projectNamePlaceholder: 'Project name',
   deckblatt: 'Cover',
+  freeArrangement: 'Free arrangement',
+  freeShort: 'Free',
+  imageSlotLabel: 'Image',
+  slotSingular: 'slot',
+  slotPlural: 'slots',
+  dropImagesHere: 'Drop image(s) here',
+  editTextPlaceholder: 'Edit text',
+  loadingImage: 'Loading image...',
+  done: 'Done',
+  lowResolutionHint: 'Low resolution - may appear pixelated\nAbout {percent}% of the recommended size',
 };
 
 export const translations: Record<Language, TranslationMap> = { de, en };

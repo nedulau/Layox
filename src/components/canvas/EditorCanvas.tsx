@@ -18,6 +18,8 @@ function SlotComponent({
   onOffsetChange,
   onScaleChange,
   onCropChange,
+  imageLabelPrefix,
+  lowResolutionHintText,
 }: {
   slot: LayoutSlot;
   slotIndex: number;
@@ -28,6 +30,8 @@ function SlotComponent({
   onOffsetChange: (slotIndex: number, offsetX: number, offsetY: number) => void;
   onScaleChange: (slotIndex: number, scale: number) => void;
   onCropChange: (slotIndex: number, cropX: number, cropY: number, cropW: number, cropH: number) => void;
+  imageLabelPrefix: string;
+  lowResolutionHintText: (qualityPercent: number) => string;
 }) {
   const [image, setImage] = useState<HTMLImageElement | null>(null);
   const [naturalSize, setNaturalSize] = useState<{ w: number; h: number } | null>(null);
@@ -321,7 +325,7 @@ function SlotComponent({
                   x={tooltipX + 10}
                   y={slot.y + 47}
                   width={288}
-                  text={`Niedrige Auflösung – kann pixelig wirken\nCa. ${qualityPercent}% der empfohlenen Größe`}
+                  text={lowResolutionHintText(qualityPercent)}
                   fontSize={14}
                   lineHeight={1.35}
                   fill="#e5e5e5"
@@ -338,7 +342,7 @@ function SlotComponent({
           x={slot.x}
           y={slot.y + slot.height / 2 - 10}
           width={slot.width}
-          text={`Bild ${slotIndex + 1}`}
+          text={`${imageLabelPrefix} ${slotIndex + 1}`}
           fontSize={16}
           fill="#bbb"
           align="center"
@@ -591,10 +595,23 @@ function EditorCanvas({
   zoomMode = 'fit',
   manualZoom = 1,
   onDisplayScaleChange,
+  dropImagesLabel = 'Drop image(s) here',
+  imageLabelPrefix = 'Image',
+  editTextPlaceholder = 'Edit text',
+  coverTitleFallback = 'Title',
+  coverSubtitleFallback = 'Subtitle',
+  lowResolutionHintText = (qualityPercent: number) =>
+    `Low resolution - may appear pixelated\nAbout ${qualityPercent}% of the recommended size`,
 }: {
   zoomMode?: 'fit' | 'manual';
   manualZoom?: number;
   onDisplayScaleChange?: (scale: number) => void;
+  dropImagesLabel?: string;
+  imageLabelPrefix?: string;
+  editTextPlaceholder?: string;
+  coverTitleFallback?: string;
+  coverSubtitleFallback?: string;
+  lowResolutionHintText?: (qualityPercent: number) => string;
 }) {
   const currentPage = useProjectStore((s) => s.project.pages[s.currentPageIndex]);
   const assetBlobs = useProjectStore((s) => s.assetBlobs);
@@ -739,7 +756,7 @@ function EditorCanvas({
       const el = freeElements.find((e) => e.id === elementId);
       if (!el || el.type !== 'text') return;
       snapshot();
-      const isDefaultText = el.content === 'Text bearbeiten';
+      const isDefaultText = el.content === editTextPlaceholder;
       setInlineEdit({
         type: 'element',
         id: elementId,
@@ -752,7 +769,7 @@ function EditorCanvas({
         color: el.color,
       });
     },
-    [freeElements, snapshot],
+    [editTextPlaceholder, freeElements, snapshot],
   );
 
   const startCoverEdit = useCallback(
@@ -777,7 +794,7 @@ function EditorCanvas({
 
   const commitInlineEdit = useCallback(() => {
     if (!inlineEdit) return;
-    const finalText = inlineEdit.text.trim() || (inlineEdit.type === 'element' ? 'Text bearbeiten' : '');
+    const finalText = inlineEdit.text.trim() || (inlineEdit.type === 'element' ? editTextPlaceholder : '');
     if (inlineEdit.type === 'element' && inlineEdit.id) {
       updateElement(inlineEdit.id, { content: finalText });
     } else if (inlineEdit.type === 'coverTitle') {
@@ -786,7 +803,7 @@ function EditorCanvas({
       setCoverSubtitle(finalText);
     }
     setInlineEdit(null);
-  }, [inlineEdit, updateElement, setCoverTitle, setCoverSubtitle]);
+  }, [editTextPlaceholder, inlineEdit, updateElement, setCoverTitle, setCoverSubtitle]);
 
   const cancelInlineEdit = useCallback(() => {
     setInlineEdit(null);
@@ -871,7 +888,7 @@ function EditorCanvas({
       {/* Drop overlay */}
       {dragOver && (
         <div className="absolute inset-0 bg-blue-500/20 border-4 border-dashed border-blue-400 rounded-xl z-50 flex items-center justify-center pointer-events-none">
-          <span className="text-blue-300 text-xl font-medium">Bild(er) hier ablegen</span>
+          <span className="text-blue-300 text-xl font-medium">{dropImagesLabel}</span>
         </div>
       )}
 
@@ -903,6 +920,8 @@ function EditorCanvas({
                   onOffsetChange={updateSlotOffset}
                   onScaleChange={updateSlotScale}
                   onCropChange={updateSlotCrop}
+                  imageLabelPrefix={imageLabelPrefix}
+                  lowResolutionHintText={lowResolutionHintText}
                 />
               ))}
 
@@ -913,7 +932,7 @@ function EditorCanvas({
                   x={coverTitleX}
                   y={coverTitleY}
                   width={CANVAS_W}
-                  text={coverTitle || 'Titel'}
+                  text={coverTitle || coverTitleFallback}
                   fontSize={coverTitleFontSize}
                   fontFamily={coverTitleFontFamily}
                   fontStyle="bold"
@@ -934,7 +953,7 @@ function EditorCanvas({
                     x={coverSubtitleX}
                     y={coverSubtitleY}
                     width={CANVAS_W}
-                    text={coverSubtitle || 'Untertitel'}
+                    text={coverSubtitle || coverSubtitleFallback}
                     fontSize={coverSubtitleFontSize}
                     fontFamily={coverSubtitleFontFamily}
                     fill={coverSubtitleColor}

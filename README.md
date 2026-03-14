@@ -2,26 +2,18 @@
 
 A local-first, privacy-focused photo album creator. No cloud, no server — everything stays on your device.
 
-> **Vollständige Feature-Übersicht → [FEATURES.md](FEATURES.md)**
+> **Full feature overview -> [FEATURES.md](FEATURES.md)**
 
 ## Highlights
 
-- **Drag & Drop** Bilder auf den Canvas ziehen
-- **14 Layout-Vorlagen** — von Einzelbild bis Mosaik, plus freie Anordnung
-- **Mehrseitige Projekte** mit Deckblatt, Seitennavigation und Inline-Textbearbeitung
-- **Seitenübersicht mit Vorschaubildern** (klickbar, feste Thumbnail-Größe, dynamisches Grid)
-- **Crop & Zoom** — Bilder frei beschneiden von allen Seiten, Scroll-Zoom in Slots
-- **Canvas-Zoomsteuerung** mit `100%`, `Anpassen`, `+`, `−`
-- **Pixelwarnung** — Hinweis wenn ein Bild eine zu niedrige Auflösung hat
-- **PDF-Export** mit wählbarer Kompression (keine / gering / mittel / stark)
-- **PNG- & JPEG-Export** der aktuellen Seite
-- **Rückgängig / Wiederherstellen** — bis zu 50 Schritte
-- **Auto-Save** — konfigurierbar in den Einstellungen
-- **UI Dark/Light Mode** — umschaltbar im Startscreen und im Editor
-- **Deutsch / Englisch** — umschaltbar im Startscreen und in den Einstellungen
-- **Offline-first** — `.layox`-Dateien (ZIP) lokal speichern und laden
-- **PWA** — als App auf dem Home-Bildschirm installierbar (iOS, Android, Desktop)
-- **Touch-optimiert** — Seitenübersicht und Crop-Modal funktionieren per Touch auf Tablets
+- **Multi-page projects** with cover pages and chapter structure
+- **Flexible layouts** (14 templates) plus free arrangement mode
+- **In-slot image editing** with pan, zoom, and free crop
+- **Inline text editing** directly on the canvas
+- **Export to PDF, PNG, and JPEG**
+- **Undo / redo** with history
+- **Local and offline-first**: no cloud dependency, `.layox` file format
+- **Installable PWA** for desktop and mobile
 
 ## Tech Stack
 
@@ -42,52 +34,50 @@ npm run dev
 
 Open [http://localhost:5173](http://localhost:5173) in your browser.
 
-## Ausführungsmodi
+## Run Modes
 
-### Entwicklung
+### Development
 
 ```bash
 npm run dev
 ```
 
-Startet den Vite Dev-Server mit Hot Module Replacement unter `http://localhost:5173`. Kein Service Worker, keine PWA-Features — ideal zum Entwickeln.
+Starts the Vite dev server with HMR at `http://localhost:5173`. No service worker, no PWA caching.
 
-### Production Build + lokales Testen
+### Production build and local preview
 
 ```bash
 npm run build
 npm run preview -- --host
 ```
 
-Erstellt den optimierten Build in `dist/` (inkl. Service Worker & Web App Manifest) und startet einen lokalen Preview-Server. Mit `--host` ist er im WLAN erreichbar — auch vom Handy/Tablet.
+Builds the optimized production app into `dist/` (including service worker and web app manifest) and starts a local preview server. With `--host`, other devices in your network can access it.
 
-### PWA auf Geräten installieren
+### Install as PWA
 
-1. Den Production Build auf einen Hosting-Dienst deployen (z.B. Vercel, Netlify, Cloudflare Pages) — **HTTPS ist Pflicht** für PWA.
-2. URL im Browser öffnen.
-3. **iOS (Safari):** Teilen → „Zum Home-Bildschirm"
-4. **Android (Chrome):** Menü → „App installieren"
-5. **Desktop (Chrome/Edge):** Install-Icon in der Adressleiste
+1. Deploy the production build to a host (for example Vercel, Netlify, Cloudflare Pages). **HTTPS is required** for PWA.
+2. Open the app URL in the browser.
+3. **iOS (Safari):** Share -> Add to Home Screen
+4. **Android (Chrome):** Menu -> Install app
+5. **Desktop (Chrome/Edge):** use the install icon in the address bar
 
-Die App läuft dann im Fullscreen-Modus mit eigenem Icon und Offline-Support.
-
-### Im lokalen Netzwerk teilen (ohne Hosting)
+### Share in local network (without hosting)
 
 ```bash
 npm run dev -- --host
 ```
 
-Zeigt eine Network-URL an (z.B. `http://192.168.1.X:5173`). Alle Geräte im selben WLAN können darauf zugreifen.
+Vite prints a network URL (for example `http://192.168.1.X:5173`) that devices in the same LAN can open.
 
 ## Scripts
 
 | Command | Description |
 |---|---|
 | `npm run dev` | Start dev server |
-| `npm run dev -- --host` | Dev server im Netzwerk freigeben |
-| `npm run build` | Type-check & build for production (inkl. PWA) |
-| `npm run preview` | Production Build lokal testen |
-| `npm run preview -- --host` | Production Build im Netzwerk freigeben |
+| `npm run dev -- --host` | Expose dev server to local network |
+| `npm run build` | Type-check and production build (including PWA) |
+| `npm run preview` | Preview production build locally |
+| `npm run preview -- --host` | Expose preview server to local network |
 | `npm test` | Run tests (watch mode) |
 | `npm run test:run` | Run tests once |
 
@@ -114,3 +104,7 @@ src/
 ## File Format
 
 Projects are saved as `.layox` files — a ZIP container holding `project.json` and an `assets/` folder.
+
+## License
+
+This project is licensed under the MIT License. See [LICENSE](LICENSE).
