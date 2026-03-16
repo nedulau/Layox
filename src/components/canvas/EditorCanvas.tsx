@@ -111,6 +111,8 @@ function SlotComponent({
   onOffsetChange,
   onScaleChange,
   onCropChange,
+  onEmptySlotDblClick,
+  onRequestDelete,
   imageLabelPrefix,
   lowResolutionHintText,
 }: {
@@ -123,12 +125,15 @@ function SlotComponent({
   onOffsetChange: (slotIndex: number, offsetX: number, offsetY: number) => void;
   onScaleChange: (slotIndex: number, scale: number) => void;
   onCropChange: (slotIndex: number, cropX: number, cropY: number, cropW: number, cropH: number) => void;
+  onEmptySlotDblClick: (slotIndex: number) => void;
+  onRequestDelete: (slotIndex: number) => void;
   imageLabelPrefix: string;
   lowResolutionHintText: (qualityPercent: number) => string;
 }) {
   const image = useCachedBlobImage(assignment?.assetPath, assetBlobs);
   const [naturalSize, setNaturalSize] = useState<{ w: number; h: number } | null>(null);
   const [showResolutionHint, setShowResolutionHint] = useState(false);
+  const [showSlotAction, setShowSlotAction] = useState(false);
 
   useEffect(() => {
     if (!image) {
@@ -137,6 +142,12 @@ function SlotComponent({
     }
     setNaturalSize({ w: image.naturalWidth, h: image.naturalHeight });
   }, [image]);
+
+  useEffect(() => {
+    if (!isSelected || !assignment) {
+      setShowSlotAction(false);
+    }
+  }, [assignment, isSelected]);
 
   const zoomScale = assignment?.scale ?? 1;
   const hasCrop = assignment?.cropX !== undefined && assignment?.cropW !== undefined;
@@ -261,6 +272,15 @@ function SlotComponent({
     }
   }, [assignment, naturalSize, hasCrop, slot, zoomScale, slotIndex, onCropChange]);
 
+  const handleSlotClick = useCallback(() => {
+    if (isSelected && assignment) {
+      setShowSlotAction((prev) => !prev);
+      return;
+    }
+    setShowSlotAction(false);
+    onSelect();
+  }, [assignment, isSelected, onSelect]);
+
   return (
     <>
       {/* Slot background */}
@@ -274,8 +294,10 @@ function SlotComponent({
         strokeWidth={isSelected ? 3 : 2}
         dash={image ? undefined : [8, 4]}
         cornerRadius={4}
-        onClick={onSelect}
-        onTap={onSelect}
+        onClick={handleSlotClick}
+        onTap={handleSlotClick}
+        onDblClick={() => onEmptySlotDblClick(slotIndex)}
+        onDblTap={() => onEmptySlotDblClick(slotIndex)}
       />
 
       {/* Clipped image – draggable within slot, scroll to zoom, dblclick to crop */}
@@ -300,8 +322,8 @@ function SlotComponent({
             }}
             draggable
             dragBoundFunc={() => ({ x: slot.x, y: slot.y })}
-            onClick={onSelect}
-            onTap={onSelect}
+            onClick={handleSlotClick}
+            onTap={handleSlotClick}
             onDragEnd={handleCropDragEnd}
             onWheel={handleWheel}
             onDblClick={handleDblClick}
@@ -325,8 +347,8 @@ function SlotComponent({
             height={coverInfo.renderedH}
             draggable
             dragBoundFunc={dragBoundFunc}
-            onClick={onSelect}
-            onTap={onSelect}
+            onClick={handleSlotClick}
+            onTap={handleSlotClick}
             onDragEnd={handleDragEnd}
             onWheel={handleWheel}
             onDblClick={handleDblClick}
@@ -347,6 +369,41 @@ function SlotComponent({
           cornerRadius={4}
           listening={false}
         />
+      )}
+
+      {showSlotAction && assignment && (
+        <Group>
+          <Rect
+            x={slot.x + slot.width - 116}
+            y={slot.y + 8}
+            width={108}
+            height={28}
+            fill="rgba(10,10,10,0.88)"
+            stroke="#ef4444"
+            strokeWidth={1}
+            cornerRadius={6}
+            onClick={(e) => {
+              e.cancelBubble = true;
+              onRequestDelete(slotIndex);
+              setShowSlotAction(false);
+            }}
+            onTap={(e) => {
+              e.cancelBubble = true;
+              onRequestDelete(slotIndex);
+              setShowSlotAction(false);
+            }}
+          />
+          <Text
+            x={slot.x + slot.width - 116}
+            y={slot.y + 15}
+            width={108}
+            text="Bild loeschen"
+            fontSize={12}
+            fill="#fecaca"
+            align="center"
+            listening={false}
+          />
+        </Group>
       )}
 
       {/* Pixelated / low-resolution warning */}
@@ -664,6 +721,7 @@ function EditorCanvas({
   zoomMode = 'fit',
   manualZoom = 1,
   onDisplayScaleChange,
+  onRequestSlotDelete,
   dropImagesLabel = 'Drop image(s) here',
   imageLabelPrefix = 'Image',
   editTextPlaceholder = 'Edit text',
@@ -675,6 +733,7 @@ function EditorCanvas({
   zoomMode?: 'fit' | 'manual';
   manualZoom?: number;
   onDisplayScaleChange?: (scale: number) => void;
+  onRequestSlotDelete?: (slotIndex: number) => void;
   dropImagesLabel?: string;
   imageLabelPrefix?: string;
   editTextPlaceholder?: string;
@@ -821,6 +880,31 @@ function EditorCanvas({
       }
     },
     [addImageFromFile],
+  );
+
+  const handleEmptySlotDblClick = useCallback(
+    (slotIndex: number) => {
+      if (!isLayoutMode) return;
+      if (selectedSlotIndex !== slotIndex) return;
+      if (currentPage?.slotAssignments?.[slotIndex]) return;
+
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      input.multiple = false;
+      input.onchange = async () => {
+        const file = input.files?.[0];
+        if (!file) return;
+        snapshot();
+        try {
+          await addImageFromFile(file);
+        } catch {
+          // Keep UI responsive; selection remains and user can retry.
+        }
+      };
+      input.click();
+    },
+    [addImageFromFile, currentPage?.slotAssignments, isLayoutMode, selectedSlotIndex, snapshot],
   );
 
   const handleStageClick = useCallback(
@@ -1008,6 +1092,8 @@ function EditorCanvas({
                   onOffsetChange={updateSlotOffset}
                   onScaleChange={updateSlotScale}
                   onCropChange={updateSlotCrop}
+                  onEmptySlotDblClick={handleEmptySlotDblClick}
+                  onRequestDelete={(slotIndex) => onRequestSlotDelete?.(slotIndex)}
                   imageLabelPrefix={imageLabelPrefix}
                   lowResolutionHintText={lowResolutionHintText}
                 />

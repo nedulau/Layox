@@ -592,10 +592,13 @@ function Editor({
   const addTextElement = useProjectStore((s) => s.addTextElement);
   const removeElement = useProjectStore((s) => s.removeElement);
   const removeImageFromSlot = useProjectStore((s) => s.removeImageFromSlot);
+  const pruneUnusedAssets = useProjectStore((s) => s.pruneUnusedAssets);
   const clearSlotCrop = useProjectStore((s) => s.clearSlotCrop);
   const updateSlotCrop = useProjectStore((s) => s.updateSlotCrop);
   const selectedElementId = useProjectStore((s) => s.selectedElementId);
   const selectedSlotIndex = useProjectStore((s) => s.selectedSlotIndex);
+  const setSelectedElementId = useProjectStore((s) => s.setSelectedElementId);
+  const setSelectedSlotIndex = useProjectStore((s) => s.setSelectedSlotIndex);
   const applyLayout = useProjectStore((s) => s.applyLayout);
   const clearLayout = useProjectStore((s) => s.clearLayout);
   const updateElement = useProjectStore((s) => s.updateElement);
@@ -708,6 +711,10 @@ function Editor({
   const [showNewProjectModal, setShowNewProjectModal] = useState(false);
   const [showPageOverview, setShowPageOverview] = useState(false);
   const [showAssetLibrary, setShowAssetLibrary] = useState(false);
+  const [showQuickImageBar, setShowQuickImageBar] = useState<boolean>(() => localStorage.getItem('layox_showQuickImageBar') !== 'false');
+  const [deleteFromLibraryOnImageDelete, setDeleteFromLibraryOnImageDelete] = useState<boolean>(() => localStorage.getItem('layox_deleteFromLibraryOnImageDelete') === 'true');
+  const [quickInsertAssetPath, setQuickInsertAssetPath] = useState<string | null>(null);
+  const [quickInsertPreviewUrls, setQuickInsertPreviewUrls] = useState<Record<string, string>>({});
   const [canvasZoomMode] = useState<'fit' | 'manual'>('fit');
   const [canvasManualZoom] = useState(1);
   const [autoSaveTimeline, setAutoSaveTimeline] = useState<AutoSaveRestorePoint[]>(() => {
@@ -732,6 +739,31 @@ function Editor({
   useEffect(() => {
     localStorage.setItem('layox_pdfDefaultLevel', pdfDefaultLevel);
   }, [pdfDefaultLevel]);
+
+  useEffect(() => {
+    localStorage.setItem('layox_showQuickImageBar', String(showQuickImageBar));
+  }, [showQuickImageBar]);
+
+  useEffect(() => {
+    localStorage.setItem('layox_deleteFromLibraryOnImageDelete', String(deleteFromLibraryOnImageDelete));
+  }, [deleteFromLibraryOnImageDelete]);
+
+  const quickInsertAssetPaths = useMemo(() => Object.keys(assetBlobs).sort(), [assetBlobs]);
+
+  useEffect(() => {
+    const nextUrls: Record<string, string> = {};
+    quickInsertAssetPaths.forEach((assetPath) => {
+      const blob = assetBlobs[assetPath];
+      if (!blob) return;
+      nextUrls[assetPath] = URL.createObjectURL(blob);
+    });
+
+    setQuickInsertPreviewUrls(nextUrls);
+
+    return () => {
+      Object.values(nextUrls).forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, [assetBlobs, quickInsertAssetPaths]);
 
   useEffect(() => {
     localStorage.setItem('layox_autoSaveTimeline', JSON.stringify(autoSaveTimeline));
@@ -857,8 +889,11 @@ function Editor({
           state.project.pages[state.currentPageIndex]?.slotAssignments?.[state.selectedSlotIndex]
         ) {
           removeImageFromSlot(state.selectedSlotIndex);
+          if (deleteFromLibraryOnImageDelete) state.pruneUnusedAssets();
         } else if (state.selectedElementId) {
+          const selectedEl = state.project.pages[state.currentPageIndex]?.elements.find((el) => el.id === state.selectedElementId);
           removeElement(state.selectedElementId);
+          if (deleteFromLibraryOnImageDelete && selectedEl?.type === 'image') state.pruneUnusedAssets();
         }
         return;
       }
@@ -874,7 +909,7 @@ function Editor({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [removeElement, removeImageFromSlot, addTextElement, resetProject]);
+  }, [addTextElement, deleteFromLibraryOnImageDelete, removeElement, removeImageFromSlot, resetProject]);
 
   // Auto-save
   useEffect(() => {
@@ -941,6 +976,32 @@ function Editor({
     snapshot();
     await addImageFromAsset(assetPath);
   };
+  const handleQuickInsertAssetPick = useCallback((assetPath: string) => {
+    if (!currentLayoutId) return;
+    if (selectedSlotIndex !== null) {
+      snapshot();
+      void addImageFromAsset(assetPath).catch((err) => console.error(err));
+      setQuickInsertAssetPath(null);
+      return;
+    }
+    setQuickInsertAssetPath(assetPath);
+    setSelectedElementId(null);
+    setSelectedSlotIndex(null);
+  }, [addImageFromAsset, currentLayoutId, selectedSlotIndex, setSelectedElementId, setSelectedSlotIndex, snapshot]);
+
+  useEffect(() => {
+    if (!quickInsertAssetPath) return;
+    if (!currentLayoutId) {
+      setQuickInsertAssetPath(null);
+      return;
+    }
+    if (selectedSlotIndex === null) return;
+
+    snapshot();
+    void addImageFromAsset(quickInsertAssetPath)
+      .catch((err) => console.error(err))
+      .finally(() => setQuickInsertAssetPath(null));
+  }, [addImageFromAsset, currentLayoutId, quickInsertAssetPath, selectedSlotIndex, snapshot]);
   const handleRemoveCover = () => { closeMenu(); snapshot(); toggleCover(false); };
   const handleMakeCover = () => { closeMenu(); snapshot(); toggleCover(true); };
   const handleAddPageFromMenu = () => { closeMenu(); snapshot(); addPage(); };
@@ -955,10 +1016,20 @@ function Editor({
     snapshot();
     if (canDeleteSlot && selectedSlotIndex !== null) {
       removeImageFromSlot(selectedSlotIndex);
+      if (deleteFromLibraryOnImageDelete) pruneUnusedAssets();
     } else if (selectedElementId) {
+      const selectedElement = pages[currentPageIndex]?.elements.find((el) => el.id === selectedElementId);
       removeElement(selectedElementId);
+      if (deleteFromLibraryOnImageDelete && selectedElement?.type === 'image') pruneUnusedAssets();
     }
   };
+
+  const handleSlotDeleteFromCanvas = useCallback((slotIndex: number) => {
+    if (!currentSlotAssignments?.[slotIndex]) return;
+    snapshot();
+    removeImageFromSlot(slotIndex);
+    if (deleteFromLibraryOnImageDelete) pruneUnusedAssets();
+  }, [currentSlotAssignments, deleteFromLibraryOnImageDelete, pruneUnusedAssets, removeImageFromSlot, snapshot]);
 
   const handleUndo = () => { closeMenu(); undo(); };
   const handleRedo = () => { closeMenu(); redo(); };
@@ -1342,83 +1413,109 @@ function Editor({
 
             {openMenu === 'quick-settings' && (
               <div className="editor-dropdown absolute top-full left-0 mt-2 w-64 max-w-[calc(100vw-2rem)] bg-neutral-900 border border-neutral-700 rounded-xl shadow-2xl z-[90] p-2">
-              <div className="px-2 pt-1 pb-2">
-                <div className="text-xs text-neutral-400 mb-1.5">{t('uiMode')}</div>
-                <select
-                  value={uiTheme}
-                  onChange={(e) => setUiTheme(e.target.value === 'light' ? 'light' : 'dark')}
-                  className="editor-input w-full px-2 py-1 text-xs rounded-md bg-neutral-800 text-white border border-neutral-600"
-                >
-                  <option value="dark">{t('dark')}</option>
-                  <option value="light">{t('light')}</option>
-                </select>
-              </div>
+                <div className="px-2 pt-1 pb-2">
+                  <div className="text-[11px] text-neutral-400 uppercase tracking-wide mb-1.5">{t('uiMode')}</div>
+                  <select
+                    value={uiTheme}
+                    onChange={(e) => setUiTheme(e.target.value === 'light' ? 'light' : 'dark')}
+                    className="editor-input w-full px-2 py-1 text-xs rounded-md bg-neutral-800 text-white border border-neutral-600"
+                  >
+                    <option value="dark">{t('dark')}</option>
+                    <option value="light">{t('light')}</option>
+                  </select>
+                </div>
 
-              <MenuDivider />
+                <MenuDivider />
 
-              <div className="px-2 pt-1 pb-2">
-                <div className="text-xs text-neutral-400 mb-1.5">{t('language')}</div>
-                <select
-                  value={language}
-                  onChange={(e) => setLanguage(e.target.value === 'en' ? 'en' : 'de')}
-                  className="editor-input w-full px-2 py-1 text-xs rounded-md bg-neutral-800 text-white border border-neutral-600"
-                >
-                  <option value="de">{t('german')}</option>
-                  <option value="en">{t('english')}</option>
-                </select>
-              </div>
+                <div className="px-2 pt-1 pb-2">
+                  <div className="text-[11px] text-neutral-400 uppercase tracking-wide mb-1.5">{t('language')}</div>
+                  <select
+                    value={language}
+                    onChange={(e) => setLanguage(e.target.value === 'en' ? 'en' : 'de')}
+                    className="editor-input w-full px-2 py-1 text-xs rounded-md bg-neutral-800 text-white border border-neutral-600"
+                  >
+                    <option value="de">{t('german')}</option>
+                    <option value="en">{t('english')}</option>
+                  </select>
+                </div>
 
-              <MenuDivider />
+                <MenuDivider />
 
-              <div className="px-2 pt-1 pb-2">
-                <label className="text-xs text-neutral-400 flex items-center gap-2 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={autoSaveEnabled}
-                    onChange={(e) => setAutoSaveEnabled(e.target.checked)}
-                    className="accent-blue-500"
-                  />
-                  {t('autoSaveEnable')}
-                </label>
+                <div className="px-2 pt-1 pb-2">
+                  <div className="text-[11px] text-neutral-400 uppercase tracking-wide mb-1.5">Bilder / Assets</div>
+                  <label className="text-xs text-neutral-400 flex items-center gap-2 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={showQuickImageBar}
+                      onChange={(e) => setShowQuickImageBar(e.target.checked)}
+                      className="accent-blue-500"
+                    />
+                    {t('assetLibrary')} Bar anzeigen
+                  </label>
 
-                {autoSaveEnabled && (
-                  <div className="mt-2 flex items-center gap-2">
-                    <span className="text-xs text-neutral-500">{t('interval')}</span>
-                    <select
-                      value={autoSaveInterval}
-                      onChange={(e) => setAutoSaveInterval(parseInt(e.target.value, 10))}
-                      className="editor-input px-2 py-1 text-xs rounded-md bg-neutral-800 text-white border border-neutral-600"
-                    >
-                      <option value={10}>10s</option>
-                      <option value={30}>30s</option>
-                      <option value={60}>60s</option>
-                      <option value={120}>2min</option>
-                      <option value={300}>5min</option>
-                    </select>
-                  </div>
-                )}
+                  <label className="text-xs text-neutral-400 flex items-center gap-2 cursor-pointer select-none mt-2">
+                    <input
+                      type="checkbox"
+                      checked={deleteFromLibraryOnImageDelete}
+                      onChange={(e) => setDeleteFromLibraryOnImageDelete(e.target.checked)}
+                      className="accent-blue-500"
+                    />
+                    Bild beim Loeschen auch aus Bibliothek entfernen
+                  </label>
+                </div>
 
-                <div className="mt-2 pt-2 border-t border-neutral-700/70">
-                  <div className="text-xs text-neutral-400 mb-1.5">{t('autoSaveHistory')}</div>
-                  {autoSaveTimeline.length === 0 ? (
-                    <div className="text-[11px] text-neutral-500">{t('noRestorePoints')}</div>
-                  ) : (
-                    <div className="max-h-36 overflow-auto space-y-1 pr-1">
-                      {autoSaveTimeline.map((point) => (
-                        <button
-                          key={point.id}
-                          onClick={() => handleRestoreAutoSavePoint(point)}
-                          className="editor-surface-control w-full px-2 py-1.5 rounded-md border border-neutral-700 bg-neutral-800 hover:bg-neutral-700 text-left transition-colors cursor-pointer"
-                          title={t('restorePoint')}
-                        >
-                          <div className="text-[11px] text-neutral-200">{new Date(point.createdAt).toLocaleTimeString(language === 'de' ? 'de-DE' : 'en-US')}</div>
-                          <div className="text-[10px] text-neutral-500 truncate">{point.projectName} • {point.pageCount} {t('pages')}</div>
-                        </button>
-                      ))}
+                <MenuDivider />
+
+                <div className="px-2 pt-1 pb-2">
+                  <div className="text-[11px] text-neutral-400 uppercase tracking-wide mb-1.5">Auto Save</div>
+                  <label className="text-xs text-neutral-400 flex items-center gap-2 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={autoSaveEnabled}
+                      onChange={(e) => setAutoSaveEnabled(e.target.checked)}
+                      className="accent-blue-500"
+                    />
+                    {t('autoSaveEnable')}
+                  </label>
+
+                  {autoSaveEnabled && (
+                    <div className="mt-2 flex items-center gap-2">
+                      <span className="text-xs text-neutral-500">{t('interval')}</span>
+                      <select
+                        value={autoSaveInterval}
+                        onChange={(e) => setAutoSaveInterval(parseInt(e.target.value, 10))}
+                        className="editor-input px-2 py-1 text-xs rounded-md bg-neutral-800 text-white border border-neutral-600"
+                      >
+                        <option value={10}>10s</option>
+                        <option value={30}>30s</option>
+                        <option value={60}>60s</option>
+                        <option value={120}>2min</option>
+                        <option value={300}>5min</option>
+                      </select>
                     </div>
                   )}
+
+                  <div className="mt-2 pt-2 border-t border-neutral-700/70">
+                    <div className="text-xs text-neutral-400 mb-1.5">{t('autoSaveHistory')}</div>
+                    {autoSaveTimeline.length === 0 ? (
+                      <div className="text-[11px] text-neutral-500">{t('noRestorePoints')}</div>
+                    ) : (
+                      <div className="max-h-36 overflow-auto space-y-1 pr-1">
+                        {autoSaveTimeline.map((point) => (
+                          <button
+                            key={point.id}
+                            onClick={() => handleRestoreAutoSavePoint(point)}
+                            className="editor-surface-control w-full px-2 py-1.5 rounded-md border border-neutral-700 bg-neutral-800 hover:bg-neutral-700 text-left transition-colors cursor-pointer"
+                            title={t('restorePoint')}
+                          >
+                            <div className="text-[11px] text-neutral-200">{new Date(point.createdAt).toLocaleTimeString(language === 'de' ? 'de-DE' : 'en-US')}</div>
+                            <div className="text-[10px] text-neutral-500 truncate">{point.projectName} • {point.pageCount} {t('pages')}</div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
 
               </div>
             )}
@@ -1488,8 +1585,63 @@ function Editor({
         <input ref={fileInputRef} type="file" accept=".layox" className="hidden" onChange={handleFileSelected} />
         <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageSelected} />
 
+        {showQuickImageBar && currentLayoutId && (
+          <div className="editor-context-bar order-3 basis-full mt-2 pt-2 border-t border-neutral-800/90 flex items-center gap-3 px-1 pb-1 text-sm">
+            <div className="flex-1 min-w-0 overflow-x-auto">
+              {quickInsertAssetPaths.length === 0 ? (
+                <div className="text-xs text-neutral-500 py-1">{t('noAssets')}</div>
+              ) : (
+                <div className="flex items-center gap-2 pr-1">
+                  <button
+                    onClick={() => {
+                      setQuickInsertAssetPath(null);
+                      setShowAssetLibrary(true);
+                    }}
+                    className="shrink-0 h-14 px-3 rounded-md border border-neutral-700 bg-neutral-900 text-neutral-200 text-xs hover:border-neutral-500 transition-colors cursor-pointer select-none"
+                  >
+                    {t('assetLibrary')}
+                  </button>
+
+                  {quickInsertAssetPaths.map((assetPath) => {
+                    const isActive = quickInsertAssetPath === assetPath;
+                    return (
+                      <button
+                        key={`quick-insert-${assetPath}`}
+                        onClick={() => handleQuickInsertAssetPick(assetPath)}
+                        className={`shrink-0 w-14 h-14 rounded-md border overflow-hidden transition-colors cursor-pointer select-none ${
+                          isActive
+                            ? 'border-blue-500 ring-1 ring-blue-500/80'
+                            : 'border-neutral-700 hover:border-neutral-500'
+                        }`}
+                        title={assetPath.split('/').pop() || assetPath}
+                      >
+                        {quickInsertPreviewUrls[assetPath] ? (
+                          <img
+                            src={quickInsertPreviewUrls[assetPath]}
+                            alt=""
+                            className="w-full h-full object-cover"
+                            draggable={false}
+                          />
+                        ) : (
+                          <div className="w-full h-full bg-neutral-900 flex items-center justify-center text-[10px] text-neutral-500">
+                            ...
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {quickInsertAssetPath && (
+              <span className="text-[11px] text-blue-300 whitespace-nowrap">{t('insertFromLibrary')}</span>
+            )}
+          </div>
+        )}
+
         {(selectedTextElement || currentIsCover) && (
-          <div className="editor-context-bar basis-full mt-2 pt-2 border-t border-neutral-800/90 flex items-center gap-3 px-1 pb-1 text-sm">
+          <div className="editor-context-bar order-2 basis-full mt-2 pt-2 border-t border-neutral-800/90 flex items-center gap-3 px-1 pb-1 text-sm">
             {selectedTextElement ? (
               <>
             <label className="text-xs text-neutral-500">{t('font')}</label>
@@ -1638,6 +1790,7 @@ function Editor({
           <EditorCanvas
             zoomMode={canvasZoomMode}
             manualZoom={canvasManualZoom}
+            onRequestSlotDelete={handleSlotDeleteFromCanvas}
             dropImagesLabel={t('dropImagesHere')}
             imageLabelPrefix={t('imageSlotLabel')}
             editTextPlaceholder={t('editTextPlaceholder')}

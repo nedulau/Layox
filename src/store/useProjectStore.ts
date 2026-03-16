@@ -84,6 +84,11 @@ interface RecentProject {
   lastOpened: number; // timestamp
 }
 
+interface HistoryEntry {
+  project: Project;
+  assetBlobs: Record<string, Blob>;
+}
+
 interface ProjectState {
   project: Project;
   currentPageIndex: number;
@@ -120,6 +125,7 @@ interface ProjectState {
 
   addImageFromFile: (file: File) => Promise<void>;
   addImageFromAsset: (assetPath: string) => Promise<void>;
+  pruneUnusedAssets: () => void;
   addTextElement: () => void;
   removeImageFromSlot: (slotIndex: number) => void;
   updateSlotOffset: (slotIndex: number, offsetX: number, offsetY: number) => void;
@@ -152,8 +158,8 @@ interface ProjectState {
   openProject: () => Promise<void>;
   loadFromFile: (file: File, handle?: FileSystemFileHandleExt | null) => Promise<void>;
 
-  historyPast: Project[];
-  historyFuture: Project[];
+  historyPast: HistoryEntry[];
+  historyFuture: HistoryEntry[];
   snapshot: () => void;
   undo: () => void;
   redo: () => void;
@@ -228,34 +234,48 @@ const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   snapshot: () => {
-    const { project, historyPast } = get();
+    const { project, assetBlobs, historyPast } = get();
+    const entry: HistoryEntry = {
+      project: JSON.parse(JSON.stringify(project)) as Project,
+      assetBlobs: { ...assetBlobs },
+    };
     set({
-      historyPast: [...historyPast, JSON.parse(JSON.stringify(project))].slice(-50),
+      historyPast: [...historyPast, entry].slice(-50),
       historyFuture: [],
     });
   },
 
   undo: () => {
-    const { historyPast, historyFuture, project } = get();
+    const { historyPast, historyFuture, project, assetBlobs } = get();
     if (historyPast.length === 0) return;
     const prev = historyPast[historyPast.length - 1];
+    const currentEntry: HistoryEntry = {
+      project: JSON.parse(JSON.stringify(project)) as Project,
+      assetBlobs: { ...assetBlobs },
+    };
     set({
       historyPast: historyPast.slice(0, -1),
-      historyFuture: [JSON.parse(JSON.stringify(project)), ...historyFuture].slice(0, 50),
-      project: prev,
+      historyFuture: [currentEntry, ...historyFuture].slice(0, 50),
+      project: prev.project,
+      assetBlobs: prev.assetBlobs,
       selectedElementId: null,
       selectedSlotIndex: null,
     });
   },
 
   redo: () => {
-    const { historyPast, historyFuture, project } = get();
+    const { historyPast, historyFuture, project, assetBlobs } = get();
     if (historyFuture.length === 0) return;
     const next = historyFuture[0];
+    const currentEntry: HistoryEntry = {
+      project: JSON.parse(JSON.stringify(project)) as Project,
+      assetBlobs: { ...assetBlobs },
+    };
     set({
-      historyPast: [...historyPast, JSON.parse(JSON.stringify(project))],
+      historyPast: [...historyPast, currentEntry],
       historyFuture: historyFuture.slice(1),
-      project: next,
+      project: next.project,
+      assetBlobs: next.assetBlobs,
       selectedElementId: null,
       selectedSlotIndex: null,
     });
@@ -876,6 +896,27 @@ const useProjectStore = create<ProjectState>((set, get) => ({
 
     get().addElement(element);
   },
+
+  pruneUnusedAssets: () =>
+    set((state) => {
+      const usedAssetPaths = new Set<string>();
+
+      state.project.pages.forEach((page) => {
+        Object.values(page.slotAssignments ?? {}).forEach((assignment) => {
+          if (assignment?.assetPath) usedAssetPaths.add(assignment.assetPath);
+        });
+
+        page.elements.forEach((element) => {
+          if (element.type === 'image') usedAssetPaths.add(element.src);
+        });
+      });
+
+      const nextAssetBlobs = Object.fromEntries(
+        Object.entries(state.assetBlobs).filter(([path]) => usedAssetPaths.has(path)),
+      );
+
+      return { assetBlobs: nextAssetBlobs };
+    }),
 
   addTextElement: () => {
     const element: TextElement = {
