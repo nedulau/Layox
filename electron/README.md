@@ -40,7 +40,7 @@ npm run electron:dev:desktop
 3) Run desktop shell against built app:
 
 ```bash
-npm run build
+npm run build:electron:renderer
 npm run electron:start
 ```
 

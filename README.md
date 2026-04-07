@@ -65,7 +65,7 @@ npm run electron:dev:desktop
 Run desktop shell against production build:
 
 ```bash
-npm run build
+npm run build:electron:renderer
 npm run electron:start
 ```
 
@@ -112,6 +112,7 @@ Vite prints a network URL (for example `http://192.168.1.X:5173`) that devices i
 | `npm run dev` | Start dev server |
 | `npm run dev -- --host` | Expose dev server to local network |
 | `npm run build` | Type-check and production build (including PWA) |
+| `npm run build:electron:renderer` | Type-check and build renderer for local Electron/appimage (`file://` safe assets) |
 | `npm run preview` | Preview production build locally |
 | `npm run preview -- --host` | Expose preview server to local network |
 | `npm test` | Run tests (watch mode) |

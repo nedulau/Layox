@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:electron:renderer": "tsc -b && vite build --mode electron",
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest",
@@ -16,7 +17,7 @@
     "electron:start": "electron ./electron/main/index.mjs",
     "electron:dev:renderer": "vite --host",
     "electron:dev:desktop": "cross-env LAYOX_DEV_SERVER_URL=http://localhost:5173 electron ./electron/main/index.mjs",
-    "electron:build:appimage": "npm run build && electron-builder --config electron-builder.yml --linux AppImage --publish never"
+    "electron:build:appimage": "npm run build:electron:renderer && electron-builder --config electron-builder.yml --linux AppImage --publish never"
   },
   "dependencies": {
     "@vercel/analytics": "^1.6.1",
