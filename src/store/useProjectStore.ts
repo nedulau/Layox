@@ -1,10 +1,12 @@
 import { create } from 'zustand';
 import { v4 as uuidv4 } from 'uuid';
 import type { Project, Page, PageElement, ImageElement, TextElement, FileSystemFileHandleExt, SlotAssignment } from '../types';
-import { saveProject, saveProjectAs, loadProject, showOpenDialog } from '../utils/fileIO';
+import { loadProject } from '../utils/fileIO';
 import { getLayoutById, computeLayoutSlots } from '../utils/layouts';
 import { storeHandle } from '../utils/handleStore';
 import { CANVAS_H, CANVAS_IMAGE_MAX_H, CANVAS_IMAGE_MAX_W, CANVAS_W } from '../constants/canvas';
+import { readStoredBoolean, readStoredJson, readStoredNumber, writeStoredString } from '../infra/storage';
+import { getFileSystemPort } from '../infra/fileSystem';
 
 const DEFAULT_LAYOUT_PADDING = 20;
 const DEFAULT_LAYOUT_GAP = 20;
@@ -14,6 +16,7 @@ const DEFAULT_COVER_TITLE_FONT_FAMILY = 'Arial';
 const DEFAULT_COVER_SUBTITLE_FONT_FAMILY = 'Arial';
 const DEFAULT_COVER_TITLE_COLOR = '#ffffff';
 const DEFAULT_COVER_SUBTITLE_COLOR = '#ffffffcc';
+const fileSystemPort = getFileSystemPort();
 
 function createEmptyPage(): Page {
   return {
@@ -172,10 +175,10 @@ const useProjectStore = create<ProjectState>((set, get) => ({
   selectedElementId: null,
   selectedSlotIndex: null,
   fileHandle: null,
-  autoSaveEnabled: localStorage.getItem('layox_autoSaveEnabled') === 'true',
-  autoSaveInterval: parseInt(localStorage.getItem('layox_autoSaveInterval') || '30', 10),
+  autoSaveEnabled: readStoredBoolean('layox_autoSaveEnabled', false),
+  autoSaveInterval: readStoredNumber('layox_autoSaveInterval', 30),
   showEditor: false,
-  recentProjects: JSON.parse(localStorage.getItem('layox_recentProjects') || '[]') as RecentProject[],
+  recentProjects: readStoredJson<RecentProject[]>('layox_recentProjects', []),
   historyPast: [],
   historyFuture: [],
 
@@ -214,12 +217,12 @@ const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   setAutoSaveEnabled: (enabled) => {
-    localStorage.setItem('layox_autoSaveEnabled', String(enabled));
+    writeStoredString('layox_autoSaveEnabled', String(enabled));
     set({ autoSaveEnabled: enabled });
   },
 
   setAutoSaveInterval: (seconds) => {
-    localStorage.setItem('layox_autoSaveInterval', String(seconds));
+    writeStoredString('layox_autoSaveInterval', String(seconds));
     set({ autoSaveInterval: seconds });
   },
 
@@ -229,7 +232,7 @@ const useProjectStore = create<ProjectState>((set, get) => ({
     const recents = get().recentProjects.filter((r) => r.fileName !== fileName);
     recents.unshift({ name, fileName, lastOpened: Date.now() });
     const trimmed = recents.slice(0, 10);
-    localStorage.setItem('layox_recentProjects', JSON.stringify(trimmed));
+    writeStoredString('layox_recentProjects', JSON.stringify(trimmed));
     set({ recentProjects: trimmed });
   },
 
@@ -938,7 +941,7 @@ const useProjectStore = create<ProjectState>((set, get) => ({
 
   saveCurrentProject: async () => {
     const { project, assetBlobs, fileHandle } = get();
-    const newHandle = await saveProject(project, assetBlobs, fileHandle);
+    const newHandle = await fileSystemPort.saveProject(project, assetBlobs, fileHandle);
     if (newHandle && newHandle !== fileHandle) {
       set({ fileHandle: newHandle });
     }
@@ -946,14 +949,14 @@ const useProjectStore = create<ProjectState>((set, get) => ({
 
   saveCurrentProjectAs: async () => {
     const { project, assetBlobs } = get();
-    const newHandle = await saveProjectAs(project, assetBlobs);
+    const newHandle = await fileSystemPort.saveProjectAs(project, assetBlobs);
     if (newHandle) {
       set({ fileHandle: newHandle });
     }
   },
 
   openProject: async () => {
-    const result = await showOpenDialog();
+    const result = await fileSystemPort.openProjectDialog();
     if (result) {
       const { project, assetBlobs } = await loadProject(result.file);
       const normalizedProject = normalizeProject(project);
@@ -963,12 +966,14 @@ const useProjectStore = create<ProjectState>((set, get) => ({
         currentPageIndex: 0,
         selectedElementId: null,
         selectedSlotIndex: null,
-        fileHandle: result.handle,
+        fileHandle: result.handle ?? null,
         showEditor: true,
       });
-      get().addRecentProject(normalizedProject.meta.name, result.handle.name);
+      get().addRecentProject(normalizedProject.meta.name, result.handle?.name ?? result.file.name);
       // Persist handle in IndexedDB for later re-open
-      storeHandle(result.handle.name, result.handle as unknown as FileSystemFileHandle).catch(() => {});
+      if (result.handle) {
+        storeHandle(result.handle.name, result.handle as unknown as FileSystemFileHandle).catch(() => {});
+      }
     }
   },
 

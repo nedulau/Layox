@@ -13,6 +13,8 @@ import type { Page, Project } from './types';
 import { computeLayoutSlots } from './utils/layouts';
 import { CANVAS_H, CANVAS_W } from './constants/canvas';
 import { Analytics } from '@vercel/analytics/react';
+import { readStoredBoolean, readStoredJson, readStoredString, writeStoredString } from './infra/storage';
+import { getFileSystemPort } from './infra/fileSystem';
 
 const FONTS = ['Arial', 'Times New Roman', 'Georgia', 'Verdana', 'Courier New', 'Trebuchet MS', 'Impact', 'Comic Sans MS'];
 type UiTheme = 'dark' | 'light';
@@ -25,22 +27,24 @@ type AutoSaveRestorePoint = {
   project: Project;
 };
 
+const fileSystemPort = getFileSystemPort();
+
 function App() {
   const [uiTheme, setUiTheme] = useState<UiTheme>(() => {
-    const saved = localStorage.getItem('layox_uiTheme');
+    const saved = readStoredString('layox_uiTheme', 'dark');
     return saved === 'light' ? 'light' : 'dark';
   });
   const [language, setLanguage] = useState<Language>(() => {
-    const saved = localStorage.getItem('layox_language');
+    const saved = readStoredString('layox_language', 'de');
     return saved === 'en' ? 'en' : 'de';
   });
 
   useEffect(() => {
-    localStorage.setItem('layox_uiTheme', uiTheme);
+    writeStoredString('layox_uiTheme', uiTheme);
   }, [uiTheme]);
 
   useEffect(() => {
-    localStorage.setItem('layox_language', language);
+    writeStoredString('layox_language', language);
   }, [language]);
 
   const showEditor = useProjectStore((s) => s.showEditor);
@@ -684,7 +688,7 @@ function Editor({
   const setAutoSaveEnabled = useProjectStore((s) => s.setAutoSaveEnabled);
   const setAutoSaveInterval = useProjectStore((s) => s.setAutoSaveInterval);
 
-  const hasFileSystemAccess = 'showOpenFilePicker' in window;
+  const hasFileSystemAccess = fileSystemPort.supportsNativePicker();
 
   // Derived state
   const canDeleteSlot =
@@ -711,25 +715,19 @@ function Editor({
   const [showNewProjectModal, setShowNewProjectModal] = useState(false);
   const [showPageOverview, setShowPageOverview] = useState(false);
   const [showAssetLibrary, setShowAssetLibrary] = useState(false);
-  const [showQuickImageBar, setShowQuickImageBar] = useState<boolean>(() => localStorage.getItem('layox_showQuickImageBar') !== 'false');
-  const [deleteFromLibraryOnImageDelete, setDeleteFromLibraryOnImageDelete] = useState<boolean>(() => localStorage.getItem('layox_deleteFromLibraryOnImageDelete') === 'true');
+  const [showQuickImageBar, setShowQuickImageBar] = useState<boolean>(() => readStoredBoolean('layox_showQuickImageBar', true));
+  const [deleteFromLibraryOnImageDelete, setDeleteFromLibraryOnImageDelete] = useState<boolean>(() => readStoredBoolean('layox_deleteFromLibraryOnImageDelete', false));
   const [quickInsertAssetPath, setQuickInsertAssetPath] = useState<string | null>(null);
   const [quickInsertPreviewUrls, setQuickInsertPreviewUrls] = useState<Record<string, string>>({});
   const [canvasZoomMode] = useState<'fit' | 'manual'>('fit');
   const [canvasManualZoom] = useState(1);
   const [autoSaveTimeline, setAutoSaveTimeline] = useState<AutoSaveRestorePoint[]>(() => {
-    try {
-      const raw = localStorage.getItem('layox_autoSaveTimeline');
-      if (!raw) return [];
-      const parsed = JSON.parse(raw) as AutoSaveRestorePoint[];
-      if (!Array.isArray(parsed)) return [];
-      return parsed.filter((item) => !!item && typeof item.createdAt === 'number' && item.project && typeof item.pageIndex === 'number');
-    } catch {
-      return [];
-    }
+    const parsed = readStoredJson<AutoSaveRestorePoint[]>('layox_autoSaveTimeline', []);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((item) => !!item && typeof item.createdAt === 'number' && item.project && typeof item.pageIndex === 'number');
   });
   const [pdfDefaultLevel, setPdfDefaultLevel] = useState<PdfCompressionLevel>(() => {
-    const saved = localStorage.getItem('layox_pdfDefaultLevel');
+    const saved = readStoredString('layox_pdfDefaultLevel', 'medium');
     if (saved && PDF_COMPRESSION_PRESETS.some((preset) => preset.id === saved)) {
       return saved as PdfCompressionLevel;
     }
@@ -737,15 +735,15 @@ function Editor({
   });
 
   useEffect(() => {
-    localStorage.setItem('layox_pdfDefaultLevel', pdfDefaultLevel);
+    writeStoredString('layox_pdfDefaultLevel', pdfDefaultLevel);
   }, [pdfDefaultLevel]);
 
   useEffect(() => {
-    localStorage.setItem('layox_showQuickImageBar', String(showQuickImageBar));
+    writeStoredString('layox_showQuickImageBar', String(showQuickImageBar));
   }, [showQuickImageBar]);
 
   useEffect(() => {
-    localStorage.setItem('layox_deleteFromLibraryOnImageDelete', String(deleteFromLibraryOnImageDelete));
+    writeStoredString('layox_deleteFromLibraryOnImageDelete', String(deleteFromLibraryOnImageDelete));
   }, [deleteFromLibraryOnImageDelete]);
 
   const quickInsertAssetPaths = useMemo(() => Object.keys(assetBlobs).sort(), [assetBlobs]);
@@ -766,7 +764,7 @@ function Editor({
   }, [assetBlobs, quickInsertAssetPaths]);
 
   useEffect(() => {
-    localStorage.setItem('layox_autoSaveTimeline', JSON.stringify(autoSaveTimeline));
+    writeStoredString('layox_autoSaveTimeline', JSON.stringify(autoSaveTimeline));
   }, [autoSaveTimeline]);
 
   const pushAutoSaveRestorePoint = useCallback((projectSnapshot: Project, pageIndex: number) => {
