@@ -35,6 +35,7 @@ declare global {
   var Capacitor:
     | {
       isNativePlatform?: () => boolean;
+      Plugins?: unknown;
     }
     | undefined;
 

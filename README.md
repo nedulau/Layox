@@ -69,6 +69,15 @@ npm run build
 npm run electron:start
 ```
 
+### Mobile bridge bootstrap (Capacitor)
+
+The app now auto-installs a default Capacitor bridge at startup when running in a native Capacitor runtime. The default bridge currently provides:
+
+- file open via input-based picker fallback
+- storage bridge based on localStorage-compatible behavior
+
+This keeps the same Port contract active while native plugin wiring is added incrementally.
+
 ### Install as PWA
 
 1. Deploy the production build to a host (for example Vercel, Netlify, Cloudflare Pages). **HTTPS is required** for PWA.
