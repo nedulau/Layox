@@ -44,6 +44,19 @@ npm run build
 npm run electron:start
 ```
 
-## Next step
+## Linux AppImage packaging
 
-Wire packaging scripts for Linux artifacts and replace the inline channel map with a generated shared contract import.
+Build a Linux AppImage artifact from project root:
+
+```bash
+npm run electron:build:appimage
+```
+
+Output artifacts are written to `dist-electron/`.
+Automated CI build and artifact upload are configured in `.github/workflows/appimage.yml`.
+
+Quick local smoke test:
+
+```bash
+./dist-electron/*.AppImage
+```

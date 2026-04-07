@@ -1,0 +1,45 @@
+name: Build Linux AppImage
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  appimage:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build AppImage
+        run: npm run electron:build:appimage
+
+      - name: Verify AppImage artifact
+        run: |
+          ls -lh dist-electron
+          ls -lh dist-electron/*.AppImage
+          file dist-electron/*.AppImage
+
+      - name: Upload AppImage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: layox-appimage
+          path: |
+            dist-electron/*.AppImage
+            dist-electron/latest-linux.yml
+          if-no-files-found: error

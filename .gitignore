@@ -10,6 +10,9 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+dist-electron
+*.AppImage
+*.AppImage.blockmap
 *.local
 
 # Editor directories and files

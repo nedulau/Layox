@@ -1,0 +1,20 @@
+appId: com.layox.app
+productName: Layox
+directories:
+  buildResources: public
+  output: dist-electron
+files:
+  - dist/**/*
+  - electron/**/*
+  - package.json
+extraMetadata:
+  main: electron/main/index.mjs
+linux:
+  target:
+    - target: AppImage
+      arch:
+        - x64
+  icon: icon-512.png
+  category: Graphics
+  maintainer: Layox Team
+artifactName: ${productName}-${version}-${arch}.${ext}

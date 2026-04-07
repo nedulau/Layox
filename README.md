@@ -69,6 +69,15 @@ npm run build
 npm run electron:start
 ```
 
+Build a distributable Linux AppImage:
+
+```bash
+npm run electron:build:appimage
+```
+
+The artifact is written to `dist-electron/`.
+Automated CI build is defined in `.github/workflows/appimage.yml`.
+
 ### Mobile bridge bootstrap (Capacitor)
 
 The app now auto-installs a default Capacitor bridge at startup when running in a native Capacitor runtime. The default bridge currently provides:
@@ -110,6 +119,7 @@ Vite prints a network URL (for example `http://192.168.1.X:5173`) that devices i
 | `npm run electron:start` | Start Electron shell against built app |
 | `npm run electron:dev:renderer` | Start renderer dev server for Electron |
 | `npm run electron:dev:desktop` | Start Electron shell against renderer dev server |
+| `npm run electron:build:appimage` | Build Linux AppImage artifact into `dist-electron/` |
 
 ## Project Structure
 
