@@ -14,8 +14,12 @@ contextBridge.exposeInMainWorld('electronBridge', {
   saveProject: (payload) => ipcRenderer.invoke(IPC_CHANNELS.saveProject, payload),
   saveProjectAs: (payload) => ipcRenderer.invoke(IPC_CHANNELS.saveProjectAs, payload),
   storage: {
-    getItem: (key) => ipcRenderer.invoke(IPC_CHANNELS.storageGet, key),
-    setItem: (key, value) => ipcRenderer.invoke(IPC_CHANNELS.storageSet, key, value),
-    removeItem: (key) => ipcRenderer.invoke(IPC_CHANNELS.storageRemove, key),
+    getItem: (key) => ipcRenderer.sendSync(IPC_CHANNELS.storageGet, key),
+    setItem: (key, value) => {
+      ipcRenderer.sendSync(IPC_CHANNELS.storageSet, key, value);
+    },
+    removeItem: (key) => {
+      ipcRenderer.sendSync(IPC_CHANNELS.storageRemove, key);
+    },
   },
 });

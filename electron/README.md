@@ -19,9 +19,30 @@ Both expose the same channel names as src/infra/electron/ipcContract.ts:
 ## Notes
 
 - Renderer stays sandboxed (contextIsolation true, nodeIntegration false, sandbox true).
-- Storage in this bootstrap is in-memory only and should be replaced by a persistent store.
+- Storage now persists to a JSON file at app.getPath('userData')/layox-settings.json.
 - Save/Open currently supports .layox files via native dialogs.
+
+## Development
+
+1) Start renderer:
+
+```bash
+npm run electron:dev:renderer
+```
+
+2) Start desktop shell (in a second terminal):
+
+```bash
+npm run electron:dev:desktop
+```
+
+3) Run desktop shell against built app:
+
+```bash
+npm run build
+npm run electron:start
+```
 
 ## Next step
 
-Replace in-memory storage with a JSON-backed store in app.getPath('userData') and wire build scripts for packaging.
+Wire packaging scripts for Linux artifacts and replace the inline channel map with a generated shared contract import.

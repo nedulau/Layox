@@ -53,6 +53,22 @@ npm run preview -- --host
 
 Builds the optimized production app into `dist/` (including service worker and web app manifest) and starts a local preview server. With `--host`, other devices in your network can access it.
 
+### Linux desktop bootstrap (Electron)
+
+Start renderer and desktop shell in two terminals:
+
+```bash
+npm run electron:dev:renderer
+npm run electron:dev:desktop
+```
+
+Run desktop shell against production build:
+
+```bash
+npm run build
+npm run electron:start
+```
+
 ### Install as PWA
 
 1. Deploy the production build to a host (for example Vercel, Netlify, Cloudflare Pages). **HTTPS is required** for PWA.
@@ -80,6 +96,9 @@ Vite prints a network URL (for example `http://192.168.1.X:5173`) that devices i
 | `npm run preview -- --host` | Expose preview server to local network |
 | `npm test` | Run tests (watch mode) |
 | `npm run test:run` | Run tests once |
+| `npm run electron:start` | Start Electron shell against built app |
+| `npm run electron:dev:renderer` | Start renderer dev server for Electron |
+| `npm run electron:dev:desktop` | Start Electron shell against renderer dev server |
 
 ## Project Structure
 

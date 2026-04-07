@@ -9,7 +9,10 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest",
-    "test:run": "vitest run"
+    "test:run": "vitest run",
+    "electron:start": "electron ./electron/main/index.mjs",
+    "electron:dev:renderer": "vite --host",
+    "electron:dev:desktop": "cross-env LAYOX_DEV_SERVER_URL=http://localhost:5173 electron ./electron/main/index.mjs"
   },
   "dependencies": {
     "@vercel/analytics": "^1.6.1",
@@ -35,6 +38,8 @@
     "@types/react-dom": "^19.2.3",
     "@types/uuid": "^10.0.0",
     "@vitejs/plugin-react": "^5.1.1",
+    "cross-env": "^10.1.0",
+    "electron": "^36.3.0",
     "eslint": "^9.39.1",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",

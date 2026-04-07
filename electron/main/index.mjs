@@ -1,5 +1,6 @@
 import { app, BrowserWindow, dialog, ipcMain } from 'electron';
 import { promises as fs } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -20,7 +21,8 @@ const WINDOW_HEIGHT = 980;
 
 let mainWindow = null;
 let currentProjectPath = null;
-const inMemoryStore = new Map();
+let storeFilePath = null;
+let storageCache = {};
 
 function toArrayBuffer(buffer) {
   return buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
@@ -28,6 +30,38 @@ function toArrayBuffer(buffer) {
 
 function toBuffer(arrayBuffer) {
   return Buffer.from(arrayBuffer);
+}
+
+function ensureStorePath() {
+  if (storeFilePath) return storeFilePath;
+  const userDataDir = app.getPath('userData');
+  mkdirSync(userDataDir, { recursive: true });
+  storeFilePath = path.join(userDataDir, 'layox-settings.json');
+  return storeFilePath;
+}
+
+function loadStorageCache() {
+  try {
+    const resolvedPath = ensureStorePath();
+    if (!existsSync(resolvedPath)) {
+      storageCache = {};
+      return;
+    }
+    const raw = readFileSync(resolvedPath, 'utf-8');
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === 'object') {
+      storageCache = parsed;
+      return;
+    }
+    storageCache = {};
+  } catch {
+    storageCache = {};
+  }
+}
+
+function persistStorageCache() {
+  const resolvedPath = ensureStorePath();
+  writeFileSync(resolvedPath, JSON.stringify(storageCache, null, 2), 'utf-8');
 }
 
 function createWindow() {
@@ -55,6 +89,8 @@ function createWindow() {
 }
 
 function registerIpcHandlers() {
+  loadStorageCache();
+
   ipcMain.handle(IPC_CHANNELS.openProject, async () => {
     const result = await dialog.showOpenDialog({
       title: 'Open Layox Project',
@@ -113,19 +149,39 @@ function registerIpcHandlers() {
     return { name: path.basename(result.filePath) };
   });
 
-  ipcMain.handle(IPC_CHANNELS.storageGet, (_event, key) => {
+  ipcMain.on(IPC_CHANNELS.storageGet, (event, key) => {
     if (typeof key !== 'string') return null;
-    return inMemoryStore.get(key) ?? null;
+    event.returnValue = storageCache[key] ?? null;
   });
 
-  ipcMain.handle(IPC_CHANNELS.storageSet, (_event, key, value) => {
-    if (typeof key !== 'string' || typeof value !== 'string') return;
-    inMemoryStore.set(key, value);
+  ipcMain.on(IPC_CHANNELS.storageSet, (event, key, value) => {
+    if (typeof key !== 'string' || typeof value !== 'string') {
+      event.returnValue = false;
+      return;
+    }
+
+    storageCache[key] = value;
+    try {
+      persistStorageCache();
+      event.returnValue = true;
+    } catch {
+      event.returnValue = false;
+    }
   });
 
-  ipcMain.handle(IPC_CHANNELS.storageRemove, (_event, key) => {
-    if (typeof key !== 'string') return;
-    inMemoryStore.delete(key);
+  ipcMain.on(IPC_CHANNELS.storageRemove, (event, key) => {
+    if (typeof key !== 'string') {
+      event.returnValue = false;
+      return;
+    }
+
+    delete storageCache[key];
+    try {
+      persistStorageCache();
+      event.returnValue = true;
+    } catch {
+      event.returnValue = false;
+    }
   });
 }
 
