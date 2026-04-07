@@ -7,14 +7,21 @@ export function detectRuntimePlatform(): RuntimePlatform {
         electron?: string;
       };
     };
-    Capacitor?: unknown;
   };
+
+  if (globalThis.electronBridge) {
+    return 'electron';
+  }
 
   if (globalWithHints.process?.versions?.electron) {
     return 'electron';
   }
 
-  if (globalWithHints.Capacitor) {
+  if (globalThis.capacitorBridge) {
+    return 'capacitor';
+  }
+
+  if (globalThis.Capacitor?.isNativePlatform?.()) {
     return 'capacitor';
   }
 

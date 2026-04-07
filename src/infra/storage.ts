@@ -1,4 +1,6 @@
 import { createWebStoragePort } from './adapters/webStoragePort';
+import { createElectronStoragePort } from './adapters/electronStoragePort';
+import { createCapacitorStoragePort } from './adapters/capacitorStoragePort';
 import { detectRuntimePlatform } from './runtime';
 import type { StoragePort } from './ports/storagePort';
 
@@ -9,7 +11,9 @@ function createStoragePortForRuntime(): StoragePort {
 
   switch (runtime) {
     case 'electron':
+      return createElectronStoragePort();
     case 'capacitor':
+      return createCapacitorStoragePort();
     case 'web':
     default:
       return createWebStoragePort();
