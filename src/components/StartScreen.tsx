@@ -3,6 +3,8 @@ import useProjectStore from '../store/useProjectStore';
 import { getHandle } from '../utils/handleStore';
 import NewProjectModal from './NewProjectModal';
 import { tr, type Language } from '../i18n';
+import { getFileSystemPort } from '../infra/fileSystem';
+import type { RecentProject } from '../store/useProjectStore';
 
 type UiTheme = 'dark' | 'light';
 
@@ -20,10 +22,11 @@ function StartScreen({ uiTheme, setUiTheme, language, setLanguage }: StartScreen
 
   const resetProject = useProjectStore((s) => s.resetProject);
   const openProject = useProjectStore((s) => s.openProject);
+  const openRecentProjectByPath = useProjectStore((s) => s.openRecentProjectByPath);
   const loadFromFile = useProjectStore((s) => s.loadFromFile);
   const recentProjects = useProjectStore((s) => s.recentProjects);
 
-  const hasFileSystemAccess = 'showOpenFilePicker' in window;
+  const hasFileSystemAccess = getFileSystemPort().supportsNativePicker();
 
   const handleNewProject = () => {
     setShowNewProjectModal(true);
@@ -55,9 +58,14 @@ function StartScreen({ uiTheme, setUiTheme, language, setLanguage }: StartScreen
   };
 
   // Double-click on a recent project: try to re-open from stored handle, fall back to file picker
-  const handleRecentDoubleClick = async (fileName: string) => {
+  const handleRecentDoubleClick = async (recentProject: RecentProject) => {
+    if (recentProject.filePath) {
+      const opened = await openRecentProjectByPath(recentProject.filePath);
+      if (opened) return;
+    }
+
     try {
-      const handle = await getHandle(fileName);
+      const handle = await getHandle(recentProject.fileName);
       if (handle) {
         // Request permission (needed after page reload)
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -146,7 +154,7 @@ function StartScreen({ uiTheme, setUiTheme, language, setLanguage }: StartScreen
               {recentProjects.map((rp, i) => (
                 <div
                   key={`${rp.fileName}-${i}`}
-                  onDoubleClick={() => handleRecentDoubleClick(rp.fileName)}
+                  onDoubleClick={() => handleRecentDoubleClick(rp)}
                   className="flex items-center justify-between px-4 py-2.5 rounded-lg
                              start-recent-item bg-neutral-800/60 hover:bg-neutral-700/80 transition-colors
                              cursor-pointer select-none"
@@ -157,7 +165,7 @@ function StartScreen({ uiTheme, setUiTheme, language, setLanguage }: StartScreen
                       {rp.name}
                     </span>
                     <span className="text-neutral-500 text-xs truncate">
-                      {rp.fileName}
+                      {rp.filePath ?? rp.fileName}
                     </span>
                   </div>
                   <span className="text-neutral-600 text-xs shrink-0 ml-4">

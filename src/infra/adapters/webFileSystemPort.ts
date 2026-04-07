@@ -14,6 +14,9 @@ export function createWebFileSystemPort(): FileSystemPort {
         handle: result.handle,
       };
     },
+    async openProjectFromPath() {
+      return null;
+    },
     async saveProject(project, assetBlobs, existingHandle) {
       return saveProject(project, assetBlobs, existingHandle);
     },

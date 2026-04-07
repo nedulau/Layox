@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { v4 as uuidv4 } from 'uuid';
+import type { OpenProjectDialogResult } from '../../infra/ports/fileSystemPort';
 
 // Mock fileIO and browser APIs before importing the store
 vi.mock('../../utils/fileIO', () => ({
@@ -7,6 +8,18 @@ vi.mock('../../utils/fileIO', () => ({
   saveProjectAs: vi.fn(),
   loadProject: vi.fn(),
   showOpenDialog: vi.fn(),
+}));
+
+const mockedFileSystemPort = {
+  supportsNativePicker: vi.fn(() => true),
+  openProjectDialog: vi.fn<() => Promise<OpenProjectDialogResult | null>>(async () => null),
+  openProjectFromPath: vi.fn<(filePath: string) => Promise<OpenProjectDialogResult | null>>(async () => null),
+  saveProject: vi.fn(async () => null),
+  saveProjectAs: vi.fn(async () => null),
+};
+
+vi.mock('../../infra/fileSystem', () => ({
+  getFileSystemPort: () => mockedFileSystemPort,
 }));
 
 // Mock localStorage
@@ -23,6 +36,7 @@ Object.defineProperty(globalThis, 'localStorage', { value: localStorageMock });
 
 // Now import the store — it reads localStorage on init
 const { default: useProjectStore } = await import('../../store/useProjectStore');
+const { loadProject } = await import('../../utils/fileIO');
 
 function getState() {
   return useProjectStore.getState();
@@ -34,7 +48,9 @@ describe('useProjectStore', () => {
     // Reset store to default
     getState().resetProject('Test Project');
     // Clear history
-    useProjectStore.setState({ historyPast: [], historyFuture: [] });
+    useProjectStore.setState({ historyPast: [], historyFuture: [], recentProjects: [] });
+    vi.mocked(mockedFileSystemPort.openProjectFromPath).mockReset();
+    vi.mocked(loadProject).mockReset();
   });
 
   describe('initial state', () => {
@@ -471,6 +487,39 @@ describe('useProjectStore', () => {
       getState().addRecentProject('First', 'first.layox');
       getState().addRecentProject('Second', 'second.layox');
       expect(getState().recentProjects[0].name).toBe('Second');
+    });
+
+    it('addRecentProject deduplicates by filePath when available', () => {
+      getState().addRecentProject('Desktop A', 'project.layox', '/tmp/project.layox');
+      getState().addRecentProject('Desktop B', 'project-copy.layox', '/tmp/project.layox');
+      expect(getState().recentProjects).toHaveLength(1);
+      expect(getState().recentProjects[0].name).toBe('Desktop B');
+      expect(getState().recentProjects[0].filePath).toBe('/tmp/project.layox');
+    });
+
+    it('openRecentProjectByPath loads and activates project', async () => {
+      const file = new File(['dummy'], 'opened.layox', { type: 'application/zip' });
+      vi.mocked(mockedFileSystemPort.openProjectFromPath).mockResolvedValueOnce({
+        file,
+        handle: null,
+        filePath: '/tmp/opened.layox',
+      });
+      vi.mocked(loadProject).mockResolvedValueOnce({
+        project: {
+          meta: { name: 'Opened Project', version: '1.0' },
+          pages: [
+            { id: 'p1', elements: [], background: '#ffffff', isCover: true },
+          ],
+        },
+        assetBlobs: {},
+      });
+
+      const opened = await getState().openRecentProjectByPath('/tmp/opened.layox');
+
+      expect(opened).toBe(true);
+      expect(getState().project.meta.name).toBe('Opened Project');
+      expect(getState().showEditor).toBe(true);
+      expect(getState().recentProjects[0].filePath).toBe('/tmp/opened.layox');
     });
   });
 

@@ -39,6 +39,19 @@ export function createElectronFileSystemPort(): FileSystemPort {
       return {
         file: new File([payload.data], payload.name, { type: 'application/zip' }),
         handle: null,
+        filePath: payload.filePath,
+      };
+    },
+    async openProjectFromPath(filePath: string) {
+      const bridge = getElectronBridge();
+      if (!bridge?.openProjectFromPath) return null;
+      const payload = await bridge.openProjectFromPath(filePath);
+      if (!payload) return null;
+
+      return {
+        file: new File([payload.data], payload.name, { type: 'application/zip' }),
+        handle: null,
+        filePath: payload.filePath,
       };
     },
     async saveProject(project, assetBlobs, existingHandle) {

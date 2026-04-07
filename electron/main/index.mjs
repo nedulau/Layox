@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 const IPC_CHANNELS = {
   openProject: 'layox:open-project',
+  openProjectFromPath: 'layox:open-project-from-path',
   saveProject: 'layox:save-project',
   saveProjectAs: 'layox:save-project-as',
   storageGet: 'layox:storage:get',
@@ -109,7 +110,23 @@ function registerIpcHandlers() {
     return {
       name: path.basename(filePath),
       data: toArrayBuffer(fileData),
+      filePath,
     };
+  });
+
+  ipcMain.handle(IPC_CHANNELS.openProjectFromPath, async (_event, filePath) => {
+    if (typeof filePath !== 'string' || filePath.length === 0) return null;
+    try {
+      const fileData = await fs.readFile(filePath);
+      currentProjectPath = filePath;
+      return {
+        name: path.basename(filePath),
+        data: toArrayBuffer(fileData),
+        filePath,
+      };
+    } catch {
+      return null;
+    }
   });
 
   ipcMain.handle(IPC_CHANNELS.saveProject, async (_event, payload) => {

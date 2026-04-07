@@ -84,8 +84,11 @@ function normalizeProject(project: Project): Project {
 interface RecentProject {
   name: string;
   fileName: string;
+  filePath?: string;
   lastOpened: number; // timestamp
 }
+
+export type { RecentProject };
 
 interface HistoryEntry {
   project: Project;
@@ -113,7 +116,8 @@ interface ProjectState {
   setAutoSaveEnabled: (enabled: boolean) => void;
   setAutoSaveInterval: (seconds: number) => void;
   setShowEditor: (show: boolean) => void;
-  addRecentProject: (name: string, fileName: string) => void;
+  addRecentProject: (name: string, fileName: string, filePath?: string) => void;
+  openRecentProjectByPath: (filePath: string) => Promise<boolean>;
 
   setCurrentPageIndex: (index: number) => void;
   addPage: () => void;
@@ -228,12 +232,34 @@ const useProjectStore = create<ProjectState>((set, get) => ({
 
   setShowEditor: (show) => set({ showEditor: show }),
 
-  addRecentProject: (name, fileName) => {
-    const recents = get().recentProjects.filter((r) => r.fileName !== fileName);
-    recents.unshift({ name, fileName, lastOpened: Date.now() });
+  addRecentProject: (name, fileName, filePath) => {
+    const recents = get().recentProjects.filter((r) => {
+      if (filePath && r.filePath) return r.filePath !== filePath;
+      return r.fileName !== fileName;
+    });
+    recents.unshift({ name, fileName, filePath, lastOpened: Date.now() });
     const trimmed = recents.slice(0, 10);
     writeStoredString('layox_recentProjects', JSON.stringify(trimmed));
     set({ recentProjects: trimmed });
+  },
+
+  openRecentProjectByPath: async (filePath) => {
+    const result = await fileSystemPort.openProjectFromPath(filePath);
+    if (!result) return false;
+
+    const { project, assetBlobs } = await loadProject(result.file);
+    const normalizedProject = normalizeProject(project);
+    set({
+      project: normalizedProject,
+      assetBlobs,
+      currentPageIndex: 0,
+      selectedElementId: null,
+      selectedSlotIndex: null,
+      fileHandle: null,
+      showEditor: true,
+    });
+    get().addRecentProject(normalizedProject.meta.name, result.file.name, result.filePath);
+    return true;
   },
 
   snapshot: () => {
@@ -969,7 +995,7 @@ const useProjectStore = create<ProjectState>((set, get) => ({
         fileHandle: result.handle ?? null,
         showEditor: true,
       });
-      get().addRecentProject(normalizedProject.meta.name, result.handle?.name ?? result.file.name);
+      get().addRecentProject(normalizedProject.meta.name, result.handle?.name ?? result.file.name, result.filePath);
       // Persist handle in IndexedDB for later re-open
       if (result.handle) {
         storeHandle(result.handle.name, result.handle as unknown as FileSystemFileHandle).catch(() => {});

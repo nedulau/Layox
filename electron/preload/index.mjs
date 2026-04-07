@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron';
 
 const IPC_CHANNELS = {
   openProject: 'layox:open-project',
+  openProjectFromPath: 'layox:open-project-from-path',
   saveProject: 'layox:save-project',
   saveProjectAs: 'layox:save-project-as',
   storageGet: 'layox:storage:get',
@@ -11,6 +12,7 @@ const IPC_CHANNELS = {
 
 contextBridge.exposeInMainWorld('electronBridge', {
   openProject: () => ipcRenderer.invoke(IPC_CHANNELS.openProject),
+  openProjectFromPath: (filePath) => ipcRenderer.invoke(IPC_CHANNELS.openProjectFromPath, filePath),
   saveProject: (payload) => ipcRenderer.invoke(IPC_CHANNELS.saveProject, payload),
   saveProjectAs: (payload) => ipcRenderer.invoke(IPC_CHANNELS.saveProjectAs, payload),
   storage: {

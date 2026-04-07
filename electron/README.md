@@ -10,6 +10,7 @@ This folder contains runnable bootstrap stubs for the desktop target.
 Both expose the same channel names as src/infra/electron/ipcContract.ts:
 
 - layox:open-project
+- layox:open-project-from-path
 - layox:save-project
 - layox:save-project-as
 - layox:storage:get
