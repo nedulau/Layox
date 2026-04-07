@@ -1,0 +1,13 @@
+node_modules
+.next
+.git
+out
+build
+dist
+dist-ssr
+dist-electron
+*.AppImage
+*.AppImage.blockmap
+electron-builder.yml
+.vercel
+.env*.local

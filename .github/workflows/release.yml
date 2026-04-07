@@ -1,0 +1,108 @@
+name: Release AppImage and Deploy Vercel
+
+on:
+  release:
+    types:
+      - published
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm run test:run
+
+      - name: Build AppImage
+        run: npm run electron:build:appimage
+
+      - name: Generate and update release notes
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const release = context.payload.release;
+            const marker = '<!-- auto-release-notes -->';
+
+            const generated = await github.rest.repos.generateReleaseNotes({
+              owner,
+              repo,
+              tag_name: release.tag_name,
+              target_commitish: release.target_commitish,
+            });
+
+            const autoNotes = generated.data.body ?? '';
+            const existingBody = release.body ?? '';
+            let nextBody = '';
+
+            if (existingBody.includes(marker)) {
+              const pattern = new RegExp(`${marker}[\\s\\S]*$`);
+              nextBody = existingBody.replace(pattern, `${marker}\n${autoNotes}`);
+            } else if (existingBody.trim().length > 0) {
+              nextBody = `${existingBody.trim()}\n\n${marker}\n${autoNotes}`;
+            } else {
+              nextBody = `${marker}\n${autoNotes}`;
+            }
+
+            await github.rest.repos.updateRelease({
+              owner,
+              repo,
+              release_id: release.id,
+              body: nextBody,
+            });
+
+      - name: Attach AppImage to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.release.tag_name }}
+          files: |
+            dist-electron/*.AppImage
+            dist-electron/latest-linux.yml
+
+      - name: Validate required Vercel secrets
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          test -n "$VERCEL_TOKEN" || (echo "Missing secret VERCEL_TOKEN" && exit 1)
+          test -n "$VERCEL_ORG_ID" || (echo "Missing secret VERCEL_ORG_ID" && exit 1)
+          test -n "$VERCEL_PROJECT_ID" || (echo "Missing secret VERCEL_PROJECT_ID" && exit 1)
+
+      - name: Install Vercel CLI
+        run: npm i -g vercel@latest
+
+      - name: Pull Vercel Environment Information
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: vercel pull --yes --environment=production --token "$VERCEL_TOKEN"
+
+      - name: Build Vercel Project Artifacts
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: vercel build --prod --token "$VERCEL_TOKEN"
+
+      - name: Deploy to Vercel Production
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: vercel deploy --prebuilt --prod --token "$VERCEL_TOKEN"
