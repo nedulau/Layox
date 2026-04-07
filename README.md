@@ -73,7 +73,9 @@ npm run electron:start
 
 The app now auto-installs a default Capacitor bridge at startup when running in a native Capacitor runtime. The default bridge currently provides:
 
-- file open via input-based picker fallback
+- file open via native FilePicker when available (with input fallback)
+- file open from known path via Filesystem plugin when available
+- file save/save-as via Filesystem plugin when available (save-as can trigger native share)
 - storage bridge based on localStorage-compatible behavior
 
 This keeps the same Port contract active while native plugin wiring is added incrementally.
