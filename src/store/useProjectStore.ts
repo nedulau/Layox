@@ -1,12 +1,13 @@
 import { create } from 'zustand';
 import { v4 as uuidv4 } from 'uuid';
-import type { Project, Page, PageElement, ImageElement, TextElement, FileSystemFileHandleExt, SlotAssignment } from '../types';
+import type { Project, Page, PageElement, ImageElement, TextElement, SlotAssignment } from '../types';
 import { loadProject } from '../utils/fileIO';
 import { getLayoutById, computeLayoutSlots } from '../utils/layouts';
 import { storeHandle } from '../utils/handleStore';
 import { CANVAS_H, CANVAS_IMAGE_MAX_H, CANVAS_IMAGE_MAX_W, CANVAS_W } from '../constants/canvas';
 import { readStoredBoolean, readStoredJson, readStoredNumber, writeStoredString } from '../infra/storage';
 import { getFileSystemPort } from '../infra/fileSystem';
+import type { ProjectLocation, SaveOutcome } from '../infra/ports/fileSystemPort';
 
 const DEFAULT_LAYOUT_PADDING = 20;
 const DEFAULT_LAYOUT_GAP = 20;
@@ -102,7 +103,12 @@ interface ProjectState {
   assetBlobs: Record<string, Blob>;
   selectedElementId: string | null;
   selectedSlotIndex: number | null;
-  fileHandle: FileSystemFileHandleExt | null;
+  projectLocation: ProjectLocation | null;
+  revision: number;
+  savedRevision: number;
+  isDirty: boolean;
+  isSaving: boolean;
+  saveError: string | null;
   autoSaveEnabled: boolean;
   autoSaveInterval: number; // seconds
   showEditor: boolean;
@@ -161,10 +167,10 @@ interface ProjectState {
   applyLayout: (layoutId: string) => void;
   clearLayout: () => void;
 
-  saveCurrentProject: () => Promise<void>;
-  saveCurrentProjectAs: () => Promise<void>;
+  saveCurrentProject: () => Promise<SaveOutcome>;
+  saveCurrentProjectAs: () => Promise<SaveOutcome>;
   openProject: () => Promise<void>;
-  loadFromFile: (file: File, handle?: FileSystemFileHandleExt | null) => Promise<void>;
+  loadFromFile: (file: File, location?: ProjectLocation | null) => Promise<void>;
 
   historyPast: HistoryEntry[];
   historyFuture: HistoryEntry[];
@@ -173,13 +179,99 @@ interface ProjectState {
   redo: () => void;
 }
 
-const useProjectStore = create<ProjectState>((set, get) => ({
+type ProjectStateUpdate =
+  | Partial<ProjectState>
+  | ProjectState
+  | ((state: ProjectState) => Partial<ProjectState> | ProjectState);
+
+const useProjectStore = create<ProjectState>((baseSet, get) => {
+  const set = (update: ProjectStateUpdate): void => {
+    baseSet((state) => {
+      const partial = typeof update === 'function' ? update(state) : update;
+      if (partial === state) return state;
+      if (
+        ((partial.project !== undefined && partial.project !== state.project) ||
+          (partial.assetBlobs !== undefined && partial.assetBlobs !== state.assetBlobs)) &&
+        partial.revision === undefined &&
+        partial.isDirty === undefined
+      ) {
+        return {
+          ...partial,
+          revision: state.revision + 1,
+          isDirty: true,
+        };
+      }
+      return partial;
+    });
+  };
+
+  let activeSave: Promise<SaveOutcome> | null = null;
+
+  const runSave = (saveAs: boolean): Promise<SaveOutcome> => {
+    if (activeSave) return activeSave;
+
+    const task = (async () => {
+      const stateAtStart = get();
+      const revisionAtStart = stateAtStart.revision;
+      set({ isSaving: true, saveError: null });
+      try {
+        const outcome = saveAs
+          ? await fileSystemPort.saveProjectAs(stateAtStart.project, stateAtStart.assetBlobs)
+          : await fileSystemPort.saveProject(
+              stateAtStart.project,
+              stateAtStart.assetBlobs,
+              stateAtStart.projectLocation,
+            );
+
+        if (outcome.status === 'saved' || outcome.status === 'downloaded') {
+          const currentRevision = get().revision;
+          const nextLocation = outcome.status === 'saved' ? outcome.location : null;
+          set({
+            projectLocation: nextLocation,
+            savedRevision: revisionAtStart,
+            isDirty: currentRevision !== revisionAtStart,
+            isSaving: false,
+            saveError: null,
+          });
+
+          if (outcome.status === 'saved') {
+            const fileName = outcome.location.kind === 'web-handle'
+              ? outcome.location.handle.name
+              : outcome.location.filePath.split(/[\\/]/).pop() || `${stateAtStart.project.meta.name}.layox`;
+            const filePath = outcome.location.kind === 'native-path' ? outcome.location.filePath : undefined;
+            get().addRecentProject(stateAtStart.project.meta.name, fileName, filePath);
+          }
+        } else {
+          set({ isSaving: false });
+        }
+        return outcome;
+      } catch (error) {
+        set({
+          isSaving: false,
+          saveError: error instanceof Error ? error.message : String(error),
+        });
+        throw error;
+      } finally {
+        activeSave = null;
+      }
+    })();
+
+    activeSave = task;
+    return task;
+  };
+
+  return ({
   project: createDefaultProject(),
   currentPageIndex: 0,
   assetBlobs: {},
   selectedElementId: null,
   selectedSlotIndex: null,
-  fileHandle: null,
+  projectLocation: null,
+  revision: 0,
+  savedRevision: 0,
+  isDirty: false,
+  isSaving: false,
+  saveError: null,
   autoSaveEnabled: readStoredBoolean('layox_autoSaveEnabled', false),
   autoSaveInterval: readStoredNumber('layox_autoSaveInterval', 30),
   showEditor: false,
@@ -216,7 +308,14 @@ const useProjectStore = create<ProjectState>((set, get) => ({
       assetBlobs: {},
       selectedElementId: null,
       selectedSlotIndex: null,
-      fileHandle: null,
+      projectLocation: null,
+      revision: 1,
+      savedRevision: 0,
+      isDirty: true,
+      isSaving: false,
+      saveError: null,
+      historyPast: [],
+      historyFuture: [],
       showEditor: true,
     });
   },
@@ -256,10 +355,16 @@ const useProjectStore = create<ProjectState>((set, get) => ({
       currentPageIndex: 0,
       selectedElementId: null,
       selectedSlotIndex: null,
-      fileHandle: null,
+      projectLocation: result.location,
+      revision: 0,
+      savedRevision: 0,
+      isDirty: false,
+      isSaving: false,
+      saveError: null,
       showEditor: true,
     });
-    get().addRecentProject(normalizedProject.meta.name, result.file.name, result.filePath);
+    const recentPath = result.location?.kind === 'native-path' ? result.location.filePath : undefined;
+    get().addRecentProject(normalizedProject.meta.name, result.file.name, recentPath);
     return true;
   },
 
@@ -966,21 +1071,9 @@ const useProjectStore = create<ProjectState>((set, get) => ({
 
   // --- File I/O ---
 
-  saveCurrentProject: async () => {
-    const { project, assetBlobs, fileHandle } = get();
-    const newHandle = await fileSystemPort.saveProject(project, assetBlobs, fileHandle);
-    if (newHandle && newHandle !== fileHandle) {
-      set({ fileHandle: newHandle });
-    }
-  },
+  saveCurrentProject: () => runSave(false),
 
-  saveCurrentProjectAs: async () => {
-    const { project, assetBlobs } = get();
-    const newHandle = await fileSystemPort.saveProjectAs(project, assetBlobs);
-    if (newHandle) {
-      set({ fileHandle: newHandle });
-    }
-  },
+  saveCurrentProjectAs: () => runSave(true),
 
   openProject: async () => {
     const result = await fileSystemPort.openProjectDialog();
@@ -993,18 +1086,27 @@ const useProjectStore = create<ProjectState>((set, get) => ({
         currentPageIndex: 0,
         selectedElementId: null,
         selectedSlotIndex: null,
-        fileHandle: result.handle ?? null,
+        projectLocation: result.location,
+        revision: 0,
+        savedRevision: 0,
+        isDirty: false,
+        isSaving: false,
+        saveError: null,
+        historyPast: [],
+        historyFuture: [],
         showEditor: true,
       });
-      get().addRecentProject(normalizedProject.meta.name, result.handle?.name ?? result.file.name, result.filePath);
+      const handle = result.location?.kind === 'web-handle' ? result.location.handle : null;
+      const filePath = result.location?.kind === 'native-path' ? result.location.filePath : undefined;
+      get().addRecentProject(normalizedProject.meta.name, handle?.name ?? result.file.name, filePath);
       // Persist handle in IndexedDB for later re-open
-      if (result.handle) {
-        storeHandle(result.handle.name, result.handle as unknown as FileSystemFileHandle).catch(() => {});
+      if (handle) {
+        storeHandle(handle.name, handle as unknown as FileSystemFileHandle).catch(() => {});
       }
     }
   },
 
-  loadFromFile: async (file, handle) => {
+  loadFromFile: async (file, location) => {
     const { project, assetBlobs } = await loadProject(file);
     const normalizedProject = normalizeProject(project);
     set({
@@ -1013,16 +1115,26 @@ const useProjectStore = create<ProjectState>((set, get) => ({
       currentPageIndex: 0,
       selectedElementId: null,
       selectedSlotIndex: null,
-      fileHandle: handle ?? null,
+      projectLocation: location ?? null,
+      revision: 0,
+      savedRevision: 0,
+      isDirty: false,
+      isSaving: false,
+      saveError: null,
+      historyPast: [],
+      historyFuture: [],
       showEditor: true,
     });
-    get().addRecentProject(normalizedProject.meta.name, handle?.name ?? file.name);
+    const handle = location?.kind === 'web-handle' ? location.handle : null;
+    const filePath = location?.kind === 'native-path' ? location.filePath : undefined;
+    get().addRecentProject(normalizedProject.meta.name, handle?.name ?? file.name, filePath);
     // Persist handle in IndexedDB if available
     if (handle) {
       storeHandle(handle.name, handle as unknown as FileSystemFileHandle).catch(() => {});
     }
   },
-}));
+  });
+});
 
 // Expose store globally for export utility
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

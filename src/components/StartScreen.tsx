@@ -77,7 +77,7 @@ function StartScreen({ uiTheme, setUiTheme, language, setLanguage }: StartScreen
         const perm = await permissionHandle.requestPermission?.({ mode: 'readwrite' });
         if (perm === 'granted' || perm === undefined) {
           const file = await permissionHandle.getFile();
-          await loadFromFile(file, permissionHandle);
+          await loadFromFile(file, { kind: 'web-handle', handle: permissionHandle });
           return;
         }
       }

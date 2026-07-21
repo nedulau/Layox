@@ -21,7 +21,6 @@ const WINDOW_WIDTH = 1500;
 const WINDOW_HEIGHT = 980;
 
 let mainWindow = null;
-let currentProjectPath = null;
 let storeFilePath = null;
 let storageCache = {};
 
@@ -36,7 +35,8 @@ function isValidSavePayload(payload) {
       payload.name.length > 0 &&
       payload.name.length <= 255 &&
       payload.name.toLowerCase().endsWith('.layox') &&
-      payload.data instanceof ArrayBuffer,
+      payload.data instanceof ArrayBuffer &&
+      (payload.targetPath === undefined || payload.targetPath === null || isValidProjectPath(payload.targetPath)),
   );
 }
 
@@ -146,8 +146,6 @@ function registerIpcHandlers() {
 
     const filePath = result.filePaths[0];
     const fileData = await fs.readFile(filePath);
-    currentProjectPath = filePath;
-
     return {
       name: path.basename(filePath),
       data: toArrayBuffer(fileData),
@@ -159,7 +157,6 @@ function registerIpcHandlers() {
     if (!isValidProjectPath(filePath)) return null;
     try {
       const fileData = await fs.readFile(filePath);
-      currentProjectPath = filePath;
       return {
         name: path.basename(filePath),
         data: toArrayBuffer(fileData),
@@ -173,7 +170,7 @@ function registerIpcHandlers() {
   ipcMain.handle(IPC_CHANNELS.saveProject, async (_event, payload) => {
     if (!isValidSavePayload(payload)) return null;
 
-    let targetPath = currentProjectPath;
+    let targetPath = isValidProjectPath(payload.targetPath) ? payload.targetPath : null;
     if (!targetPath) {
       const result = await dialog.showSaveDialog({
         title: 'Save Layox Project',
@@ -185,8 +182,6 @@ function registerIpcHandlers() {
     }
 
     await writeFileAtomically(targetPath, payload.data);
-    currentProjectPath = targetPath;
-
     return { name: path.basename(targetPath), filePath: targetPath };
   });
 
@@ -202,8 +197,6 @@ function registerIpcHandlers() {
     if (result.canceled || !result.filePath) return null;
 
     await writeFileAtomically(result.filePath, payload.data);
-    currentProjectPath = result.filePath;
-
     return { name: path.basename(result.filePath), filePath: result.filePath };
   });
 

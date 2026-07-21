@@ -1,6 +1,7 @@
 import { saveAs } from 'file-saver';
 import type { Project, FileSystemFileHandleExt } from '../types';
 import { createProjectArchiveBlob, loadProjectArchive } from './projectArchive';
+import type { SaveOutcome } from '../infra/ports/fileSystemPort';
 
 /**
  * Writes a blob to an existing FileSystemFileHandle (overwrite in place).
@@ -20,8 +21,12 @@ async function saveToHandle(
  */
 async function showSaveAsDialog(
   suggestedName: string,
-): Promise<FileSystemFileHandleExt | null> {
-  if (!('showSaveFilePicker' in window)) return null;
+): Promise<
+  | { status: 'selected'; handle: FileSystemFileHandleExt }
+  | { status: 'unsupported' }
+  | { status: 'cancelled' }
+> {
+  if (!('showSaveFilePicker' in window)) return { status: 'unsupported' };
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const handle = await (window as any).showSaveFilePicker({
@@ -33,9 +38,10 @@ async function showSaveAsDialog(
         },
       ],
     });
-    return handle as FileSystemFileHandleExt;
-  } catch {
-    return null; // user cancelled
+    return { status: 'selected', handle: handle as FileSystemFileHandleExt };
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') return { status: 'cancelled' };
+    throw error;
   }
 }
 
@@ -74,14 +80,14 @@ export async function saveProject(
   project: Project,
   assetBlobs: Record<string, Blob>,
   existingHandle: FileSystemFileHandleExt | null,
-): Promise<FileSystemFileHandleExt | null> {
+): Promise<SaveOutcome> {
   const blob = await createProjectArchiveBlob(project, assetBlobs);
 
   // Try to overwrite existing file
   if (existingHandle) {
     try {
       await saveToHandle(existingHandle, blob);
-      return existingHandle;
+      return { status: 'saved', location: { kind: 'web-handle', handle: existingHandle } };
     } catch {
       // permission lost → fall through to Save As
     }
@@ -90,15 +96,16 @@ export async function saveProject(
   // Try File System Access API picker
   const safeName =
     project.meta.name.replace(/[^\p{L}\p{N}_\- ]/gu, '_') + '.layox';
-  const newHandle = await showSaveAsDialog(safeName);
-  if (newHandle) {
-    await saveToHandle(newHandle, blob);
-    return newHandle;
+  const picker = await showSaveAsDialog(safeName);
+  if (picker.status === 'selected') {
+    await saveToHandle(picker.handle, blob);
+    return { status: 'saved', location: { kind: 'web-handle', handle: picker.handle } };
   }
+  if (picker.status === 'cancelled') return { status: 'cancelled' };
 
   // Fallback: classic download
   saveAs(blob, safeName);
-  return null;
+  return { status: 'downloaded' };
 }
 
 /**
@@ -107,20 +114,21 @@ export async function saveProject(
 export async function saveProjectAs(
   project: Project,
   assetBlobs: Record<string, Blob>,
-): Promise<FileSystemFileHandleExt | null> {
+): Promise<SaveOutcome> {
   const blob = await createProjectArchiveBlob(project, assetBlobs);
   const safeName =
     project.meta.name.replace(/[^\p{L}\p{N}_\- ]/gu, '_') + '.layox';
 
-  const handle = await showSaveAsDialog(safeName);
-  if (handle) {
-    await saveToHandle(handle, blob);
-    return handle;
+  const picker = await showSaveAsDialog(safeName);
+  if (picker.status === 'selected') {
+    await saveToHandle(picker.handle, blob);
+    return { status: 'saved', location: { kind: 'web-handle', handle: picker.handle } };
   }
+  if (picker.status === 'cancelled') return { status: 'cancelled' };
 
   // Fallback
   saveAs(blob, safeName);
-  return null;
+  return { status: 'downloaded' };
 }
 
 /**

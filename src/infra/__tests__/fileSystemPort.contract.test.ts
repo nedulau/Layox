@@ -41,13 +41,13 @@ describe('FileSystemPort contract', () => {
   it('web adapter delegates open and save operations', async () => {
     const file = new File(['demo'], 'demo.layox', { type: 'application/zip' });
     vi.mocked(showOpenDialog).mockResolvedValueOnce({ file, handle: fileHandleStub });
-    vi.mocked(saveProject).mockResolvedValueOnce(null);
-    vi.mocked(saveProjectAs).mockResolvedValueOnce(null);
+    vi.mocked(saveProject).mockResolvedValueOnce({ status: 'cancelled' });
+    vi.mocked(saveProjectAs).mockResolvedValueOnce({ status: 'cancelled' });
 
     const port = createWebFileSystemPort();
     const opened = await port.openProjectDialog();
     const openedByPath = await port.openProjectFromPath('/tmp/demo.layox');
-    await port.saveProject(projectFixture, {}, fileHandleStub);
+    await port.saveProject(projectFixture, {}, { kind: 'web-handle', handle: fileHandleStub });
     await port.saveProjectAs(projectFixture, {});
 
     expect(opened?.file.name).toBe('demo.layox');
@@ -68,8 +68,8 @@ describe('FileSystemPort contract', () => {
       data: new TextEncoder().encode('zip-content').buffer,
       filePath: '/tmp/from-electron-path.layox',
     });
-    const saveProjectBridge = vi.fn().mockResolvedValue({ name: 'saved.layox' });
-    const saveProjectAsBridge = vi.fn().mockResolvedValue({ name: 'saved-as.layox' });
+    const saveProjectBridge = vi.fn().mockResolvedValue({ name: 'saved.layox', filePath: '/tmp/saved.layox' });
+    const saveProjectAsBridge = vi.fn().mockResolvedValue({ name: 'saved-as.layox', filePath: '/tmp/saved-as.layox' });
 
     globalThis.electronBridge = {
       openProject,
@@ -81,16 +81,17 @@ describe('FileSystemPort contract', () => {
     const port = createElectronFileSystemPort();
     const opened = await port.openProjectDialog();
     const openedByPath = await port.openProjectFromPath('/tmp/from-electron-path.layox');
-    await port.saveProject(projectFixture, { 'assets/demo.txt': new Blob(['x']) }, fileHandleStub);
+    await port.saveProject(projectFixture, { 'assets/demo.txt': new Blob(['x']) }, { kind: 'native-path', filePath: '/tmp/existing.layox' });
     await port.saveProjectAs(projectFixture, { 'assets/demo.txt': new Blob(['x']) });
 
     expect(opened?.file.name).toBe('from-electron.layox');
-    expect(opened?.filePath).toBe('/tmp/from-electron.layox');
+    expect(opened?.location).toEqual({ kind: 'native-path', filePath: '/tmp/from-electron.layox' });
     expect(openedByPath?.file.name).toBe('from-electron-path.layox');
-    expect(openedByPath?.filePath).toBe('/tmp/from-electron-path.layox');
+    expect(openedByPath?.location).toEqual({ kind: 'native-path', filePath: '/tmp/from-electron-path.layox' });
     expect(openProject).toHaveBeenCalledTimes(1);
     expect(openProjectFromPath).toHaveBeenCalledTimes(1);
     expect(saveProjectBridge).toHaveBeenCalledTimes(1);
+    expect(saveProjectBridge).toHaveBeenCalledWith(expect.objectContaining({ targetPath: '/tmp/existing.layox' }));
     expect(saveProjectAsBridge).toHaveBeenCalledTimes(1);
     expect(showOpenDialog).not.toHaveBeenCalled();
   });
@@ -106,8 +107,8 @@ describe('FileSystemPort contract', () => {
       data: new TextEncoder().encode('zip-content').buffer,
       filePath: '/tmp/from-capacitor-path.layox',
     });
-    const saveProjectBridge = vi.fn().mockResolvedValue({ name: 'saved.layox' });
-    const saveProjectAsBridge = vi.fn().mockResolvedValue({ name: 'saved-as.layox' });
+    const saveProjectBridge = vi.fn().mockResolvedValue({ name: 'saved.layox', filePath: '/tmp/saved.layox' });
+    const saveProjectAsBridge = vi.fn().mockResolvedValue({ name: 'saved-as.layox', filePath: '/tmp/saved-as.layox' });
 
     globalThis.capacitorBridge = {
       openProject,
@@ -119,13 +120,13 @@ describe('FileSystemPort contract', () => {
     const port = createCapacitorFileSystemPort();
     const opened = await port.openProjectDialog();
     const openedByPath = await port.openProjectFromPath('/tmp/from-capacitor-path.layox');
-    await port.saveProject(projectFixture, { 'assets/demo.txt': new Blob(['x']) }, fileHandleStub);
+    await port.saveProject(projectFixture, { 'assets/demo.txt': new Blob(['x']) }, { kind: 'native-path', filePath: '/tmp/existing.layox' });
     await port.saveProjectAs(projectFixture, { 'assets/demo.txt': new Blob(['x']) });
 
     expect(opened?.file.name).toBe('from-capacitor.layox');
-    expect(opened?.filePath).toBe('/tmp/from-capacitor.layox');
+    expect(opened?.location).toEqual({ kind: 'native-path', filePath: '/tmp/from-capacitor.layox' });
     expect(openedByPath?.file.name).toBe('from-capacitor-path.layox');
-    expect(openedByPath?.filePath).toBe('/tmp/from-capacitor-path.layox');
+    expect(openedByPath?.location).toEqual({ kind: 'native-path', filePath: '/tmp/from-capacitor-path.layox' });
     expect(openProject).toHaveBeenCalledTimes(1);
     expect(openProjectFromPath).toHaveBeenCalledTimes(1);
     expect(saveProjectBridge).toHaveBeenCalledTimes(1);

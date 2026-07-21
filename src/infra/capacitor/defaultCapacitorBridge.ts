@@ -255,11 +255,13 @@ export function createDefaultCapacitorBridge(): CapacitorBridge {
 
   if (getCapacitorPlugins().Filesystem) {
     bridge.saveProject = async (payload) => {
-      const targetPath = lastSavedPath ?? createSafeProjectPath(payload.name, false);
+      const targetPath = payload.targetPath === undefined
+        ? (lastSavedPath ?? createSafeProjectPath(payload.name, false))
+        : (payload.targetPath ?? createSafeProjectPath(payload.name, false));
       const writtenUri = await writeProjectToFilesystem(targetPath, payload.data);
       if (!writtenUri) return null;
       lastSavedPath = targetPath;
-      return { name: getBaseName(targetPath) };
+      return { name: getBaseName(targetPath), filePath: writtenUri };
     };
 
     bridge.saveProjectAs = async (payload) => {
@@ -282,7 +284,7 @@ export function createDefaultCapacitorBridge(): CapacitorBridge {
         }
       }
 
-      return { name: getBaseName(targetPath) };
+      return { name: getBaseName(targetPath), filePath: writtenUri };
     };
   }
 

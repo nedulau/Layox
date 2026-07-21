@@ -11,14 +11,18 @@ export function createWebFileSystemPort(): FileSystemPort {
       if (!result) return null;
       return {
         file: result.file,
-        handle: result.handle,
+        location: { kind: 'web-handle', handle: result.handle },
       };
     },
     async openProjectFromPath() {
       return null;
     },
-    async saveProject(project, assetBlobs, existingHandle) {
-      return saveProject(project, assetBlobs, existingHandle);
+    async saveProject(project, assetBlobs, location) {
+      return saveProject(
+        project,
+        assetBlobs,
+        location?.kind === 'web-handle' ? location.handle : null,
+      );
     },
     async saveProjectAs(project, assetBlobs) {
       return saveProjectAs(project, assetBlobs);

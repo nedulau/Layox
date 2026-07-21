@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { v4 as uuidv4 } from 'uuid';
-import type { OpenProjectDialogResult } from '../../infra/ports/fileSystemPort';
+import type { FileSystemPort, OpenProjectDialogResult, SaveOutcome } from '../../infra/ports/fileSystemPort';
 import type { TextElement } from '../../types';
 
 // Mock fileIO and browser APIs before importing the store
@@ -15,8 +15,8 @@ const mockedFileSystemPort = {
   supportsNativePicker: vi.fn(() => true),
   openProjectDialog: vi.fn<() => Promise<OpenProjectDialogResult | null>>(async () => null),
   openProjectFromPath: vi.fn<(filePath: string) => Promise<OpenProjectDialogResult | null>>(async () => null),
-  saveProject: vi.fn(async () => null),
-  saveProjectAs: vi.fn(async () => null),
+  saveProject: vi.fn<FileSystemPort['saveProject']>(async () => ({ status: 'cancelled' })),
+  saveProjectAs: vi.fn<FileSystemPort['saveProjectAs']>(async () => ({ status: 'cancelled' })),
 };
 
 vi.mock('../../infra/fileSystem', () => ({
@@ -51,6 +51,10 @@ describe('useProjectStore', () => {
     // Clear history
     useProjectStore.setState({ historyPast: [], historyFuture: [], recentProjects: [] });
     vi.mocked(mockedFileSystemPort.openProjectFromPath).mockReset();
+    vi.mocked(mockedFileSystemPort.saveProject).mockReset();
+    vi.mocked(mockedFileSystemPort.saveProjectAs).mockReset();
+    vi.mocked(mockedFileSystemPort.saveProject).mockResolvedValue({ status: 'cancelled' });
+    vi.mocked(mockedFileSystemPort.saveProjectAs).mockResolvedValue({ status: 'cancelled' });
     vi.mocked(loadProject).mockReset();
   });
 
@@ -502,8 +506,7 @@ describe('useProjectStore', () => {
       const file = new File(['dummy'], 'opened.layox', { type: 'application/zip' });
       vi.mocked(mockedFileSystemPort.openProjectFromPath).mockResolvedValueOnce({
         file,
-        handle: null,
-        filePath: '/tmp/opened.layox',
+        location: { kind: 'native-path', filePath: '/tmp/opened.layox' },
       });
       vi.mocked(loadProject).mockResolvedValueOnce({
         project: {
@@ -529,6 +532,69 @@ describe('useProjectStore', () => {
       const blob = new Blob(['test'], { type: 'text/plain' });
       getState().addAsset('assets/test.txt', blob);
       expect(getState().assetBlobs['assets/test.txt']).toBe(blob);
+    });
+  });
+
+  describe('dirty state and saving', () => {
+    beforeEach(() => {
+      useProjectStore.setState({ revision: 0, savedRevision: 0, isDirty: false, projectLocation: null });
+    });
+
+    it('marks content changes as dirty but ignores navigation', () => {
+      getState().setCurrentPageIndex(1);
+      expect(getState().revision).toBe(0);
+      expect(getState().isDirty).toBe(false);
+
+      getState().setProjectName('Changed');
+      expect(getState().revision).toBe(1);
+      expect(getState().isDirty).toBe(true);
+    });
+
+    it('records a successful native save location and marks the saved revision clean', async () => {
+      getState().setProjectName('Saved Project');
+      const outcome: SaveOutcome = {
+        status: 'saved',
+        location: { kind: 'native-path', filePath: '/tmp/saved-project.layox' },
+      };
+      vi.mocked(mockedFileSystemPort.saveProject).mockResolvedValueOnce(outcome);
+
+      await getState().saveCurrentProject();
+
+      expect(getState().projectLocation).toEqual(outcome.location);
+      expect(getState().savedRevision).toBe(1);
+      expect(getState().isDirty).toBe(false);
+      expect(getState().isSaving).toBe(false);
+    });
+
+    it('stays dirty when the project changes while a save is running', async () => {
+      getState().setProjectName('Before save');
+      let finishSave: ((outcome: SaveOutcome) => void) | undefined;
+      const pendingSave = new Promise<SaveOutcome>((resolve) => {
+        finishSave = resolve;
+      });
+      vi.mocked(mockedFileSystemPort.saveProject).mockReturnValueOnce(pendingSave);
+
+      const save = getState().saveCurrentProject();
+      getState().setProjectName('Changed during save');
+      finishSave?.({
+        status: 'saved',
+        location: { kind: 'native-path', filePath: '/tmp/project.layox' },
+      });
+      await save;
+
+      expect(getState().savedRevision).toBe(1);
+      expect(getState().revision).toBe(2);
+      expect(getState().isDirty).toBe(true);
+    });
+
+    it('does not mark a cancelled save as clean', async () => {
+      getState().setProjectName('Unsaved');
+      vi.mocked(mockedFileSystemPort.saveProject).mockResolvedValueOnce({ status: 'cancelled' });
+
+      await getState().saveCurrentProject();
+
+      expect(getState().isDirty).toBe(true);
+      expect(getState().savedRevision).toBe(0);
     });
   });
 });

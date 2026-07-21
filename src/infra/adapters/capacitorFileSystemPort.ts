@@ -29,8 +29,7 @@ export function createCapacitorFileSystemPort(): FileSystemPort {
 
       return {
         file: new File([payload.data], payload.name, { type: 'application/zip' }),
-        handle: null,
-        filePath: payload.filePath,
+        location: payload.filePath ? { kind: 'native-path', filePath: payload.filePath } : null,
       };
     },
     async openProjectFromPath(filePath: string) {
@@ -41,38 +40,28 @@ export function createCapacitorFileSystemPort(): FileSystemPort {
 
       return {
         file: new File([payload.data], payload.name, { type: 'application/zip' }),
-        handle: null,
-        filePath: payload.filePath,
+        location: payload.filePath ? { kind: 'native-path', filePath: payload.filePath } : null,
       };
     },
-    async saveProject(project, assetBlobs, existingHandle) {
+    async saveProject(project, assetBlobs, location) {
       const bridge = getCapacitorBridge();
       if (!bridge?.saveProject) {
-        return webFileSystemFallback.saveProject(project, assetBlobs, existingHandle);
+        return webFileSystemFallback.saveProject(project, assetBlobs, location);
       }
 
       const archiveBlob = await createProjectArchiveBlob(project, assetBlobs);
       const payload = {
         name: createSuggestedName(project),
         data: await archiveBlob.arrayBuffer(),
+        targetPath: location?.kind === 'native-path' ? location.filePath : null,
       };
-
-      if (existingHandle && bridge.saveProject) {
-        await bridge.saveProject(payload);
-        return existingHandle;
-      }
-
-      if (bridge.saveProjectAs) {
-        await bridge.saveProjectAs(payload);
-        return null;
-      }
-
-      await bridge.saveProject(payload);
-      return null;
+      const result = await bridge.saveProject(payload);
+      if (!result) return { status: 'cancelled' };
+      return { status: 'saved', location: { kind: 'native-path', filePath: result.filePath } };
     },
     async saveProjectAs(project, assetBlobs) {
       const bridge = getCapacitorBridge();
-      if (!bridge?.saveProjectAs && !bridge?.saveProject) {
+      if (!bridge?.saveProjectAs) {
         return webFileSystemFallback.saveProjectAs(project, assetBlobs);
       }
 
@@ -82,15 +71,9 @@ export function createCapacitorFileSystemPort(): FileSystemPort {
         data: await archiveBlob.arrayBuffer(),
       };
 
-      if (bridge.saveProjectAs) {
-        await bridge.saveProjectAs(payload);
-        return null;
-      }
-
-      const saveWithOverwrite = bridge.saveProject;
-      if (!saveWithOverwrite) return null;
-      await saveWithOverwrite(payload);
-      return null;
+      const result = await bridge.saveProjectAs(payload);
+      if (!result) return { status: 'cancelled' };
+      return { status: 'saved', location: { kind: 'native-path', filePath: result.filePath } };
     },
   };
 }

@@ -645,6 +645,9 @@ function Editor({
   const autoSaveInterval = useProjectStore((s) => s.autoSaveInterval);
   const setAutoSaveEnabled = useProjectStore((s) => s.setAutoSaveEnabled);
   const setAutoSaveInterval = useProjectStore((s) => s.setAutoSaveInterval);
+  const isDirty = useProjectStore((s) => s.isDirty);
+  const isSaving = useProjectStore((s) => s.isSaving);
+  const saveError = useProjectStore((s) => s.saveError);
 
   const hasFileSystemAccess = fileSystemPort.supportsNativePicker();
 
@@ -784,9 +787,9 @@ function Editor({
       if ((e.ctrlKey || e.metaKey) && e.key === 's') {
         e.preventDefault();
         if (e.shiftKey) {
-          useProjectStore.getState().saveCurrentProjectAs();
+          void useProjectStore.getState().saveCurrentProjectAs().catch(() => undefined);
         } else {
-          useProjectStore.getState().saveCurrentProject();
+          void useProjectStore.getState().saveCurrentProject().catch(() => undefined);
         }
         return;
       }
@@ -856,7 +859,7 @@ function Editor({
     if (!autoSaveEnabled || autoSaveInterval <= 0) return;
     const id = setInterval(() => {
       const state = useProjectStore.getState();
-      if (state.fileHandle) {
+      if (state.projectLocation && state.isDirty && !state.isSaving) {
         state.saveCurrentProject()
           .then(() => {
             pushAutoSaveRestorePoint(state.project, state.currentPageIndex);
@@ -869,6 +872,15 @@ function Editor({
     }, autoSaveInterval * 1000);
     return () => clearInterval(id);
   }, [autoSaveEnabled, autoSaveInterval, pushAutoSaveRestorePoint]);
+
+  useEffect(() => {
+    if (!isDirty) return;
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [isDirty]);
 
   // ─── Handlers ─────────────────────────────────────────────────────────
   const handleOpen = async () => {
@@ -1000,8 +1012,7 @@ function Editor({
 
   const handleGoHome = () => {
     closeMenu();
-    const confirmed = window.confirm(t('homeConfirm'));
-    if (confirmed) setShowEditor(false);
+    if (!isDirty || window.confirm(t('homeConfirm'))) setShowEditor(false);
   };
 
   // ─── Export handlers ──────────────────────────────────────────────────
@@ -1118,6 +1129,20 @@ function Editor({
                        outline-none focus:text-white focus:border-blue-500 py-0.5 px-2 hover:border-neutral-500 transition-colors"
             title={t('projectNameEdit')}
           />
+          <span
+            className={`hidden 2xl:inline text-[11px] tabular-nums ${
+              saveError ? 'text-red-300' : isSaving ? 'text-blue-300' : isDirty ? 'text-amber-300' : 'text-emerald-300'
+            }`}
+            title={saveError ?? undefined}
+          >
+            {saveError
+              ? (language === 'de' ? 'Speicherfehler' : 'Save failed')
+              : isSaving
+                ? (language === 'de' ? 'Speichert…' : 'Saving…')
+                : isDirty
+                  ? (language === 'de' ? 'Ungespeichert' : 'Unsaved')
+                  : (language === 'de' ? 'Gespeichert' : 'Saved')}
+          </span>
         </div>
 
         {/* Undo / Redo */}
@@ -1144,8 +1169,8 @@ function Editor({
               <MenuItem label={t('newProject')} shortcut="Ctrl+N" onClick={handleNewProject} />
               <MenuItem label={t('open')} shortcut="Ctrl+O" onClick={handleOpen} />
               <MenuDivider />
-              <MenuItem label={t('save')} shortcut="Ctrl+S" onClick={handleSave} />
-              <MenuItem label={t('saveAs')} shortcut="Ctrl+Shift+S" onClick={handleSaveAs} />
+              <MenuItem label={t('save')} shortcut="Ctrl+S" onClick={handleSave} disabled={isSaving} />
+              <MenuItem label={t('saveAs')} shortcut="Ctrl+Shift+S" onClick={handleSaveAs} disabled={isSaving} />
               <MenuDivider />
               <MenuItem label={t('exportPdf')} onClick={handleExportPdfPrompt} />
               <MenuItem label={t('exportPng')} onClick={handleExportPng} />

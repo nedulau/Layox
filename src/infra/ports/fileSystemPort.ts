@@ -2,9 +2,17 @@ import type { FileSystemFileHandleExt, Project } from '../../types';
 
 export interface OpenProjectDialogResult {
   file: File;
-  handle: FileSystemFileHandleExt | null;
-  filePath?: string;
+  location: ProjectLocation | null;
 }
+
+export type ProjectLocation =
+  | { kind: 'web-handle'; handle: FileSystemFileHandleExt }
+  | { kind: 'native-path'; filePath: string };
+
+export type SaveOutcome =
+  | { status: 'saved'; location: ProjectLocation }
+  | { status: 'downloaded' }
+  | { status: 'cancelled' };
 
 export interface FileSystemPort {
   supportsNativePicker(): boolean;
@@ -13,10 +21,10 @@ export interface FileSystemPort {
   saveProject(
     project: Project,
     assetBlobs: Record<string, Blob>,
-    existingHandle: FileSystemFileHandleExt | null,
-  ): Promise<FileSystemFileHandleExt | null>;
+    location: ProjectLocation | null,
+  ): Promise<SaveOutcome>;
   saveProjectAs(
     project: Project,
     assetBlobs: Record<string, Blob>,
-  ): Promise<FileSystemFileHandleExt | null>;
+  ): Promise<SaveOutcome>;
 }

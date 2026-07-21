@@ -13,6 +13,7 @@ export type ElectronIpcChannel = (typeof ELECTRON_IPC_CHANNELS)[keyof typeof ELE
 export interface SaveProjectIpcPayload {
   name: string;
   data: ArrayBuffer;
+  targetPath?: string | null;
 }
 
 export interface OpenProjectIpcResult {

@@ -3,13 +3,17 @@ export interface ProjectBinaryPayload {
   data: ArrayBuffer;
 }
 
+export interface ProjectSaveBinaryPayload extends ProjectBinaryPayload {
+  targetPath?: string | null;
+}
+
 export interface ProjectOpenPayload extends ProjectBinaryPayload {
   filePath?: string;
 }
 
 export interface ProjectSavePayload {
   name: string;
-  filePath?: string;
+  filePath: string;
 }
 
 export interface PlatformStorageBridge {
@@ -21,16 +25,16 @@ export interface PlatformStorageBridge {
 export interface ElectronBridge {
   openProject?: () => Promise<ProjectOpenPayload | null>;
   openProjectFromPath?: (filePath: string) => Promise<ProjectOpenPayload | null>;
-  saveProject?: (payload: ProjectBinaryPayload) => Promise<ProjectSavePayload | null>;
-  saveProjectAs?: (payload: ProjectBinaryPayload) => Promise<ProjectSavePayload | null>;
+  saveProject?: (payload: ProjectSaveBinaryPayload) => Promise<ProjectSavePayload | null>;
+  saveProjectAs?: (payload: ProjectSaveBinaryPayload) => Promise<ProjectSavePayload | null>;
   storage?: PlatformStorageBridge;
 }
 
 export interface CapacitorBridge {
   openProject?: () => Promise<ProjectOpenPayload | null>;
   openProjectFromPath?: (filePath: string) => Promise<ProjectOpenPayload | null>;
-  saveProject?: (payload: ProjectBinaryPayload) => Promise<ProjectSavePayload | null>;
-  saveProjectAs?: (payload: ProjectBinaryPayload) => Promise<ProjectSavePayload | null>;
+  saveProject?: (payload: ProjectSaveBinaryPayload) => Promise<ProjectSavePayload | null>;
+  saveProjectAs?: (payload: ProjectSaveBinaryPayload) => Promise<ProjectSavePayload | null>;
   storage?: PlatformStorageBridge;
 }
 
