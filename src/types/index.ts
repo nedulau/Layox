@@ -86,8 +86,9 @@ export interface Page {
 
 export interface Project {
   meta: {
+    id: string;
     name: string;
-    version: string;
+    version: '1.1';
     defaultLayoutPadding?: number;
     defaultLayoutGap?: number;
   };

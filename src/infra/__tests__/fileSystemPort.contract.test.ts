@@ -15,10 +15,11 @@ import { createCapacitorFileSystemPort } from '../adapters/capacitorFileSystemPo
 
 const projectFixture: Project = {
   meta: {
+    id: 'contract-project',
     name: 'Contract Project',
-    version: '1.0',
+    version: '1.1',
   },
-  pages: [],
+  pages: [{ id: 'page-1', elements: [], background: '#ffffff' }],
 };
 
 const fileHandleStub: FileSystemFileHandleExt = {

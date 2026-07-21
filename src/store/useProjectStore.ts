@@ -46,8 +46,9 @@ function createDefaultProject(name: string = 'Untitled Project'): Project {
   };
   return {
     meta: {
+      id: uuidv4(),
       name,
-      version: '1.0',
+      version: '1.1',
       defaultLayoutPadding: DEFAULT_LAYOUT_PADDING,
       defaultLayoutGap: DEFAULT_LAYOUT_GAP,
     },

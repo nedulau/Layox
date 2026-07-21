@@ -507,7 +507,7 @@ describe('useProjectStore', () => {
       });
       vi.mocked(loadProject).mockResolvedValueOnce({
         project: {
-          meta: { name: 'Opened Project', version: '1.0' },
+          meta: { id: 'opened-project', name: 'Opened Project', version: '1.1' },
           pages: [
             { id: 'p1', elements: [], background: '#ffffff', isCover: true },
           ],

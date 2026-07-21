@@ -1,21 +1,6 @@
-import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 import type { Project, FileSystemFileHandleExt } from '../types';
-
-/**
- * Builds the ZIP blob for a project.
- */
-async function generateProjectBlob(
-  project: Project,
-  assetBlobs: Record<string, Blob>,
-): Promise<Blob> {
-  const zip = new JSZip();
-  zip.file('project.json', JSON.stringify(project, null, 2));
-  for (const [path, blob] of Object.entries(assetBlobs)) {
-    zip.file(path, blob);
-  }
-  return zip.generateAsync({ type: 'blob' });
-}
+import { createProjectArchiveBlob, loadProjectArchive } from './projectArchive';
 
 /**
  * Writes a blob to an existing FileSystemFileHandle (overwrite in place).
@@ -90,7 +75,7 @@ export async function saveProject(
   assetBlobs: Record<string, Blob>,
   existingHandle: FileSystemFileHandleExt | null,
 ): Promise<FileSystemFileHandleExt | null> {
-  const blob = await generateProjectBlob(project, assetBlobs);
+  const blob = await createProjectArchiveBlob(project, assetBlobs);
 
   // Try to overwrite existing file
   if (existingHandle) {
@@ -123,7 +108,7 @@ export async function saveProjectAs(
   project: Project,
   assetBlobs: Record<string, Blob>,
 ): Promise<FileSystemFileHandleExt | null> {
-  const blob = await generateProjectBlob(project, assetBlobs);
+  const blob = await createProjectArchiveBlob(project, assetBlobs);
   const safeName =
     project.meta.name.replace(/[^\p{L}\p{N}_\- ]/gu, '_') + '.layox';
 
@@ -144,29 +129,5 @@ export async function saveProjectAs(
 export async function loadProject(
   file: File,
 ): Promise<{ project: Project; assetBlobs: Record<string, Blob> }> {
-  const zip = await JSZip.loadAsync(file);
-
-  const projectFile = zip.file('project.json');
-  if (!projectFile) {
-    throw new Error('Invalid .layox file: missing project.json.');
-  }
-
-  const projectJson = await projectFile.async('string');
-  const project = JSON.parse(projectJson) as Project;
-
-  if (!project.meta || !project.pages || !Array.isArray(project.pages)) {
-    throw new Error(
-      'Invalid .layox file: project.json has an invalid format.',
-    );
-  }
-
-  const assetBlobs: Record<string, Blob> = {};
-  const assetFiles = zip.file(/^assets\//);
-
-  for (const entry of assetFiles) {
-    const blob = await entry.async('blob');
-    assetBlobs[entry.name] = blob;
-  }
-
-  return { project, assetBlobs };
+  return loadProjectArchive(file);
 }

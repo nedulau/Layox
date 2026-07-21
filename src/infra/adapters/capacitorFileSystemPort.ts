@@ -1,7 +1,7 @@
-import JSZip from 'jszip';
 import type { Project } from '../../types';
 import { createWebFileSystemPort } from './webFileSystemPort';
 import type { FileSystemPort } from '../ports/fileSystemPort';
+import { createProjectArchiveBlob } from '../../utils/projectArchive';
 
 function getCapacitorBridge() {
   return globalThis.capacitorBridge;
@@ -9,15 +9,6 @@ function getCapacitorBridge() {
 
 function createSuggestedName(project: Project): string {
   return `${project.meta.name.replace(/[^\p{L}\p{N}_\- ]/gu, '_')}.layox`;
-}
-
-async function buildProjectArchiveBlob(project: Project, assetBlobs: Record<string, Blob>): Promise<Blob> {
-  const zip = new JSZip();
-  zip.file('project.json', JSON.stringify(project, null, 2));
-  for (const [path, blob] of Object.entries(assetBlobs)) {
-    zip.file(path, blob);
-  }
-  return zip.generateAsync({ type: 'blob' });
 }
 
 export function createCapacitorFileSystemPort(): FileSystemPort {
@@ -60,7 +51,7 @@ export function createCapacitorFileSystemPort(): FileSystemPort {
         return webFileSystemFallback.saveProject(project, assetBlobs, existingHandle);
       }
 
-      const archiveBlob = await buildProjectArchiveBlob(project, assetBlobs);
+      const archiveBlob = await createProjectArchiveBlob(project, assetBlobs);
       const payload = {
         name: createSuggestedName(project),
         data: await archiveBlob.arrayBuffer(),
@@ -85,7 +76,7 @@ export function createCapacitorFileSystemPort(): FileSystemPort {
         return webFileSystemFallback.saveProjectAs(project, assetBlobs);
       }
 
-      const archiveBlob = await buildProjectArchiveBlob(project, assetBlobs);
+      const archiveBlob = await createProjectArchiveBlob(project, assetBlobs);
       const payload = {
         name: createSuggestedName(project),
         data: await archiveBlob.arrayBuffer(),
