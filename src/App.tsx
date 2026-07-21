@@ -9,23 +9,16 @@ import useProjectStore from './store/useProjectStore';
 import { exportAsPdf, exportCurrentPageAsPng, exportCurrentPageAsJpeg, exportAllPagesAsZip, PDF_COMPRESSION_PRESETS } from './utils/exportProject';
 import type { PdfCompressionLevel } from './utils/exportProject';
 import { tr, type Language } from './i18n';
-import type { Page, Project } from './types';
+import type { Page } from './types';
 import { computeLayoutSlots } from './utils/layouts';
 import { CANVAS_H, CANVAS_W } from './constants/canvas';
-import { readStoredBoolean, readStoredJson, readStoredString, writeStoredString } from './infra/storage';
+import { readStoredBoolean, readStoredString, removeStoredValue, writeStoredString } from './infra/storage';
 import { getFileSystemPort } from './infra/fileSystem';
+import { recoveryRepository, type RecoverySummary } from './utils/recoveryRepository';
+import { v4 as uuidv4 } from 'uuid';
 
 const FONTS = ['Arial', 'Times New Roman', 'Georgia', 'Verdana', 'Courier New', 'Trebuchet MS', 'Impact', 'Comic Sans MS'];
 type UiTheme = 'dark' | 'light';
-type AutoSaveRestorePoint = {
-  id: string;
-  createdAt: number;
-  pageIndex: number;
-  pageCount: number;
-  projectName: string;
-  project: Project;
-};
-
 const fileSystemPort = getFileSystemPort();
 
 function App() {
@@ -539,10 +532,11 @@ function Editor({
   const saveCurrentProjectAs = useProjectStore((s) => s.saveCurrentProjectAs);
   const openProject = useProjectStore((s) => s.openProject);
   const loadFromFile = useProjectStore((s) => s.loadFromFile);
-  const setProject = useProjectStore((s) => s.setProject);
+  const restoreRecoveredProject = useProjectStore((s) => s.restoreRecoveredProject);
   const resetProject = useProjectStore((s) => s.resetProject);
   const setProjectName = useProjectStore((s) => s.setProjectName);
   const projectName = useProjectStore((s) => s.project.meta.name);
+  const projectId = useProjectStore((s) => s.project.meta.id);
   const snapshot = useProjectStore((s) => s.snapshot);
   const undo = useProjectStore((s) => s.undo);
   const redo = useProjectStore((s) => s.redo);
@@ -681,11 +675,9 @@ function Editor({
   const [quickInsertAssetPath, setQuickInsertAssetPath] = useState<string | null>(null);
   const [canvasZoomMode] = useState<'fit' | 'manual'>('fit');
   const [canvasManualZoom] = useState(1);
-  const [autoSaveTimeline, setAutoSaveTimeline] = useState<AutoSaveRestorePoint[]>(() => {
-    const parsed = readStoredJson<AutoSaveRestorePoint[]>('layox_autoSaveTimeline', []);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter((item) => !!item && typeof item.createdAt === 'number' && item.project && typeof item.pageIndex === 'number');
-  });
+  const [recoveryPoints, setRecoveryPoints] = useState<RecoverySummary[]>([]);
+  const [recoveryError, setRecoveryError] = useState<string | null>(null);
+  const autoSaveRunningRef = useRef(false);
   const [pdfDefaultLevel, setPdfDefaultLevel] = useState<PdfCompressionLevel>(() => {
     const saved = readStoredString('layox_pdfDefaultLevel', 'medium');
     if (saved && PDF_COMPRESSION_PRESETS.some((preset) => preset.id === saved)) {
@@ -708,30 +700,46 @@ function Editor({
 
   const quickInsertAssetPaths = useMemo(() => Object.keys(assetBlobs).sort(), [assetBlobs]);
 
+  const refreshRecoveryPoints = useCallback(async () => {
+    try {
+      setRecoveryPoints(await recoveryRepository.list(projectId));
+      setRecoveryError(null);
+    } catch (error) {
+      setRecoveryError(error instanceof Error ? error.message : String(error));
+    }
+  }, [projectId]);
+
   useEffect(() => {
-    writeStoredString('layox_autoSaveTimeline', JSON.stringify(autoSaveTimeline));
-  }, [autoSaveTimeline]);
+    removeStoredValue('layox_autoSaveTimeline');
+    void refreshRecoveryPoints();
+  }, [refreshRecoveryPoints]);
 
-  const pushAutoSaveRestorePoint = useCallback((projectSnapshot: Project, pageIndex: number) => {
-    const clone = JSON.parse(JSON.stringify(projectSnapshot)) as Project;
-    const point: AutoSaveRestorePoint = {
-      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+  const createRecoveryPoint = useCallback(async () => {
+    const state = useProjectStore.getState();
+    const projectCopy = structuredClone(state.project);
+    await recoveryRepository.save({
+      id: uuidv4(),
+      projectId: projectCopy.meta.id,
       createdAt: Date.now(),
-      pageIndex,
-      pageCount: clone.pages.length,
-      projectName: clone.meta.name,
-      project: clone,
-    };
+      pageIndex: state.currentPageIndex,
+      pageCount: projectCopy.pages.length,
+      projectName: projectCopy.meta.name,
+      project: projectCopy,
+    }, state.assetBlobs);
+    await refreshRecoveryPoints();
+  }, [refreshRecoveryPoints]);
 
-    setAutoSaveTimeline((prev) => [point, ...prev].slice(0, 12));
-  }, []);
-
-  const handleRestoreAutoSavePoint = useCallback((point: AutoSaveRestorePoint) => {
-    snapshot();
-    setProject(point.project);
-    setCurrentPageIndex(Math.max(0, Math.min(point.pageIndex, point.project.pages.length - 1)));
-    setOpenMenu(null);
-  }, [setCurrentPageIndex, setProject, snapshot]);
+  const handleRestoreRecoveryPoint = useCallback(async (point: RecoverySummary) => {
+    try {
+      const recovered = await recoveryRepository.restore(point.id);
+      snapshot();
+      restoreRecoveredProject(recovered.project, recovered.assetBlobs, recovered.pageIndex);
+      setRecoveryError(null);
+      setOpenMenu(null);
+    } catch (error) {
+      setRecoveryError(error instanceof Error ? error.message : String(error));
+    }
+  }, [restoreRecoveredProject, snapshot]);
 
   const toggleMenu = useCallback(
     (name: string) => setOpenMenu((prev) => (prev === name ? null : name)),
@@ -859,19 +867,25 @@ function Editor({
     if (!autoSaveEnabled || autoSaveInterval <= 0) return;
     const id = setInterval(() => {
       const state = useProjectStore.getState();
-      if (state.projectLocation && state.isDirty && !state.isSaving) {
-        state.saveCurrentProject()
-          .then(() => {
-            pushAutoSaveRestorePoint(state.project, state.currentPageIndex);
-          })
-          .catch((err) => console.error('Auto-save error:', err));
-        return;
-      }
-
-      pushAutoSaveRestorePoint(state.project, state.currentPageIndex);
+      if (!state.isDirty || state.isSaving || autoSaveRunningRef.current) return;
+      autoSaveRunningRef.current = true;
+      void (async () => {
+        try {
+          await createRecoveryPoint();
+          const latestState = useProjectStore.getState();
+          if (latestState.projectLocation && latestState.isDirty) {
+            await latestState.saveCurrentProject();
+          }
+          setRecoveryError(null);
+        } catch (error) {
+          setRecoveryError(error instanceof Error ? error.message : String(error));
+        } finally {
+          autoSaveRunningRef.current = false;
+        }
+      })();
     }, autoSaveInterval * 1000);
     return () => clearInterval(id);
-  }, [autoSaveEnabled, autoSaveInterval, pushAutoSaveRestorePoint]);
+  }, [autoSaveEnabled, autoSaveInterval, createRecoveryPoint]);
 
   useEffect(() => {
     if (!isDirty) return;
@@ -1460,14 +1474,14 @@ function Editor({
 
                   <div className="mt-2 pt-2 border-t border-neutral-700/70">
                     <div className="text-xs text-neutral-400 mb-1.5">{t('autoSaveHistory')}</div>
-                    {autoSaveTimeline.length === 0 ? (
+                    {recoveryPoints.length === 0 ? (
                       <div className="text-[11px] text-neutral-500">{t('noRestorePoints')}</div>
                     ) : (
                       <div className="max-h-36 overflow-auto space-y-1 pr-1">
-                        {autoSaveTimeline.map((point) => (
+                        {recoveryPoints.map((point) => (
                           <button
                             key={point.id}
-                            onClick={() => handleRestoreAutoSavePoint(point)}
+                            onClick={() => void handleRestoreRecoveryPoint(point)}
                             className="editor-surface-control w-full px-2 py-1.5 rounded-md border border-neutral-700 bg-neutral-800 hover:bg-neutral-700 text-left transition-colors cursor-pointer"
                             title={t('restorePoint')}
                           >
@@ -1476,6 +1490,9 @@ function Editor({
                           </button>
                         ))}
                       </div>
+                    )}
+                    {recoveryError && (
+                      <div className="mt-1.5 text-[10px] text-red-300 break-words">{recoveryError}</div>
                     )}
                   </div>
                 </div>

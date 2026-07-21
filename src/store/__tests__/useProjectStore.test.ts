@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { v4 as uuidv4 } from 'uuid';
 import type { FileSystemPort, OpenProjectDialogResult, SaveOutcome } from '../../infra/ports/fileSystemPort';
-import type { TextElement } from '../../types';
+import type { Project, TextElement } from '../../types';
 
 // Mock fileIO and browser APIs before importing the store
 vi.mock('../../utils/fileIO', () => ({
@@ -595,6 +595,26 @@ describe('useProjectStore', () => {
 
       expect(getState().isDirty).toBe(true);
       expect(getState().savedRevision).toBe(0);
+    });
+
+    it('restores project data, assets and page position as an unsaved project', () => {
+      const recoveredProject: Project = {
+        meta: { id: 'recovered', name: 'Recovered', version: '1.1' },
+        pages: [
+          { id: 'page-1', elements: [], background: '#fff' },
+          { id: 'page-2', elements: [], background: '#000' },
+        ],
+      };
+      const photo = new Blob(['photo']);
+
+      getState().restoreRecoveredProject(recoveredProject, { 'assets/photo.jpg': photo }, 1);
+
+      expect(getState().project.meta).toMatchObject(recoveredProject.meta);
+      expect(getState().project.pages).toEqual(recoveredProject.pages);
+      expect(getState().assetBlobs['assets/photo.jpg']).toBe(photo);
+      expect(getState().currentPageIndex).toBe(1);
+      expect(getState().projectLocation).toBeNull();
+      expect(getState().isDirty).toBe(true);
     });
   });
 });

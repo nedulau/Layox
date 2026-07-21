@@ -117,6 +117,7 @@ interface ProjectState {
   currentPage: () => Page | undefined;
 
   setProject: (project: Project) => void;
+  restoreRecoveredProject: (project: Project, assetBlobs: Record<string, Blob>, pageIndex: number) => void;
   setProjectName: (name: string) => void;
   addAsset: (path: string, blob: Blob) => void;
   resetProject: (name?: string) => void;
@@ -286,6 +287,24 @@ const useProjectStore = create<ProjectState>((baseSet, get) => {
 
   setProject: (project) =>
     set({ project: normalizeProject(project), currentPageIndex: 0, selectedElementId: null, selectedSlotIndex: null }),
+
+  restoreRecoveredProject: (project, assetBlobs, pageIndex) =>
+    set((state) => ({
+      project: normalizeProject(project),
+      assetBlobs,
+      currentPageIndex: Math.max(0, Math.min(pageIndex, project.pages.length - 1)),
+      selectedElementId: null,
+      selectedSlotIndex: null,
+      projectLocation: null,
+      revision: state.revision + 1,
+      savedRevision: state.savedRevision,
+      isDirty: true,
+      isSaving: false,
+      saveError: null,
+      showEditor: true,
+      historyPast: [],
+      historyFuture: [],
+    })),
 
   setProjectName: (name) =>
     set((state) => ({

@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import useProjectStore from '../store/useProjectStore';
 import { getHandle } from '../utils/handleStore';
 import NewProjectModal from './NewProjectModal';
@@ -6,6 +6,7 @@ import { tr, type Language } from '../i18n';
 import { getFileSystemPort } from '../infra/fileSystem';
 import type { RecentProject } from '../store/useProjectStore';
 import type { FileSystemFileHandleExt } from '../types';
+import { recoveryRepository, type RecoverySummary } from '../utils/recoveryRepository';
 
 type PermissionAwareFileHandle = FileSystemFileHandleExt & {
   requestPermission?: (options: { mode: 'readwrite' }) => Promise<PermissionState>;
@@ -23,6 +24,8 @@ type StartScreenProps = {
 function StartScreen({ uiTheme, setUiTheme, language, setLanguage }: StartScreenProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showNewProjectModal, setShowNewProjectModal] = useState(false);
+  const [recoveryPoints, setRecoveryPoints] = useState<RecoverySummary[]>([]);
+  const [recoveryError, setRecoveryError] = useState<string | null>(null);
   const t = (key: string) => tr(language, key);
 
   const resetProject = useProjectStore((s) => s.resetProject);
@@ -30,8 +33,15 @@ function StartScreen({ uiTheme, setUiTheme, language, setLanguage }: StartScreen
   const openRecentProjectByPath = useProjectStore((s) => s.openRecentProjectByPath);
   const loadFromFile = useProjectStore((s) => s.loadFromFile);
   const recentProjects = useProjectStore((s) => s.recentProjects);
+  const restoreRecoveredProject = useProjectStore((s) => s.restoreRecoveredProject);
 
   const hasFileSystemAccess = getFileSystemPort().supportsNativePicker();
+
+  useEffect(() => {
+    recoveryRepository.list()
+      .then((points) => setRecoveryPoints(points.slice(0, 8)))
+      .catch((error) => setRecoveryError(error instanceof Error ? error.message : String(error)));
+  }, []);
 
   const handleNewProject = () => {
     setShowNewProjectModal(true);
@@ -89,13 +99,22 @@ function StartScreen({ uiTheme, setUiTheme, language, setLanguage }: StartScreen
 
   const formatDate = (ts: number) => {
     const d = new Date(ts);
-    return d.toLocaleDateString('de-DE', {
+    return d.toLocaleDateString(language === 'de' ? 'de-DE' : 'en-US', {
       day: '2-digit',
       month: '2-digit',
       year: 'numeric',
       hour: '2-digit',
       minute: '2-digit',
     });
+  };
+
+  const handleRecovery = async (point: RecoverySummary) => {
+    try {
+      const recovered = await recoveryRepository.restore(point.id);
+      restoreRecoveredProject(recovered.project, recovered.assetBlobs, recovered.pageIndex);
+    } catch (error) {
+      setRecoveryError(error instanceof Error ? error.message : String(error));
+    }
   };
 
   return (
@@ -147,6 +166,40 @@ function StartScreen({ uiTheme, setUiTheme, language, setLanguage }: StartScreen
             {t('openProject')}
           </button>
         </div>
+
+        {recoveryPoints.length > 0 && (
+          <div className="w-full">
+            <h2 className="text-sm start-recent-title font-medium mb-2 uppercase tracking-wider">
+              {language === 'de' ? 'Wiederherstellung' : 'Recovery'}
+            </h2>
+            <div className="flex flex-col gap-1">
+              {recoveryPoints.map((point) => (
+                <button
+                  key={point.id}
+                  type="button"
+                  onClick={() => void handleRecovery(point)}
+                  className="w-full flex items-center justify-between px-4 py-2.5 rounded-lg text-left
+                             start-recent-item bg-neutral-800/60 hover:bg-neutral-700/80 transition-colors
+                             cursor-pointer select-none"
+                >
+                  <span className="flex flex-col min-w-0">
+                    <span className="start-recent-name text-sm font-medium truncate">{point.projectName}</span>
+                    <span className="text-neutral-500 text-xs">
+                      {point.pageCount} {t('pages')} · {language === 'de' ? 'Wiederherstellen' : 'Restore'}
+                    </span>
+                  </span>
+                  <span className="text-neutral-600 text-xs shrink-0 ml-4">{formatDate(point.createdAt)}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {recoveryError && (
+          <div className="w-full rounded-lg border border-red-800 bg-red-950/40 px-3 py-2 text-xs text-red-200">
+            {recoveryError}
+          </div>
+        )}
 
         {/* Recent projects */}
         {recentProjects.length > 0 && (
