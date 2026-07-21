@@ -335,6 +335,39 @@ describe('useProjectStore', () => {
       getState().setCoverSubtitle('2024');
       expect(getState().project.pages[0].coverSubtitle).toBe('2024');
     });
+
+    it('updates cover styles, positions, visibility and chapter metadata', () => {
+      getState().setCurrentPageIndex(0);
+      getState().setCoverSubtitleVisible(true);
+      getState().setCoverTitleStyle({ fontSize: -2, fontFamily: 'Georgia', color: '#123456' });
+      getState().setCoverSubtitleStyle({ fontSize: 30, fontFamily: 'Verdana', color: '#abcdef' });
+      getState().setCoverTitlePosition(11, 22);
+      getState().setCoverSubtitlePosition(33, 44);
+      getState().setCurrentPageChapterTitle('  Chapter  ');
+      getState().setCurrentPageSubchapterTitle('  Subchapter  ');
+
+      expect(getState().project.pages[0]).toMatchObject({
+        showCoverSubtitle: true,
+        coverTitleFontSize: 1,
+        coverTitleFontFamily: 'Georgia',
+        coverTitleColor: '#123456',
+        coverSubtitleFontSize: 30,
+        coverSubtitleFontFamily: 'Verdana',
+        coverSubtitleColor: '#abcdef',
+        coverTitleX: 11,
+        coverTitleY: 22,
+        coverSubtitleX: 33,
+        coverSubtitleY: 44,
+        chapterTitle: 'Chapter',
+        subchapterTitle: 'Subchapter',
+      });
+
+      getState().setCurrentPageChapterTitle('  ');
+      getState().setCurrentPageSubchapterTitle('');
+      getState().setCoverTitle('');
+      expect(getState().project.pages[0].chapterTitle).toBeUndefined();
+      expect(getState().project.pages[0].subchapterTitle).toBeUndefined();
+    });
   });
 
   describe('layout', () => {
@@ -387,6 +420,29 @@ describe('useProjectStore', () => {
       expect(updatedPage.slotAssignments).toBeUndefined();
       expect(updatedPage.elements.filter((e) => e.type === 'image')).toHaveLength(1);
     });
+
+    it('ignores unknown layouts and clearing a free page', () => {
+      getState().setCurrentPageIndex(1);
+      const before = getState().project;
+      getState().applyLayout('unknown');
+      getState().clearLayout();
+      expect(getState().project).toBe(before);
+    });
+
+    it('preserves assignments when switching between layouts', () => {
+      getState().setCurrentPageIndex(1);
+      getState().applyLayout('single');
+      const pages = [...getState().project.pages];
+      pages[1] = {
+        ...pages[1],
+        slotAssignments: { 0: { assetPath: 'assets/photo.jpg', offsetX: 0, offsetY: 0, scale: 1 } },
+      };
+      useProjectStore.setState({ project: { ...getState().project, pages } });
+
+      getState().applyLayout('two-side');
+
+      expect(getState().project.pages[1].slotAssignments?.[0].assetPath).toBe('assets/photo.jpg');
+    });
   });
 
   describe('layout padding & gap', () => {
@@ -400,6 +456,16 @@ describe('useProjectStore', () => {
       getState().setCurrentPageIndex(1);
       getState().setLayoutGap(15);
       expect(getState().project.pages[1].layoutGap).toBe(15);
+    });
+
+    it('updates and applies project layout defaults', () => {
+      getState().setDefaultLayoutPadding(32);
+      getState().setDefaultLayoutGap(14);
+      getState().applyLayoutDefaultsToAllPages();
+
+      expect(getState().project.meta.defaultLayoutPadding).toBe(32);
+      expect(getState().project.meta.defaultLayoutGap).toBe(14);
+      expect(getState().project.pages.every((page) => page.layoutPadding === 32 && page.layoutGap === 14)).toBe(true);
     });
   });
 
@@ -450,6 +516,15 @@ describe('useProjectStore', () => {
       expect(assignment.cropY).toBeUndefined();
       expect(assignment.cropW).toBeUndefined();
       expect(assignment.cropH).toBeUndefined();
+    });
+
+    it('ignores updates for a missing slot assignment', () => {
+      const before = getState().project;
+      getState().updateSlotOffset(9, 1, 2);
+      getState().updateSlotScale(9, 2);
+      getState().updateSlotCrop(9, 0, 0, 10, 10);
+      getState().clearSlotCrop(9);
+      expect(getState().project).toBe(before);
     });
   });
 
@@ -533,6 +608,51 @@ describe('useProjectStore', () => {
       getState().addAsset('assets/test.txt', blob);
       expect(getState().assetBlobs['assets/test.txt']).toBe(blob);
     });
+
+    it('adds an existing asset to a selected layout slot', async () => {
+      getState().setCurrentPageIndex(1);
+      getState().applyLayout('two-side');
+      getState().addAsset('assets/photo.jpg', new Blob(['photo']));
+      getState().setSelectedSlotIndex(1);
+
+      await getState().addImageFromAsset('assets/photo.jpg');
+
+      expect(getState().project.pages[1].slotAssignments?.[1].assetPath).toBe('assets/photo.jpg');
+      expect(getState().selectedSlotIndex).toBeNull();
+    });
+
+    it('uses the next empty slot and ignores missing or full layout assets', async () => {
+      getState().setCurrentPageIndex(1);
+      getState().applyLayout('single');
+      getState().addAsset('assets/photo.jpg', new Blob(['photo']));
+      await getState().addImageFromAsset('assets/missing.jpg');
+      await getState().addImageFromAsset('assets/photo.jpg');
+      const assignment = getState().project.pages[1].slotAssignments?.[0];
+      await getState().addImageFromAsset('assets/photo.jpg');
+      expect(getState().project.pages[1].slotAssignments?.[0]).toEqual(assignment);
+    });
+
+    it('adds and scales an existing asset in free mode', async () => {
+      class LoadedImage {
+        naturalWidth = 2400;
+        naturalHeight = 1800;
+        onload: (() => void) | null = null;
+        set src(_value: string) { queueMicrotask(() => this.onload?.()); }
+      }
+      vi.stubGlobal('Image', LoadedImage);
+      vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:photo');
+      vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
+      getState().setCurrentPageIndex(1);
+      getState().addAsset('assets/photo.jpg', new Blob(['photo']));
+
+      await getState().addImageFromAsset('assets/photo.jpg');
+
+      expect(getState().project.pages[1].elements.at(-1)).toMatchObject({
+        type: 'image',
+        width: 900,
+        height: 675,
+      });
+    });
   });
 
   describe('dirty state and saving', () => {
@@ -595,6 +715,45 @@ describe('useProjectStore', () => {
 
       expect(getState().isDirty).toBe(true);
       expect(getState().savedRevision).toBe(0);
+    });
+
+    it('uses Save As and records a web handle', async () => {
+      const handle = {
+        kind: 'file' as const,
+        name: 'web-project.layox',
+        getFile: async () => new File([], 'web-project.layox'),
+        createWritable: vi.fn(),
+      };
+      vi.mocked(mockedFileSystemPort.saveProjectAs).mockResolvedValueOnce({
+        status: 'saved',
+        location: { kind: 'web-handle', handle },
+      });
+
+      await getState().saveCurrentProjectAs();
+
+      expect(mockedFileSystemPort.saveProjectAs).toHaveBeenCalledOnce();
+      expect(getState().projectLocation).toEqual({ kind: 'web-handle', handle });
+    });
+
+    it('stores save errors without marking the project clean', async () => {
+      getState().setProjectName('Fails');
+      vi.mocked(mockedFileSystemPort.saveProject).mockRejectedValueOnce(new Error('disk full'));
+
+      await expect(getState().saveCurrentProject()).rejects.toThrow('disk full');
+
+      expect(getState().saveError).toBe('disk full');
+      expect(getState().isDirty).toBe(true);
+      expect(getState().isSaving).toBe(false);
+    });
+
+    it('handles browser downloads as successful saves without a location', async () => {
+      getState().setProjectName('Download');
+      vi.mocked(mockedFileSystemPort.saveProject).mockResolvedValueOnce({ status: 'downloaded' });
+
+      await getState().saveCurrentProject();
+
+      expect(getState().isDirty).toBe(false);
+      expect(getState().projectLocation).toBeNull();
     });
 
     it('restores project data, assets and page position as an unsaved project', () => {

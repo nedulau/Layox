@@ -8,80 +8,29 @@ import { CANVAS_H, CANVAS_IMAGE_MAX_H, CANVAS_IMAGE_MAX_W, CANVAS_W } from '../c
 import { readStoredBoolean, readStoredJson, readStoredNumber, writeStoredString } from '../infra/storage';
 import { getFileSystemPort } from '../infra/fileSystem';
 import type { ProjectLocation, SaveOutcome } from '../infra/ports/fileSystemPort';
-
-const DEFAULT_LAYOUT_PADDING = 20;
-const DEFAULT_LAYOUT_GAP = 20;
-const DEFAULT_COVER_TITLE_FONT_SIZE = 48;
-const DEFAULT_COVER_SUBTITLE_FONT_SIZE = 24;
-const DEFAULT_COVER_TITLE_FONT_FAMILY = 'Arial';
-const DEFAULT_COVER_SUBTITLE_FONT_FAMILY = 'Arial';
-const DEFAULT_COVER_TITLE_COLOR = '#ffffff';
-const DEFAULT_COVER_SUBTITLE_COLOR = '#ffffffcc';
+import {
+  createCoverPage,
+  createDefaultProject,
+  createEmptyPage,
+  DEFAULT_LAYOUT_GAP,
+  DEFAULT_LAYOUT_PADDING,
+  DEFAULT_TEXT_COLOR,
+  DEFAULT_TEXT_FONT_FAMILY,
+  DEFAULT_TEXT_FONT_SIZE,
+  normalizeProject,
+} from '../domain/projectDefaults';
+import {
+  addElementAt,
+  appendPage,
+  movePageAt,
+  pruneUnusedAssetBlobs,
+  removeElementAt,
+  removePageAt,
+  renameProject,
+  updateElementAt,
+} from '../domain/projectOperations';
+import { createSaveCoordinator } from '../services/saveCoordinator';
 const fileSystemPort = getFileSystemPort();
-
-function createEmptyPage(): Page {
-  return {
-    id: uuidv4(),
-    elements: [],
-    background: '#ffffff',
-  };
-}
-
-function createDefaultProject(name: string = 'Untitled Project'): Project {
-  const coverPage: Page = {
-    id: uuidv4(),
-    elements: [],
-    background: '#ffffff',
-    isCover: true,
-    coverTitle: name,
-    chapterTitle: name,
-    coverSubtitle: '',
-    showCoverSubtitle: false,
-    coverTitleFontSize: DEFAULT_COVER_TITLE_FONT_SIZE,
-    coverTitleFontFamily: DEFAULT_COVER_TITLE_FONT_FAMILY,
-    coverTitleColor: DEFAULT_COVER_TITLE_COLOR,
-    coverSubtitleFontSize: DEFAULT_COVER_SUBTITLE_FONT_SIZE,
-    coverSubtitleFontFamily: DEFAULT_COVER_SUBTITLE_FONT_FAMILY,
-    coverSubtitleColor: DEFAULT_COVER_SUBTITLE_COLOR,
-    layoutId: 'cover-full',
-  };
-  return {
-    meta: {
-      id: uuidv4(),
-      name,
-      version: '1.1',
-      defaultLayoutPadding: DEFAULT_LAYOUT_PADDING,
-      defaultLayoutGap: DEFAULT_LAYOUT_GAP,
-    },
-    pages: [coverPage, createEmptyPage()],
-  };
-}
-
-function normalizeProject(project: Project): Project {
-  return {
-    ...project,
-    pages: project.pages.map((page) => {
-      if (!page.isCover) return page;
-      const normalizedCoverTitle = page.coverTitle ?? '';
-      return {
-        ...page,
-        chapterTitle: page.chapterTitle ?? normalizedCoverTitle,
-        showCoverSubtitle: page.showCoverSubtitle ?? false,
-        coverTitleFontSize: page.coverTitleFontSize ?? DEFAULT_COVER_TITLE_FONT_SIZE,
-        coverTitleFontFamily: page.coverTitleFontFamily ?? DEFAULT_COVER_TITLE_FONT_FAMILY,
-        coverTitleColor: page.coverTitleColor ?? DEFAULT_COVER_TITLE_COLOR,
-        coverSubtitleFontSize: page.coverSubtitleFontSize ?? DEFAULT_COVER_SUBTITLE_FONT_SIZE,
-        coverSubtitleFontFamily: page.coverSubtitleFontFamily ?? DEFAULT_COVER_SUBTITLE_FONT_FAMILY,
-        coverSubtitleColor: page.coverSubtitleColor ?? DEFAULT_COVER_SUBTITLE_COLOR,
-      };
-    }),
-    meta: {
-      ...project.meta,
-      defaultLayoutPadding: project.meta.defaultLayoutPadding ?? DEFAULT_LAYOUT_PADDING,
-      defaultLayoutGap: project.meta.defaultLayoutGap ?? DEFAULT_LAYOUT_GAP,
-    },
-  };
-}
 
 interface RecentProject {
   name: string;
@@ -206,60 +155,14 @@ const useProjectStore = create<ProjectState>((baseSet, get) => {
     });
   };
 
-  let activeSave: Promise<SaveOutcome> | null = null;
-
-  const runSave = (saveAs: boolean): Promise<SaveOutcome> => {
-    if (activeSave) return activeSave;
-
-    const task = (async () => {
-      const stateAtStart = get();
-      const revisionAtStart = stateAtStart.revision;
-      set({ isSaving: true, saveError: null });
-      try {
-        const outcome = saveAs
-          ? await fileSystemPort.saveProjectAs(stateAtStart.project, stateAtStart.assetBlobs)
-          : await fileSystemPort.saveProject(
-              stateAtStart.project,
-              stateAtStart.assetBlobs,
-              stateAtStart.projectLocation,
-            );
-
-        if (outcome.status === 'saved' || outcome.status === 'downloaded') {
-          const currentRevision = get().revision;
-          const nextLocation = outcome.status === 'saved' ? outcome.location : null;
-          set({
-            projectLocation: nextLocation,
-            savedRevision: revisionAtStart,
-            isDirty: currentRevision !== revisionAtStart,
-            isSaving: false,
-            saveError: null,
-          });
-
-          if (outcome.status === 'saved') {
-            const fileName = outcome.location.kind === 'web-handle'
-              ? outcome.location.handle.name
-              : outcome.location.filePath.split(/[\\/]/).pop() || `${stateAtStart.project.meta.name}.layox`;
-            const filePath = outcome.location.kind === 'native-path' ? outcome.location.filePath : undefined;
-            get().addRecentProject(stateAtStart.project.meta.name, fileName, filePath);
-          }
-        } else {
-          set({ isSaving: false });
-        }
-        return outcome;
-      } catch (error) {
-        set({
-          isSaving: false,
-          saveError: error instanceof Error ? error.message : String(error),
-        });
-        throw error;
-      } finally {
-        activeSave = null;
-      }
-    })();
-
-    activeSave = task;
-    return task;
-  };
+  const runSave = createSaveCoordinator({
+    fileSystemPort,
+    getState: get,
+    updateSaveState: (patch) => set(patch),
+    onSavedProject: ({ projectName, fileName, filePath }) => {
+      get().addRecentProject(projectName, fileName, filePath);
+    },
+  });
 
   return ({
   project: createDefaultProject(),
@@ -307,12 +210,7 @@ const useProjectStore = create<ProjectState>((baseSet, get) => {
     })),
 
   setProjectName: (name) =>
-    set((state) => ({
-      project: {
-        ...state.project,
-        meta: { ...state.project.meta, name },
-      },
-    })),
+    set((state) => ({ project: renameProject(state.project, name) })),
 
   addAsset: (path, blob) =>
     set((state) => ({
@@ -443,10 +341,10 @@ const useProjectStore = create<ProjectState>((baseSet, get) => {
   addPage: () =>
     set((state) => {
       const newPage = createEmptyPage();
-      const newPages = [...state.project.pages, newPage];
+      const project = appendPage(state.project, newPage);
       return {
-        project: { ...state.project, pages: newPages },
-        currentPageIndex: newPages.length - 1,
+        project,
+        currentPageIndex: project.pages.length - 1,
         selectedElementId: null,
         selectedSlotIndex: null,
       };
@@ -454,11 +352,11 @@ const useProjectStore = create<ProjectState>((baseSet, get) => {
 
   removePage: (index) =>
     set((state) => {
-      if (state.project.pages.length <= 1) return state;
-      const newPages = state.project.pages.filter((_, i) => i !== index);
-      const newIndex = Math.min(state.currentPageIndex, newPages.length - 1);
+      const project = removePageAt(state.project, index);
+      if (project === state.project) return state;
+      const newIndex = Math.min(state.currentPageIndex, project.pages.length - 1);
       return {
-        project: { ...state.project, pages: newPages },
+        project,
         currentPageIndex: newIndex,
         selectedElementId: null,
         selectedSlotIndex: null,
@@ -467,32 +365,12 @@ const useProjectStore = create<ProjectState>((baseSet, get) => {
 
   movePage: (fromIndex, toIndex) =>
     set((state) => {
-      const pages = [...state.project.pages];
-      if (
-        fromIndex < 0 ||
-        toIndex < 0 ||
-        fromIndex >= pages.length ||
-        toIndex >= pages.length ||
-        fromIndex === toIndex
-      ) {
-        return state;
-      }
-
-      const [moved] = pages.splice(fromIndex, 1);
-      pages.splice(toIndex, 0, moved);
-
-      let nextCurrentPageIndex = state.currentPageIndex;
-      if (state.currentPageIndex === fromIndex) {
-        nextCurrentPageIndex = toIndex;
-      } else if (fromIndex < state.currentPageIndex && toIndex >= state.currentPageIndex) {
-        nextCurrentPageIndex -= 1;
-      } else if (fromIndex > state.currentPageIndex && toIndex <= state.currentPageIndex) {
-        nextCurrentPageIndex += 1;
-      }
+      const moved = movePageAt(state.project, fromIndex, toIndex, state.currentPageIndex);
+      if (moved.project === state.project) return state;
 
       return {
-        project: { ...state.project, pages },
-        currentPageIndex: nextCurrentPageIndex,
+        project: moved.project,
+        currentPageIndex: moved.currentPageIndex,
         selectedElementId: null,
         selectedSlotIndex: null,
       };
@@ -501,40 +379,21 @@ const useProjectStore = create<ProjectState>((baseSet, get) => {
   // --- Element CRUD ---
 
   addElement: (element) =>
-    set((state) => {
-      const pages = [...state.project.pages];
-      const page = { ...pages[state.currentPageIndex] };
-      page.elements = [...page.elements, element];
-      pages[state.currentPageIndex] = page;
-      return {
-        project: { ...state.project, pages },
-        selectedElementId: element.id,
-      };
-    }),
+    set((state) => ({
+      project: addElementAt(state.project, state.currentPageIndex, element),
+      selectedElementId: element.id,
+    })),
 
   updateElement: (elementId, changes) =>
-    set((state) => {
-      const pages = [...state.project.pages];
-      const page = { ...pages[state.currentPageIndex] };
-      page.elements = page.elements.map((el) =>
-        el.id === elementId ? ({ ...el, ...changes } as PageElement) : el,
-      );
-      pages[state.currentPageIndex] = page;
-      return { project: { ...state.project, pages } };
-    }),
+    set((state) => ({
+      project: updateElementAt(state.project, state.currentPageIndex, elementId, changes),
+    })),
 
   removeElement: (elementId) =>
-    set((state) => {
-      const pages = [...state.project.pages];
-      const page = { ...pages[state.currentPageIndex] };
-      page.elements = page.elements.filter((el) => el.id !== elementId);
-      pages[state.currentPageIndex] = page;
-      return {
-        project: { ...state.project, pages },
-        selectedElementId:
-          state.selectedElementId === elementId ? null : state.selectedElementId,
-      };
-    }),
+    set((state) => ({
+      project: removeElementAt(state.project, state.currentPageIndex, elementId),
+      selectedElementId: state.selectedElementId === elementId ? null : state.selectedElementId,
+    })),
 
   setSelectedElementId: (id) => set({ selectedElementId: id, selectedSlotIndex: null }),
 
@@ -791,23 +650,7 @@ const useProjectStore = create<ProjectState>((baseSet, get) => {
 
   addCoverPage: () =>
     set((state) => {
-      const coverPage: Page = {
-        id: uuidv4(),
-        elements: [],
-        background: '#ffffff',
-        isCover: true,
-        coverTitle: state.project.meta.name,
-        chapterTitle: state.project.meta.name,
-        coverSubtitle: '',
-        showCoverSubtitle: false,
-        coverTitleFontSize: DEFAULT_COVER_TITLE_FONT_SIZE,
-        coverTitleFontFamily: DEFAULT_COVER_TITLE_FONT_FAMILY,
-        coverTitleColor: DEFAULT_COVER_TITLE_COLOR,
-        coverSubtitleFontSize: DEFAULT_COVER_SUBTITLE_FONT_SIZE,
-        coverSubtitleFontFamily: DEFAULT_COVER_SUBTITLE_FONT_FAMILY,
-        coverSubtitleColor: DEFAULT_COVER_SUBTITLE_COLOR,
-        layoutId: 'cover-full',
-      };
+      const coverPage = createCoverPage(state.project.meta.name);
       const newPages = [coverPage, ...state.project.pages];
       return {
         project: { ...state.project, pages: newPages },
@@ -862,7 +705,7 @@ const useProjectStore = create<ProjectState>((baseSet, get) => {
       const page = { ...pages[state.currentPageIndex] };
       if (!page.layoutId) return state;
 
-      const padding = page.layoutPadding ?? 20;
+      const padding = page.layoutPadding ?? DEFAULT_LAYOUT_PADDING;
       const gap = page.layoutGap ?? DEFAULT_LAYOUT_GAP;
       const slots = computeLayoutSlots(page.layoutId, padding, gap);
 
@@ -1052,25 +895,9 @@ const useProjectStore = create<ProjectState>((baseSet, get) => {
   },
 
   pruneUnusedAssets: () =>
-    set((state) => {
-      const usedAssetPaths = new Set<string>();
-
-      state.project.pages.forEach((page) => {
-        Object.values(page.slotAssignments ?? {}).forEach((assignment) => {
-          if (assignment?.assetPath) usedAssetPaths.add(assignment.assetPath);
-        });
-
-        page.elements.forEach((element) => {
-          if (element.type === 'image') usedAssetPaths.add(element.src);
-        });
-      });
-
-      const nextAssetBlobs = Object.fromEntries(
-        Object.entries(state.assetBlobs).filter(([path]) => usedAssetPaths.has(path)),
-      );
-
-      return { assetBlobs: nextAssetBlobs };
-    }),
+    set((state) => ({
+      assetBlobs: pruneUnusedAssetBlobs(state.project, state.assetBlobs),
+    })),
 
   addTextElement: () => {
     const element: TextElement = {
@@ -1081,9 +908,9 @@ const useProjectStore = create<ProjectState>((baseSet, get) => {
       rotation: 0,
       zIndex: get().currentPage()?.elements.length ?? 0,
       content: 'Edit text',
-      fontSize: 24,
-      fontFamily: 'Arial',
-      color: '#000000',
+      fontSize: DEFAULT_TEXT_FONT_SIZE,
+      fontFamily: DEFAULT_TEXT_FONT_FAMILY,
+      color: DEFAULT_TEXT_COLOR,
     };
     get().addElement(element);
   },

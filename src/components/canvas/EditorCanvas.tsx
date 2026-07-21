@@ -5,99 +5,23 @@ import useProjectStore from '../../store/useProjectStore';
 import type { ImageElement, TextElement, PageElement, LayoutSlot, SlotAssignment } from '../../types';
 import { computeLayoutSlots } from '../../utils/layouts';
 import { CANVAS_H, CANVAS_W } from '../../constants/canvas';
-
-type CachedImageEntry = {
-  blob: Blob;
-  image: HTMLImageElement;
-  promise?: Promise<HTMLImageElement>;
-};
-
-const cachedImages = new Map<string, CachedImageEntry>();
-
-function loadCachedBlobImage(path: string, blob: Blob): Promise<HTMLImageElement> {
-  const existing = cachedImages.get(path);
-
-  if (existing && existing.blob === blob) {
-    if (existing.image.complete && existing.image.naturalWidth > 0) {
-      return Promise.resolve(existing.image);
-    }
-    if (existing.promise) {
-      return existing.promise;
-    }
-  }
-
-  const image = new window.Image();
-  const url = URL.createObjectURL(blob);
-
-  const promise = new Promise<HTMLImageElement>((resolve, reject) => {
-    image.onload = () => {
-      URL.revokeObjectURL(url);
-      cachedImages.set(path, { blob, image });
-      resolve(image);
-    };
-    image.onerror = () => {
-      URL.revokeObjectURL(url);
-      cachedImages.delete(path);
-      reject(new Error(`Failed to load image for path: ${path}`));
-    };
-  });
-
-  cachedImages.set(path, { blob, image, promise });
-  image.src = url;
-  return promise;
-}
-
-function useCachedBlobImage(
-  assetPath: string | undefined,
-  assetBlobs: Record<string, Blob>,
-): HTMLImageElement | null {
-  const [loaded, setLoaded] = useState<{
-    path: string;
-    blob: Blob;
-    image: HTMLImageElement;
-  } | null>(null);
-
-  useEffect(() => {
-    if (!assetPath) return;
-
-    const blob = assetBlobs[assetPath];
-    if (!blob) return;
-
-    let cancelled = false;
-    loadCachedBlobImage(assetPath, blob)
-      .then((loadedImage) => {
-        if (!cancelled) setLoaded({ path: assetPath, blob, image: loadedImage });
-      })
-      .catch(() => {
-        // The derived return value remains null and the caller renders a placeholder.
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [assetPath, assetBlobs]);
-
-  if (!assetPath) return null;
-  const blob = assetBlobs[assetPath];
-  return loaded?.path === assetPath && loaded.blob === blob ? loaded.image : null;
-}
-
-function collectImagePathsFromPage(elementPage: {
-  elements: PageElement[];
-  slotAssignments?: Record<number, SlotAssignment>;
-}): string[] {
-  const paths = new Set<string>();
-
-  Object.values(elementPage.slotAssignments ?? {}).forEach((assignment) => {
-    if (assignment?.assetPath) paths.add(assignment.assetPath);
-  });
-
-  elementPage.elements.forEach((element) => {
-    if (element.type === 'image') paths.add(element.src);
-  });
-
-  return [...paths];
-}
+import {
+  DEFAULT_COVER_SUBTITLE_COLOR,
+  DEFAULT_COVER_SUBTITLE_FONT_FAMILY,
+  DEFAULT_COVER_SUBTITLE_FONT_SIZE,
+  DEFAULT_COVER_TITLE_COLOR,
+  DEFAULT_COVER_TITLE_FONT_FAMILY,
+  DEFAULT_COVER_TITLE_FONT_SIZE,
+  DEFAULT_LAYOUT_GAP,
+  DEFAULT_LAYOUT_PADDING,
+  DEFAULT_PAGE_BACKGROUND,
+} from '../../domain/projectDefaults';
+import {
+  bindImageCacheToProject,
+  collectImagePathsFromPage,
+  loadCachedBlobImage,
+  useCachedBlobImage,
+} from './useAssetImage';
 
 // ─── Layout slot (for layout mode) ──────────────────────────────────────────
 
@@ -106,6 +30,7 @@ function SlotComponent({
   slotIndex,
   assignment,
   assetBlobs,
+  projectId,
   isSelected,
   onSelect,
   onOffsetChange,
@@ -114,12 +39,14 @@ function SlotComponent({
   onEmptySlotDblClick,
   onRequestDelete,
   imageLabelPrefix,
+  deleteImageLabel,
   lowResolutionHintText,
 }: {
   slot: LayoutSlot;
   slotIndex: number;
   assignment?: SlotAssignment;
   assetBlobs: Record<string, Blob>;
+  projectId: string;
   isSelected: boolean;
   onSelect: () => void;
   onOffsetChange: (slotIndex: number, offsetX: number, offsetY: number) => void;
@@ -128,9 +55,10 @@ function SlotComponent({
   onEmptySlotDblClick: (slotIndex: number) => void;
   onRequestDelete: (slotIndex: number) => void;
   imageLabelPrefix: string;
+  deleteImageLabel: string;
   lowResolutionHintText: (qualityPercent: number) => string;
 }) {
-  const image = useCachedBlobImage(assignment?.assetPath, assetBlobs);
+  const image = useCachedBlobImage(projectId, assignment?.assetPath, assetBlobs);
   const naturalSize = useMemo(
     () => (image ? { w: image.naturalWidth, h: image.naturalHeight } : null),
     [image],
@@ -386,7 +314,7 @@ function SlotComponent({
             x={slot.x + slot.width - 116}
             y={slot.y + 15}
             width={108}
-            text="Bild loeschen"
+            text={deleteImageLabel}
             fontSize={12}
             fill="#fecaca"
             align="center"
@@ -483,17 +411,19 @@ function SlotComponent({
 function ImageElementComponent({
   element,
   assetBlobs,
+  projectId,
   isSelected,
   onSelect,
   onChange,
 }: {
   element: ImageElement;
   assetBlobs: Record<string, Blob>;
+  projectId: string;
   isSelected: boolean;
   onSelect: () => void;
   onChange: (changes: Partial<ImageElement>) => void;
 }) {
-  const image = useCachedBlobImage(element.src, assetBlobs);
+  const image = useCachedBlobImage(projectId, element.src, assetBlobs);
   const shapeRef = useRef<Konva.Image>(null);
   const trRef = useRef<Konva.Transformer>(null);
 
@@ -660,6 +590,7 @@ function TextElementComponent({
 function ElementRenderer({
   element,
   assetBlobs,
+  projectId,
   isSelected,
   onSelect,
   onChange,
@@ -669,6 +600,7 @@ function ElementRenderer({
 }: {
   element: PageElement;
   assetBlobs: Record<string, Blob>;
+  projectId: string;
   isSelected: boolean;
   onSelect: () => void;
   onChange: (changes: Partial<PageElement>) => void;
@@ -682,6 +614,7 @@ function ElementRenderer({
         <ImageElementComponent
           element={element}
           assetBlobs={assetBlobs}
+          projectId={projectId}
           isSelected={isSelected}
           onSelect={onSelect}
           onChange={onChange}
@@ -713,6 +646,7 @@ function EditorCanvas({
   onRequestSlotDelete,
   dropImagesLabel = 'Drop image(s) here',
   imageLabelPrefix = 'Image',
+  deleteImageLabel = 'Delete image',
   editTextPlaceholder = 'Edit text',
   coverTitleFallback = 'Title',
   coverSubtitleFallback = 'Subtitle',
@@ -725,12 +659,14 @@ function EditorCanvas({
   onRequestSlotDelete?: (slotIndex: number) => void;
   dropImagesLabel?: string;
   imageLabelPrefix?: string;
+  deleteImageLabel?: string;
   editTextPlaceholder?: string;
   coverTitleFallback?: string;
   coverSubtitleFallback?: string;
   lowResolutionHintText?: (qualityPercent: number) => string;
 }) {
   const currentPageIndex = useProjectStore((s) => s.currentPageIndex);
+  const projectId = useProjectStore((s) => s.project.meta.id);
   const pages = useProjectStore((s) => s.project.pages);
   const currentPage = useProjectStore((s) => s.project.pages[s.currentPageIndex]);
   const assetBlobs = useProjectStore((s) => s.assetBlobs);
@@ -748,8 +684,8 @@ function EditorCanvas({
   const setCoverSubtitlePosition = useProjectStore((s) => s.setCoverSubtitlePosition);
   const updateSlotCrop = useProjectStore((s) => s.updateSlotCrop);
   const snapshot = useProjectStore((s) => s.snapshot);
-  const defaultLayoutPadding = useProjectStore((s) => s.project.meta.defaultLayoutPadding ?? 20);
-  const defaultLayoutGap = useProjectStore((s) => s.project.meta.defaultLayoutGap ?? 20);
+  const defaultLayoutPadding = useProjectStore((s) => s.project.meta.defaultLayoutPadding ?? DEFAULT_LAYOUT_PADDING);
+  const defaultLayoutGap = useProjectStore((s) => s.project.meta.defaultLayoutGap ?? DEFAULT_LAYOUT_GAP);
 
   const layoutId = currentPage?.layoutId;
   const isLayoutMode = !!layoutId;
@@ -759,6 +695,10 @@ function EditorCanvas({
     () => (layoutId ? computeLayoutSlots(layoutId, layoutPadding, layoutGap) : []),
     [layoutGap, layoutId, layoutPadding],
   );
+
+  useEffect(() => {
+    bindImageCacheToProject(projectId, assetBlobs);
+  }, [assetBlobs, projectId]);
 
   useEffect(() => {
     const neighborPages = [pages[currentPageIndex - 1], pages[currentPageIndex + 1]].filter(Boolean);
@@ -773,9 +713,9 @@ function EditorCanvas({
     neighborPaths.forEach((path) => {
       const blob = assetBlobs[path];
       if (!blob) return;
-      void loadCachedBlobImage(path, blob).catch(() => undefined);
+      void loadCachedBlobImage(projectId, path, blob).catch(() => undefined);
     });
-  }, [assetBlobs, currentPageIndex, pages]);
+  }, [assetBlobs, currentPageIndex, pages, projectId]);
 
   // In layout mode: only text elements are free. In free mode: all elements.
   const elements = useMemo(() => currentPage?.elements ?? [], [currentPage?.elements]);
@@ -789,14 +729,14 @@ function EditorCanvas({
   const coverTitle = currentPage?.coverTitle ?? '';
   const coverSubtitle = currentPage?.coverSubtitle ?? '';
   const showCoverSubtitle = currentPage?.showCoverSubtitle ?? false;
-  const coverTitleFontSize = currentPage?.coverTitleFontSize ?? 48;
-  const coverTitleFontFamily = currentPage?.coverTitleFontFamily ?? 'Arial';
-  const coverTitleColor = currentPage?.coverTitleColor ?? '#ffffff';
+  const coverTitleFontSize = currentPage?.coverTitleFontSize ?? DEFAULT_COVER_TITLE_FONT_SIZE;
+  const coverTitleFontFamily = currentPage?.coverTitleFontFamily ?? DEFAULT_COVER_TITLE_FONT_FAMILY;
+  const coverTitleColor = currentPage?.coverTitleColor ?? DEFAULT_COVER_TITLE_COLOR;
   const coverTitleX = currentPage?.coverTitleX ?? 0;
   const coverTitleY = currentPage?.coverTitleY ?? CANVAS_H * 0.35;
-  const coverSubtitleFontSize = currentPage?.coverSubtitleFontSize ?? 24;
-  const coverSubtitleFontFamily = currentPage?.coverSubtitleFontFamily ?? 'Arial';
-  const coverSubtitleColor = currentPage?.coverSubtitleColor ?? '#ffffffcc';
+  const coverSubtitleFontSize = currentPage?.coverSubtitleFontSize ?? DEFAULT_COVER_SUBTITLE_FONT_SIZE;
+  const coverSubtitleFontFamily = currentPage?.coverSubtitleFontFamily ?? DEFAULT_COVER_SUBTITLE_FONT_FAMILY;
+  const coverSubtitleColor = currentPage?.coverSubtitleColor ?? DEFAULT_COVER_SUBTITLE_COLOR;
   const coverSubtitleX = currentPage?.coverSubtitleX ?? 0;
   const coverSubtitleY = currentPage?.coverSubtitleY ?? CANVAS_H * 0.35 + 60;
 
@@ -1068,7 +1008,7 @@ function EditorCanvas({
         <Stage width={CANVAS_W} height={CANVAS_H} onClick={handleStageClick} onTap={handleStageClick} onDragStart={handleDragStart}>
           <Layer>
             {/* Page background */}
-            <Rect x={0} y={0} width={CANVAS_W} height={CANVAS_H} fill={currentPage?.background ?? '#ffffff'} />
+            <Rect x={0} y={0} width={CANVAS_W} height={CANVAS_H} fill={currentPage?.background ?? DEFAULT_PAGE_BACKGROUND} />
 
             {/* Layout slots (layout mode only) */}
             {isLayoutMode &&
@@ -1079,6 +1019,7 @@ function EditorCanvas({
                   slotIndex={i}
                   assignment={currentPage?.slotAssignments?.[i]}
                   assetBlobs={assetBlobs}
+                  projectId={projectId}
                   isSelected={selectedSlotIndex === i}
                   onSelect={() => setSelectedSlotIndex(i)}
                   onOffsetChange={updateSlotOffset}
@@ -1087,6 +1028,7 @@ function EditorCanvas({
                   onEmptySlotDblClick={handleEmptySlotDblClick}
                   onRequestDelete={(slotIndex) => onRequestSlotDelete?.(slotIndex)}
                   imageLabelPrefix={imageLabelPrefix}
+                  deleteImageLabel={deleteImageLabel}
                   lowResolutionHintText={lowResolutionHintText}
                 />
               ))}
@@ -1144,6 +1086,7 @@ function EditorCanvas({
                 key={el.id}
                 element={el}
                 assetBlobs={assetBlobs}
+                projectId={projectId}
                 isSelected={selectedElementId === el.id && inlineEdit?.id !== el.id}
                 onSelect={() => setSelectedElementId(el.id)}
                 onChange={(changes) => {

@@ -1,8 +1,6 @@
 export type Language = 'de' | 'en';
 
-type TranslationMap = Record<string, string>;
-
-const de: TranslationMap = {
+export const de = {
   file: 'Datei',
   insert: 'Einfügen',
   edit: 'Bearbeiten',
@@ -117,9 +115,41 @@ const de: TranslationMap = {
   loadingImage: 'Bild wird geladen...',
   done: 'Fertig',
   lowResolutionHint: 'Niedrige Auflösung - kann pixelig wirken\nEtwa {percent}% der empfohlenen Größe',
-};
+  imageDelete: 'Bild löschen',
+  recovery: 'Wiederherstellung',
+  restore: 'Wiederherstellen',
+  saved: 'Gespeichert',
+  unsaved: 'Ungespeichert',
+  saving: 'Speichert…',
+  saveFailed: 'Speicherfehler',
+  exportProgress: '{format} wird exportiert',
+  exportFailed: 'Export fehlgeschlagen',
+  removeChapter: 'Kapitel entfernen',
+  autoSave: 'Auto-Save',
+  pdfNoneLabel: 'Keine Kompression',
+  pdfNoneDescription: 'Maximale Qualität (PNG, große Datei)',
+  pdfLowLabel: 'Niedrig',
+  pdfLowDescription: 'Sehr hohe Qualität (JPEG 95 %)',
+  pdfMediumLabel: 'Mittel',
+  pdfMediumDescription: 'Gute Qualität (JPEG 80 %)',
+  pdfHighLabel: 'Hoch',
+  pdfHighDescription: 'Kleine Datei (JPEG 55 %)',
+  phoneEditorTitle: 'Bearbeitung benötigt ein größeres Display',
+  phoneEditorMessage: 'Auf Smartphones kannst du Projekte öffnen und Wiederherstellungspunkte laden. Zum Bearbeiten wird ein Tablet oder Desktop ab 768 px benötigt.',
+  backHome: 'Zur Startseite',
+  discardChanges: 'Änderungen verwerfen',
+  attention: 'Achtung',
+  updateAvailable: 'Update verfügbar',
+  updateDescription: 'Eine neue Layox-Version ist bereit.',
+  updateSaveFirst: 'Speichere zuerst deine Änderungen; Layox lädt niemals automatisch neu.',
+  updateNow: 'Jetzt aktualisieren',
+  later: 'Später',
+} as const;
 
-const en: TranslationMap = {
+export type TranslationKey = keyof typeof de;
+export type Translator = (key: TranslationKey) => string;
+
+export const en = {
   file: 'File',
   insert: 'Insert',
   edit: 'Edit',
@@ -234,10 +264,39 @@ const en: TranslationMap = {
   loadingImage: 'Loading image...',
   done: 'Done',
   lowResolutionHint: 'Low resolution - may appear pixelated\nAbout {percent}% of the recommended size',
-};
+  imageDelete: 'Delete image',
+  recovery: 'Recovery',
+  restore: 'Restore',
+  saved: 'Saved',
+  unsaved: 'Unsaved',
+  saving: 'Saving…',
+  saveFailed: 'Save failed',
+  exportProgress: 'Exporting {format}',
+  exportFailed: 'Export failed',
+  removeChapter: 'Remove chapter',
+  autoSave: 'Auto-save',
+  pdfNoneLabel: 'No compression',
+  pdfNoneDescription: 'Maximum quality (PNG, large file)',
+  pdfLowLabel: 'Low',
+  pdfLowDescription: 'Very high quality (JPEG 95%)',
+  pdfMediumLabel: 'Medium',
+  pdfMediumDescription: 'Good quality (JPEG 80%)',
+  pdfHighLabel: 'High',
+  pdfHighDescription: 'Small file (JPEG 55%)',
+  phoneEditorTitle: 'Editing needs a larger display',
+  phoneEditorMessage: 'On phones you can open projects and restore snapshots. Editing requires a tablet or desktop at least 768 px wide.',
+  backHome: 'Back to home',
+  discardChanges: 'Discard changes',
+  attention: 'Attention',
+  updateAvailable: 'Update available',
+  updateDescription: 'A new Layox version is ready.',
+  updateSaveFirst: 'Save your changes first; Layox will never reload automatically.',
+  updateNow: 'Update now',
+  later: 'Later',
+} satisfies Record<TranslationKey, string>;
 
-export const translations: Record<Language, TranslationMap> = { de, en };
+export const translations: Record<Language, Record<TranslationKey, string>> = { de, en };
 
-export function tr(language: Language, key: string): string {
-  return translations[language][key] ?? translations.de[key] ?? key;
+export function tr(language: Language, key: TranslationKey): string {
+  return translations[language][key];
 }

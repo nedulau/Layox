@@ -2,6 +2,7 @@ import JSZip from 'jszip';
 import { describe, expect, it } from 'vitest';
 import type { Project } from '../../types';
 import { createProjectArchiveBlob, loadProjectArchive } from '../projectArchive';
+import { MAX_PROJECT_ARCHIVE_BYTES, MAX_PROJECT_JSON_BYTES } from '../../domain/projectSchema';
 
 const project: Project = {
   meta: {
@@ -102,5 +103,30 @@ describe('project archive', () => {
 
   it('rejects damaged ZIP data without exposing parser details', async () => {
     await expect(loadProjectArchive(new Blob(['not a zip']))).rejects.toThrow('ZIP archive is damaged');
+  });
+
+  it('rejects invalid asset paths while creating an archive', async () => {
+    await expect(createProjectArchiveBlob(project, {
+      '../photo.jpg': new Blob(['photo']),
+    })).rejects.toThrow('Invalid asset path');
+  });
+
+  it('rejects archives above the configured size before parsing', async () => {
+    const oversized = { size: MAX_PROJECT_ARCHIVE_BYTES + 1 } as Blob;
+    await expect(loadProjectArchive(oversized)).rejects.toThrow('2 GiB');
+  });
+
+  it('rejects project.json above five MiB', async () => {
+    const zip = new JSZip();
+    zip.file('project.json', ' '.repeat(MAX_PROJECT_JSON_BYTES + 1));
+    const archive = await zip.generateAsync({ type: 'blob' });
+
+    await expect(loadProjectArchive(archive)).rejects.toThrow('5 MiB');
+  });
+
+  it('rejects archives without project.json', async () => {
+    const zip = new JSZip();
+    zip.file('assets/photo.jpg', 'photo');
+    await expect(loadProjectArchive(await zip.generateAsync({ type: 'blob' }))).rejects.toThrow('missing project.json');
   });
 });

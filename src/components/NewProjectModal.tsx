@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
+import { useDialogFocus } from './common/useDialogFocus';
 
 type NewProjectModalProps = {
   open: boolean;
@@ -51,17 +52,21 @@ function NewProjectDialog({
   onConfirm,
 }: Omit<NewProjectModalProps, 'open'>) {
   const [name, setName] = useState(initialName ?? 'New project');
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    requestAnimationFrame(() => inputRef.current?.focus());
-  }, []);
+  const dialogRef = useDialogFocus<HTMLDivElement>(true, onClose);
 
   return (
     <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/55 backdrop-blur-sm">
-      <div className="w-[min(92vw,420px)] rounded-2xl border border-neutral-700 bg-neutral-900 shadow-2xl p-5">
-        <h3 className="text-white text-base font-semibold">{title}</h3>
-        <p className="text-neutral-400 text-xs mt-1">{description}</p>
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="new-project-title"
+        aria-describedby="new-project-description"
+        tabIndex={-1}
+        className="w-[min(92vw,420px)] rounded-2xl border border-neutral-700 bg-neutral-900 shadow-2xl p-5"
+      >
+        <h3 id="new-project-title" className="text-white text-base font-semibold">{title}</h3>
+        <p id="new-project-description" className="text-neutral-400 text-xs mt-1">{description}</p>
 
         <form
           className="mt-4"
@@ -71,7 +76,6 @@ function NewProjectDialog({
           }}
         >
           <input
-            ref={inputRef}
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}

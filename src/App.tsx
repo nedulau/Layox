@@ -8,7 +8,7 @@ import NewProjectModal from './components/NewProjectModal';
 import useProjectStore from './store/useProjectStore';
 import { exportAsPdf, exportCurrentPageAsPng, exportCurrentPageAsJpeg, exportAllPagesAsZip, PDF_COMPRESSION_PRESETS } from './utils/exportProject';
 import type { ExportJobOptions, PdfCompressionLevel, ProjectExportContext } from './utils/exportProject';
-import { tr, type Language } from './i18n';
+import { tr, type Language, type TranslationKey } from './i18n';
 import type { Page } from './types';
 import { computeLayoutSlots } from './utils/layouts';
 import { CANVAS_H, CANVAS_W } from './constants/canvas';
@@ -17,6 +17,24 @@ import { getFileSystemPort } from './infra/fileSystem';
 import { recoveryRepository, type RecoverySummary } from './utils/recoveryRepository';
 import { konvaPageRenderer } from './utils/konvaPageRenderer';
 import { v4 as uuidv4 } from 'uuid';
+import {
+  DEFAULT_COVER_SUBTITLE_COLOR,
+  DEFAULT_COVER_SUBTITLE_FONT_FAMILY,
+  DEFAULT_COVER_SUBTITLE_FONT_SIZE,
+  DEFAULT_COVER_TITLE_COLOR,
+  DEFAULT_COVER_TITLE_FONT_FAMILY,
+  DEFAULT_COVER_TITLE_FONT_SIZE,
+  DEFAULT_LAYOUT_GAP,
+  DEFAULT_LAYOUT_PADDING,
+} from './domain/projectDefaults';
+import { MenuButton, MenuDivider, MenuItem } from './components/editor/MenuComponents';
+import BlobImage from './components/common/BlobImage';
+import AssetLibraryModal from './components/editor/AssetLibraryModal';
+import { useDialogFocus } from './components/common/useDialogFocus';
+import { useMediaQuery } from './hooks/useMediaQuery';
+import ConfirmDialog from './components/common/ConfirmDialog';
+import PwaUpdatePrompt from './components/PwaUpdatePrompt';
+import { useAutoSave } from './hooks/useAutoSave';
 
 const FONTS = ['Arial', 'Times New Roman', 'Georgia', 'Verdana', 'Courier New', 'Trebuchet MS', 'Impact', 'Comic Sans MS'];
 type UiTheme = 'dark' | 'light';
@@ -41,74 +59,39 @@ function App() {
   }, [language]);
 
   const showEditor = useProjectStore((s) => s.showEditor);
+  const setShowEditor = useProjectStore((s) => s.setShowEditor);
+  const isDirty = useProjectStore((s) => s.isDirty);
+  const phoneViewport = useMediaQuery('(max-width: 767px)');
   if (!showEditor) {
-    return <StartScreen uiTheme={uiTheme} setUiTheme={setUiTheme} language={language} setLanguage={setLanguage} />;
+    return (
+      <>
+        <StartScreen uiTheme={uiTheme} setUiTheme={setUiTheme} language={language} setLanguage={setLanguage} />
+        <PwaUpdatePrompt language={language} isDirty={isDirty} />
+      </>
+    );
   }
-  return <Editor uiTheme={uiTheme} setUiTheme={setUiTheme} language={language} setLanguage={setLanguage} />;
-}
-
-// ─── Dropdown menu helper ────────────────────────────────────────────────────
-
-function MenuButton({
-  label,
-  isOpen,
-  onClick,
-}: {
-  label: string;
-  isOpen: boolean;
-  onClick: () => void;
-}) {
+  if (phoneViewport) {
+    return (
+      <>
+      <div className="app-ui start-ui flex h-screen w-screen items-center justify-center px-6" data-ui-theme={uiTheme}>
+        <div className="max-w-md rounded-2xl border border-neutral-700 bg-neutral-900 p-6 text-center shadow-2xl">
+          <h1 className="text-xl font-semibold text-white">{tr(language, 'phoneEditorTitle')}</h1>
+          <p className="mt-3 text-sm leading-6 text-neutral-300">{tr(language, 'phoneEditorMessage')}</p>
+          <button type="button" onClick={() => setShowEditor(false)} className="mt-5 min-h-11 rounded-lg bg-blue-600 px-5 py-2.5 font-medium text-white hover:bg-blue-500">
+            {tr(language, 'backHome')}
+          </button>
+        </div>
+      </div>
+      <PwaUpdatePrompt language={language} isDirty={isDirty} />
+      </>
+    );
+  }
   return (
-    <button
-      onClick={onClick}
-      data-menu
-      className={`editor-surface-control px-3 py-1 text-[13px] rounded-lg border transition-all duration-150 cursor-pointer select-none ${
-        isOpen
-          ? 'bg-neutral-800 border-neutral-500 text-white shadow-sm'
-          : 'bg-neutral-900 border-neutral-700 text-neutral-200 hover:bg-neutral-800 hover:border-neutral-600 hover:text-white'
-      }`}
-    >
-      {label}
-    </button>
+    <>
+      <Editor uiTheme={uiTheme} setUiTheme={setUiTheme} language={language} setLanguage={setLanguage} />
+      <PwaUpdatePrompt language={language} isDirty={isDirty} />
+    </>
   );
-}
-
-function MenuItem({
-  label,
-  shortcut,
-  onClick,
-  disabled,
-  danger,
-}: {
-  label: string;
-  shortcut?: string;
-  onClick: () => void;
-  disabled?: boolean;
-  danger?: boolean;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      className={`editor-surface-control w-full text-left px-3 py-2 text-sm flex justify-between items-center rounded-md transition-colors cursor-pointer select-none
-                  ${disabled ? 'text-neutral-600 cursor-not-allowed' : danger ? 'text-red-300 hover:bg-red-500/15' : 'text-neutral-200 hover:bg-neutral-700 hover:text-white'}`}
-    >
-      <span>{label}</span>
-      {shortcut && <span className="text-neutral-500 text-xs ml-6">{shortcut}</span>}
-    </button>
-  );
-}
-
-function MenuDivider() {
-  return <div className="h-px bg-neutral-700/80 my-1" />;
-}
-
-function BlobImage({ blob, ...props }: { blob: Blob } & Omit<React.ImgHTMLAttributes<HTMLImageElement>, 'src'>) {
-  const url = useMemo(() => URL.createObjectURL(blob), [blob]);
-
-  useEffect(() => () => URL.revokeObjectURL(url), [url]);
-
-  return <img {...props} src={url} />;
 }
 
 function PagePreviewCard({
@@ -119,6 +102,8 @@ function PagePreviewCard({
   onClick,
   noPreviewLabel,
   metaLabel,
+  defaultLayoutPadding,
+  defaultLayoutGap,
 }: {
   page: Page;
   assetBlobs: Record<string, Blob>;
@@ -127,13 +112,15 @@ function PagePreviewCard({
   onClick: () => void;
   noPreviewLabel: string;
   metaLabel: string;
+  defaultLayoutPadding: number;
+  defaultLayoutGap: number;
 }) {
   const slots = useMemo(() => {
     if (!page.layoutId) return [];
-    const padding = page.layoutPadding ?? 20;
-    const gap = page.layoutGap ?? 20;
+    const padding = page.layoutPadding ?? defaultLayoutPadding;
+    const gap = page.layoutGap ?? defaultLayoutGap;
     return computeLayoutSlots(page.layoutId, padding, gap);
-  }, [page.layoutGap, page.layoutId, page.layoutPadding]);
+  }, [defaultLayoutGap, defaultLayoutPadding, page.layoutGap, page.layoutId, page.layoutPadding]);
 
   const hasPreview =
     slots.some((_, slotIndex) => {
@@ -263,6 +250,8 @@ function PageOverviewModal({
   chapterNavLabel,
   searchPlaceholder,
   getMetaLabel,
+  defaultLayoutPadding,
+  defaultLayoutGap,
 }: {
   open: boolean;
   pages: Page[];
@@ -278,11 +267,14 @@ function PageOverviewModal({
   chapterNavLabel: string;
   searchPlaceholder: string;
   getMetaLabel: (page: Page) => string;
+  defaultLayoutPadding: number;
+  defaultLayoutGap: number;
 }) {
   const [dragFromIndex, setDragFromIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const pointerActiveRef = useRef(false);
+  const dialogRef = useDialogFocus<HTMLDivElement>(open, onClose);
 
   const visibleItems = useMemo(() => {
     const needle = searchTerm.trim().toLowerCase();
@@ -297,15 +289,6 @@ function PageOverviewModal({
     [getMetaLabel, pages],
   );
 
-  useEffect(() => {
-    if (!open) return;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [open, onClose]);
-
   if (!open) return null;
 
   return (
@@ -316,12 +299,17 @@ function PageOverviewModal({
       }}
     >
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="page-overview-title"
+        tabIndex={-1}
         className="editor-dropdown w-[min(96vw,1400px)] h-[min(90vh,860px)] bg-neutral-900 border border-neutral-700 rounded-2xl shadow-2xl flex flex-col overflow-hidden"
         onMouseDown={(event) => event.stopPropagation()}
       >
         <div className="flex items-center justify-between px-4 py-3 border-b border-neutral-700/80">
           <div>
-            <h3 className="text-sm font-semibold text-neutral-100">{title}</h3>
+            <h3 id="page-overview-title" className="text-sm font-semibold text-neutral-100">{title}</h3>
             <div className="text-[11px] text-neutral-400 mt-0.5">{dragToReorderLabel}</div>
           </div>
           <div className="flex items-center gap-2">
@@ -419,6 +407,8 @@ function PageOverviewModal({
                     active={index === currentPageIndex}
                     noPreviewLabel={noPreviewLabel}
                     metaLabel={getMetaLabel(page)}
+                    defaultLayoutPadding={defaultLayoutPadding}
+                    defaultLayoutGap={defaultLayoutGap}
                     onClick={() => {
                       onSelectPage(index);
                       onClose();
@@ -428,82 +418,6 @@ function PageOverviewModal({
               ))}
             </div>
           </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function AssetLibraryModal({
-  open,
-  assetBlobs,
-  title,
-  closeLabel,
-  emptyLabel,
-  onInsert,
-  onClose,
-}: {
-  open: boolean;
-  assetBlobs: Record<string, Blob>;
-  title: string;
-  closeLabel: string;
-  emptyLabel: string;
-  onInsert: (assetPath: string) => void;
-  onClose: () => void;
-}) {
-  const assetPaths = useMemo(() => Object.keys(assetBlobs).sort(), [assetBlobs]);
-
-  if (!open) return null;
-
-  return (
-    <div
-      className="fixed inset-0 z-[112] bg-black/60 backdrop-blur-[1px] flex items-center justify-center px-6 py-6"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose();
-      }}
-    >
-      <div
-        className="editor-dropdown w-[min(94vw,980px)] h-[min(86vh,760px)] bg-neutral-900 border border-neutral-700 rounded-2xl shadow-2xl flex flex-col overflow-hidden"
-        onMouseDown={(event) => event.stopPropagation()}
-      >
-        <div className="flex items-center justify-between px-4 py-3 border-b border-neutral-700/80">
-          <h3 className="text-sm font-semibold text-neutral-100">{title}</h3>
-          <button
-            onClick={onClose}
-            className="editor-surface-control px-2.5 py-1 rounded-md border border-neutral-600 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 text-xs"
-          >
-            {closeLabel}
-          </button>
-        </div>
-
-        <div className="flex-1 overflow-auto p-4">
-          {assetPaths.length === 0 ? (
-            <div className="h-full flex items-center justify-center text-sm text-neutral-400">{emptyLabel}</div>
-          ) : (
-            <div className="grid gap-3 justify-center" style={{ gridTemplateColumns: 'repeat(auto-fill, 180px)' }}>
-              {assetPaths.map((assetPath) => (
-                <button
-                  key={assetPath}
-                  onClick={() => {
-                    onInsert(assetPath);
-                    onClose();
-                  }}
-                  className="group text-left rounded-xl border border-neutral-700 bg-neutral-900/80 hover:bg-neutral-800/90 transition-colors overflow-hidden"
-                >
-                  <div className="w-[180px] h-[135px] bg-neutral-950 flex items-center justify-center overflow-hidden">
-                    {assetBlobs[assetPath] ? (
-                      <BlobImage blob={assetBlobs[assetPath]} alt="" className="w-full h-full object-cover" draggable={false} />
-                    ) : (
-                      <span className="text-xs text-neutral-500">…</span>
-                    )}
-                  </div>
-                  <div className="px-2 py-1.5 border-t border-neutral-700/80 text-[11px] text-neutral-400 truncate">
-                    {assetPath.split('/').pop() || assetPath}
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
         </div>
       </div>
     </div>
@@ -523,7 +437,7 @@ function Editor({
   language: Language;
   setLanguage: (language: Language) => void;
 }) {
-  const t = useCallback((key: string) => tr(language, key), [language]);
+  const t = useCallback((key: TranslationKey) => tr(language, key), [language]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -583,16 +497,16 @@ function Editor({
     (s) => s.project.pages[s.currentPageIndex]?.slotAssignments,
   );
   const defaultLayoutPadding = useProjectStore(
-    (s) => s.project.meta.defaultLayoutPadding ?? 20,
+    (s) => s.project.meta.defaultLayoutPadding ?? DEFAULT_LAYOUT_PADDING,
   );
   const defaultLayoutGap = useProjectStore(
-    (s) => s.project.meta.defaultLayoutGap ?? 20,
+    (s) => s.project.meta.defaultLayoutGap ?? DEFAULT_LAYOUT_GAP,
   );
   const currentLayoutPadding = useProjectStore(
-    (s) => s.project.pages[s.currentPageIndex]?.layoutPadding ?? (s.project.meta.defaultLayoutPadding ?? 20),
+    (s) => s.project.pages[s.currentPageIndex]?.layoutPadding ?? (s.project.meta.defaultLayoutPadding ?? DEFAULT_LAYOUT_PADDING),
   );
   const currentLayoutGap = useProjectStore(
-    (s) => s.project.pages[s.currentPageIndex]?.layoutGap ?? (s.project.meta.defaultLayoutGap ?? 20),
+    (s) => s.project.pages[s.currentPageIndex]?.layoutGap ?? (s.project.meta.defaultLayoutGap ?? DEFAULT_LAYOUT_GAP),
   );
   const setCurrentPageIndex = useProjectStore((s) => s.setCurrentPageIndex);
   const addPage = useProjectStore((s) => s.addPage);
@@ -609,22 +523,22 @@ function Editor({
     (s) => s.project.pages[s.currentPageIndex]?.coverSubtitle ?? '',
   );
   const currentCoverTitleFontSize = useProjectStore(
-    (s) => s.project.pages[s.currentPageIndex]?.coverTitleFontSize ?? 48,
+    (s) => s.project.pages[s.currentPageIndex]?.coverTitleFontSize ?? DEFAULT_COVER_TITLE_FONT_SIZE,
   );
   const currentCoverTitleFontFamily = useProjectStore(
-    (s) => s.project.pages[s.currentPageIndex]?.coverTitleFontFamily ?? 'Arial',
+    (s) => s.project.pages[s.currentPageIndex]?.coverTitleFontFamily ?? DEFAULT_COVER_TITLE_FONT_FAMILY,
   );
   const currentCoverTitleColor = useProjectStore(
-    (s) => s.project.pages[s.currentPageIndex]?.coverTitleColor ?? '#ffffff',
+    (s) => s.project.pages[s.currentPageIndex]?.coverTitleColor ?? DEFAULT_COVER_TITLE_COLOR,
   );
   const currentCoverSubtitleFontSize = useProjectStore(
-    (s) => s.project.pages[s.currentPageIndex]?.coverSubtitleFontSize ?? 24,
+    (s) => s.project.pages[s.currentPageIndex]?.coverSubtitleFontSize ?? DEFAULT_COVER_SUBTITLE_FONT_SIZE,
   );
   const currentCoverSubtitleFontFamily = useProjectStore(
-    (s) => s.project.pages[s.currentPageIndex]?.coverSubtitleFontFamily ?? 'Arial',
+    (s) => s.project.pages[s.currentPageIndex]?.coverSubtitleFontFamily ?? DEFAULT_COVER_SUBTITLE_FONT_FAMILY,
   );
   const currentCoverSubtitleColor = useProjectStore(
-    (s) => s.project.pages[s.currentPageIndex]?.coverSubtitleColor ?? '#ffffffcc',
+    (s) => s.project.pages[s.currentPageIndex]?.coverSubtitleColor ?? DEFAULT_COVER_SUBTITLE_COLOR,
   );
   const currentShowCoverSubtitle = useProjectStore(
     (s) => s.project.pages[s.currentPageIndex]?.showCoverSubtitle ?? false,
@@ -674,14 +588,19 @@ function Editor({
   const [showQuickImageBar, setShowQuickImageBar] = useState<boolean>(() => readStoredBoolean('layox_showQuickImageBar', true));
   const [deleteFromLibraryOnImageDelete, setDeleteFromLibraryOnImageDelete] = useState<boolean>(() => readStoredBoolean('layox_deleteFromLibraryOnImageDelete', false));
   const [quickInsertAssetPath, setQuickInsertAssetPath] = useState<string | null>(null);
-  const [canvasZoomMode] = useState<'fit' | 'manual'>('fit');
-  const [canvasManualZoom] = useState(1);
+  const [canvasZoomMode, setCanvasZoomMode] = useState<'fit' | 'manual'>('fit');
+  const [canvasManualZoom, setCanvasManualZoom] = useState(1);
+  const [canvasDisplayScale, setCanvasDisplayScale] = useState(1);
   const [recoveryPoints, setRecoveryPoints] = useState<RecoverySummary[]>([]);
   const [recoveryError, setRecoveryError] = useState<string | null>(null);
-  const autoSaveRunningRef = useRef(false);
   const exportAbortRef = useRef<AbortController | null>(null);
   const [exportJob, setExportJob] = useState<{ label: string; completed: number; total: number } | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
+  const [uiError, setUiError] = useState<string | null>(null);
+  const [showHomeConfirm, setShowHomeConfirm] = useState(false);
+  const [showPdfDialog, setShowPdfDialog] = useState(false);
+  const pdfDialogRef = useDialogFocus<HTMLDivElement>(showPdfDialog, () => setShowPdfDialog(false));
+  const exportDialogRef = useDialogFocus<HTMLDivElement>(exportJob !== null, () => exportAbortRef.current?.abort());
   const [pdfDefaultLevel, setPdfDefaultLevel] = useState<PdfCompressionLevel>(() => {
     const saved = readStoredString('layox_pdfDefaultLevel', 'medium');
     if (saved && PDF_COMPRESSION_PRESETS.some((preset) => preset.id === saved)) {
@@ -732,6 +651,18 @@ function Editor({
     }, state.assetBlobs);
     await refreshRecoveryPoints();
   }, [refreshRecoveryPoints]);
+
+  const handleAutoSaveSuccess = useCallback(() => setRecoveryError(null), []);
+  const handleAutoSaveError = useCallback((error: unknown) => {
+    setRecoveryError(error instanceof Error ? error.message : String(error));
+  }, []);
+  useAutoSave({
+    enabled: autoSaveEnabled,
+    intervalSeconds: autoSaveInterval,
+    createRecoveryPoint,
+    onSuccess: handleAutoSaveSuccess,
+    onError: handleAutoSaveError,
+  });
 
   const handleRestoreRecoveryPoint = useCallback(async (point: RecoverySummary) => {
     try {
@@ -866,31 +797,6 @@ function Editor({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [addTextElement, deleteFromLibraryOnImageDelete, removeElement, removeImageFromSlot, resetProject]);
 
-  // Auto-save
-  useEffect(() => {
-    if (!autoSaveEnabled || autoSaveInterval <= 0) return;
-    const id = setInterval(() => {
-      const state = useProjectStore.getState();
-      if (!state.isDirty || state.isSaving || autoSaveRunningRef.current) return;
-      autoSaveRunningRef.current = true;
-      void (async () => {
-        try {
-          await createRecoveryPoint();
-          const latestState = useProjectStore.getState();
-          if (latestState.projectLocation && latestState.isDirty) {
-            await latestState.saveCurrentProject();
-          }
-          setRecoveryError(null);
-        } catch (error) {
-          setRecoveryError(error instanceof Error ? error.message : String(error));
-        } finally {
-          autoSaveRunningRef.current = false;
-        }
-      })();
-    }, autoSaveInterval * 1000);
-    return () => clearInterval(id);
-  }, [autoSaveEnabled, autoSaveInterval, createRecoveryPoint]);
-
   useEffect(() => {
     if (!isDirty) return;
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
@@ -906,7 +812,7 @@ function Editor({
     if (hasFileSystemAccess) {
       try { await openProject(); } catch (err) {
         console.error(t('openError'), err);
-        alert(`${t('openError')}: ${err instanceof Error ? err.message : err}`);
+        setUiError(`${t('openError')}: ${err instanceof Error ? err.message : err}`);
       }
     } else {
       fileInputRef.current?.click();
@@ -918,13 +824,13 @@ function Editor({
     if (!file) return;
     try { await loadFromFile(file); } catch (err) {
       console.error(t('loadError'), err);
-      alert(`${t('loadError')}: ${err instanceof Error ? err.message : err}`);
+      setUiError(`${t('loadError')}: ${err instanceof Error ? err.message : err}`);
     }
     e.target.value = '';
   };
 
-  const handleSave = async () => { closeMenu(); try { await saveCurrentProject(); } catch (err) { alert(`${t('saveError')}: ${err}`); } };
-  const handleSaveAs = async () => { closeMenu(); try { await saveCurrentProjectAs(); } catch (err) { alert(`${t('saveError')}: ${err}`); } };
+  const handleSave = async () => { closeMenu(); try { await saveCurrentProject(); } catch (err) { setUiError(`${t('saveError')}: ${err}`); } };
+  const handleSaveAs = async () => { closeMenu(); try { await saveCurrentProjectAs(); } catch (err) { setUiError(`${t('saveError')}: ${err}`); } };
 
   const handleNewProject = () => {
     closeMenu();
@@ -1030,12 +936,11 @@ function Editor({
 
   const handleGoHome = () => {
     closeMenu();
-    if (!isDirty || window.confirm(t('homeConfirm'))) setShowEditor(false);
+    if (isDirty) setShowHomeConfirm(true);
+    else setShowEditor(false);
   };
 
   // ─── Export handlers ──────────────────────────────────────────────────
-  const [showPdfDialog, setShowPdfDialog] = useState(false);
-
   const exportContext = useMemo<ProjectExportContext>(() => ({
     pages,
     assets: assetBlobs,
@@ -1103,10 +1008,20 @@ function Editor({
     await runExport('JPEG ZIP', pages.length, (job) => exportAllPagesAsZip(exportContext, 'jpeg', job));
   };
 
+  const setManualCanvasZoom = (scale: number) => {
+    setCanvasZoomMode('manual');
+    setCanvasManualZoom(Math.max(0.2, Math.min(3, scale)));
+  };
+
+  const changeCanvasZoom = (delta: number) => {
+    const currentScale = canvasZoomMode === 'manual' ? canvasManualZoom : canvasDisplayScale;
+    setManualCanvasZoom(Math.round((currentScale + delta) * 10) / 10);
+  };
+
   const btnPageNav =
-    'min-w-8 h-8 px-2 flex items-center justify-center rounded-lg border text-sm transition-all cursor-pointer select-none';
+    'min-w-11 h-11 px-2 flex items-center justify-center rounded-lg border text-sm transition-all cursor-pointer select-none';
   const btnIcon =
-    'w-7 h-7 flex items-center justify-center rounded-lg border text-sm transition-all cursor-pointer select-none disabled:opacity-35 disabled:cursor-not-allowed';
+    'w-11 h-11 flex items-center justify-center rounded-lg border text-sm transition-all cursor-pointer select-none disabled:opacity-35 disabled:cursor-not-allowed';
 
   const getVisiblePageItems = useCallback((total: number, current: number): Array<number | 'ellipsis-left' | 'ellipsis-right'> => {
     if (total <= 9) return Array.from({ length: total }, (_, i) => i);
@@ -1190,23 +1105,23 @@ function Editor({
             title={saveError ?? undefined}
           >
             {saveError
-              ? (language === 'de' ? 'Speicherfehler' : 'Save failed')
+              ? t('saveFailed')
               : isSaving
-                ? (language === 'de' ? 'Speichert…' : 'Saving…')
+                ? t('saving')
                 : isDirty
-                  ? (language === 'de' ? 'Ungespeichert' : 'Unsaved')
-                  : (language === 'de' ? 'Gespeichert' : 'Saved')}
+                  ? t('unsaved')
+                  : t('saved')}
           </span>
         </div>
 
         {/* Undo / Redo */}
-        <button onClick={handleUndo} disabled={!canUndo} className={`${btnIcon} editor-surface-control editor-toolbar-icon border-neutral-700 bg-neutral-900 text-neutral-300 hover:bg-neutral-800`} title={`${t('undo')} (Ctrl+Z)`}>
+        <button onClick={handleUndo} disabled={!canUndo} className={`${btnIcon} editor-surface-control editor-toolbar-icon border-neutral-700 bg-neutral-900 text-neutral-300 hover:bg-neutral-800`} title={`${t('undo')} (Ctrl+Z)`} aria-label={t('undo')}>
           <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M9 7H4v5" />
             <path d="M4 12c1.6-3.8 4.8-5.8 8.7-5.8 5.1 0 8.3 3.6 8.3 8.8" />
           </svg>
         </button>
-        <button onClick={handleRedo} disabled={!canRedo} className={`${btnIcon} editor-surface-control editor-toolbar-icon border-neutral-700 bg-neutral-900 text-neutral-300 hover:bg-neutral-800`} title={`${t('redo')} (Ctrl+Y)`}>
+        <button onClick={handleRedo} disabled={!canRedo} className={`${btnIcon} editor-surface-control editor-toolbar-icon border-neutral-700 bg-neutral-900 text-neutral-300 hover:bg-neutral-800`} title={`${t('redo')} (Ctrl+Y)`} aria-label={t('redo')}>
           <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M15 7h5v5" />
             <path d="M20 12c-1.6-3.8-4.8-5.8-8.7-5.8-5.1 0-8.3 3.6-8.3 8.8" />
@@ -1377,7 +1292,7 @@ function Editor({
                     }}
                     className="editor-surface-control w-full px-2 py-1 text-xs rounded-md border border-neutral-600 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 transition-colors cursor-pointer select-none"
                   >
-                    Remove {t('chapter')}
+                    {t('removeChapter')}
                   </button>
                 )}
               </div>
@@ -1408,6 +1323,16 @@ function Editor({
               )}
             </div>
           )}
+        </div>
+
+        <div className="editor-zoom-controls flex items-center gap-1" role="group" aria-label={t('zoomLevel')}>
+          <button type="button" onClick={() => changeCanvasZoom(-0.1)} className={`${btnIcon} editor-surface-control`} title={t('zoomOut')} aria-label={t('zoomOut')}>−</button>
+          <button type="button" onClick={() => setCanvasZoomMode('fit')} className={`${btnPageNav} editor-surface-control text-xs`} title={t('zoomFit')}>{t('zoomFit')}</button>
+          <button type="button" onClick={() => setManualCanvasZoom(1)} className={`${btnPageNav} editor-surface-control text-xs`} title={t('zoom100')}>{t('zoom100')}</button>
+          <button type="button" onClick={() => changeCanvasZoom(0.1)} className={`${btnIcon} editor-surface-control`} title={t('zoomIn')} aria-label={t('zoomIn')}>+</button>
+          <span className="min-w-11 text-center text-[11px] text-neutral-400" aria-live="polite">
+            {Math.round(canvasDisplayScale * 100)}%
+          </span>
         </div>
 
         {/* ── Spacer ── */}
@@ -1484,7 +1409,7 @@ function Editor({
                 <MenuDivider />
 
                 <div className="px-2 pt-1 pb-2">
-                  <div className="text-[11px] text-neutral-400 uppercase tracking-wide mb-1.5">Auto Save</div>
+                  <div className="text-[11px] text-neutral-400 uppercase tracking-wide mb-1.5">{t('autoSave')}</div>
                   <label className="text-xs text-neutral-400 flex items-center gap-2 cursor-pointer select-none">
                     <input
                       type="checkbox"
@@ -1795,6 +1720,7 @@ function Editor({
         <button
           onClick={goPrevPage}
           disabled={currentPageIndex === 0}
+          aria-label={t('pagePrev')}
           className="editor-side-nav shrink-0 w-11 h-11 flex items-center justify-center rounded-2xl border border-neutral-600
                      bg-gradient-to-b from-neutral-800 to-neutral-900 hover:from-neutral-700 hover:to-neutral-800 text-neutral-200 disabled:opacity-25
                      disabled:cursor-not-allowed transition-all shadow-[0_8px_18px_rgba(0,0,0,0.35)] cursor-pointer select-none"
@@ -1810,10 +1736,12 @@ function Editor({
           <EditorCanvas
             zoomMode={canvasZoomMode}
             manualZoom={canvasManualZoom}
+            onDisplayScaleChange={setCanvasDisplayScale}
             onRequestSlotDelete={handleSlotDeleteFromCanvas}
             dropImagesLabel={t('dropImagesHere')}
             imageLabelPrefix={t('imageSlotLabel')}
             editTextPlaceholder={t('editTextPlaceholder')}
+            deleteImageLabel={t('imageDelete')}
             coverTitleFallback={t('title')}
             coverSubtitleFallback={t('subtitle')}
             lowResolutionHintText={(percent) =>
@@ -1826,6 +1754,7 @@ function Editor({
         {currentPageIndex >= pages.length - 1 ? (
           <button
             onClick={() => { snapshot(); addPage(); }}
+            aria-label={t('pageAdd')}
             className="editor-side-nav shrink-0 w-11 h-11 flex items-center justify-center rounded-xl border border-green-700/50
                        bg-neutral-900 hover:bg-green-900/40 text-green-300
                        transition-all cursor-pointer select-none text-2xl leading-none"
@@ -1836,6 +1765,7 @@ function Editor({
         ) : (
           <button
             onClick={goNextPage}
+            aria-label={t('pageNext')}
             className="editor-side-nav shrink-0 w-11 h-11 flex items-center justify-center rounded-2xl border border-neutral-600
                        bg-gradient-to-b from-neutral-800 to-neutral-900 hover:from-neutral-700 hover:to-neutral-800 text-neutral-200
                        transition-all shadow-[0_8px_18px_rgba(0,0,0,0.35)] cursor-pointer select-none"
@@ -1851,14 +1781,16 @@ function Editor({
 
       {exportJob && (
         <div
+          ref={exportDialogRef}
           className="fixed inset-0 z-[150] flex items-center justify-center bg-black/70"
           role="dialog"
           aria-modal="true"
           aria-labelledby="layox-export-progress-title"
+          tabIndex={-1}
         >
           <div className="editor-dropdown w-80 rounded-2xl border border-neutral-700 bg-neutral-900 p-5 shadow-2xl">
             <h3 id="layox-export-progress-title" className="text-base font-semibold text-white">
-              {language === 'de' ? `${exportJob.label} wird exportiert` : `Exporting ${exportJob.label}`}
+              {t('exportProgress').replace('{format}', exportJob.label)}
             </h3>
             <div className="mt-3 h-2 overflow-hidden rounded-full bg-neutral-700">
               <div
@@ -1882,10 +1814,31 @@ function Editor({
 
       {exportError && (
         <div className="fixed bottom-5 left-1/2 z-[140] flex max-w-lg -translate-x-1/2 items-center gap-3 rounded-xl border border-red-700 bg-red-950 px-4 py-3 text-sm text-red-100 shadow-2xl" role="alert">
-          <span>{language === 'de' ? 'Export fehlgeschlagen' : 'Export failed'}: {exportError}</span>
+          <span>{t('exportFailed')}: {exportError}</span>
           <button type="button" onClick={() => setExportError(null)} className="rounded px-2 py-1 hover:bg-red-900" aria-label={t('close')}>×</button>
         </div>
       )}
+
+      {uiError && (
+        <div className="fixed bottom-5 left-1/2 z-[140] flex max-w-lg -translate-x-1/2 items-center gap-3 rounded-xl border border-red-700 bg-red-950 px-4 py-3 text-sm text-red-100 shadow-2xl" role="alert">
+          <span>{uiError}</span>
+          <button type="button" onClick={() => setUiError(null)} className="rounded px-2 py-1 hover:bg-red-900" aria-label={t('close')}>×</button>
+        </div>
+      )}
+
+      <ConfirmDialog
+        open={showHomeConfirm}
+        title={t('attention')}
+        message={t('homeConfirm')}
+        cancelLabel={t('cancel')}
+        confirmLabel={t('discardChanges')}
+        danger
+        onCancel={() => setShowHomeConfirm(false)}
+        onConfirm={() => {
+          setShowHomeConfirm(false);
+          setShowEditor(false);
+        }}
+      />
 
       {/* ─── Crop modal ─── */}
       {cropModal && (
@@ -1903,8 +1856,15 @@ function Editor({
       {/* ─── PDF compression dialog ─── */}
       {showPdfDialog && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60">
-          <div className="editor-dropdown bg-neutral-900 border border-neutral-700 rounded-2xl shadow-2xl p-5 w-80">
-            <h3 className="text-white font-semibold text-base mb-3">{t('pdfCompression')}</h3>
+          <div
+            ref={pdfDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="pdf-compression-title"
+            tabIndex={-1}
+            className="editor-dropdown bg-neutral-900 border border-neutral-700 rounded-2xl shadow-2xl p-5 w-80"
+          >
+            <h3 id="pdf-compression-title" className="text-white font-semibold text-base mb-3">{t('pdfCompression')}</h3>
             <div className="flex flex-col gap-2">
               {PDF_COMPRESSION_PRESETS.map((preset) => (
                 <button
@@ -1918,14 +1878,14 @@ function Editor({
                              }`}
                 >
                   <div className="text-sm text-white font-medium flex items-center gap-2">
-                    {preset.label}
+                    {t(preset.labelKey)}
                     {preset.id === pdfDefaultLevel && (
                       <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded border border-blue-500/70 text-blue-200">
                         {t('pdfDefault')}
                       </span>
                     )}
                   </div>
-                  <div className="text-xs text-neutral-400 mt-0.5">{preset.description}</div>
+                  <div className="text-xs text-neutral-400 mt-0.5">{t(preset.descriptionKey)}</div>
                 </button>
               ))}
             </div>
@@ -1959,6 +1919,8 @@ function Editor({
         chapterNavLabel={t('chapterPanel')}
         searchPlaceholder={t('searchChapter')}
         getMetaLabel={getPageOverviewMetaLabel}
+        defaultLayoutPadding={defaultLayoutPadding}
+        defaultLayoutGap={defaultLayoutGap}
       />
 
       <AssetLibraryModal

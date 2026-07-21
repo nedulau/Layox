@@ -60,15 +60,11 @@ function openDatabase(): Promise<IDBDatabase> {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
     request.onupgradeneeded = () => {
       const database = request.result;
-      if (!database.objectStoreNames.contains(SNAPSHOT_STORE)) {
-        const snapshots = database.createObjectStore(SNAPSHOT_STORE, { keyPath: 'id' });
-        snapshots.createIndex('projectId', 'projectId');
-        snapshots.createIndex('createdAt', 'createdAt');
-      }
-      if (!database.objectStoreNames.contains(ASSET_STORE)) {
-        const assets = database.createObjectStore(ASSET_STORE, { keyPath: 'key' });
-        assets.createIndex('projectId', 'projectId');
-      }
+      const snapshots = database.createObjectStore(SNAPSHOT_STORE, { keyPath: 'id' });
+      snapshots.createIndex('projectId', 'projectId');
+      snapshots.createIndex('createdAt', 'createdAt');
+      const assets = database.createObjectStore(ASSET_STORE, { keyPath: 'key' });
+      assets.createIndex('projectId', 'projectId');
     };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);

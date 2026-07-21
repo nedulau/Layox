@@ -3,6 +3,15 @@ import type { Page, PageElement, SlotAssignment } from '../types';
 import type { PageRenderer, PageRenderOptions } from '../ports/pageRenderer';
 import { CANVAS_H, CANVAS_W } from '../constants/canvas';
 import { computeLayoutSlots } from './layouts';
+import {
+  DEFAULT_COVER_SUBTITLE_COLOR,
+  DEFAULT_COVER_SUBTITLE_FONT_FAMILY,
+  DEFAULT_COVER_SUBTITLE_FONT_SIZE,
+  DEFAULT_COVER_TITLE_COLOR,
+  DEFAULT_COVER_TITLE_FONT_FAMILY,
+  DEFAULT_COVER_TITLE_FONT_SIZE,
+  DEFAULT_PAGE_BACKGROUND,
+} from '../domain/projectDefaults';
 
 function abortError(): DOMException {
   return new DOMException('Export cancelled.', 'AbortError');
@@ -159,10 +168,10 @@ function addCoverText(Konva: typeof KonvaType, layer: KonvaType.Layer, page: Pag
       y: page.coverTitleY ?? CANVAS_H * 0.35,
       width: CANVAS_W,
       text: page.coverTitle,
-      fontSize: page.coverTitleFontSize ?? 48,
-      fontFamily: page.coverTitleFontFamily ?? 'Arial',
+      fontSize: page.coverTitleFontSize ?? DEFAULT_COVER_TITLE_FONT_SIZE,
+      fontFamily: page.coverTitleFontFamily ?? DEFAULT_COVER_TITLE_FONT_FAMILY,
       fontStyle: 'bold',
-      fill: page.coverTitleColor ?? '#ffffff',
+      fill: page.coverTitleColor ?? DEFAULT_COVER_TITLE_COLOR,
       shadowColor: '#000000',
       shadowBlur: 8,
       shadowOpacity: 0.7,
@@ -176,9 +185,9 @@ function addCoverText(Konva: typeof KonvaType, layer: KonvaType.Layer, page: Pag
       y: page.coverSubtitleY ?? CANVAS_H * 0.35 + 60,
       width: CANVAS_W,
       text: page.coverSubtitle,
-      fontSize: page.coverSubtitleFontSize ?? 24,
-      fontFamily: page.coverSubtitleFontFamily ?? 'Arial',
-      fill: page.coverSubtitleColor ?? '#ffffffcc',
+      fontSize: page.coverSubtitleFontSize ?? DEFAULT_COVER_SUBTITLE_FONT_SIZE,
+      fontFamily: page.coverSubtitleFontFamily ?? DEFAULT_COVER_SUBTITLE_FONT_FAMILY,
+      fill: page.coverSubtitleColor ?? DEFAULT_COVER_SUBTITLE_COLOR,
       shadowColor: '#000000',
       shadowBlur: 6,
       shadowOpacity: 0.5,
@@ -221,7 +230,7 @@ export const konvaPageRenderer: PageRenderer = {
         y: 0,
         width: CANVAS_W,
         height: CANVAS_H,
-        fill: page.background || '#ffffff',
+        fill: page.background || DEFAULT_PAGE_BACKGROUND,
         listening: false,
       }));
 

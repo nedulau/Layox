@@ -1,18 +1,19 @@
 import type { Page } from '../types';
 import type { PageRenderer, PageRenderOptions } from '../ports/pageRenderer';
 import { CANVAS_H, CANVAS_W } from '../constants/canvas';
+import type { TranslationKey } from '../i18n';
 
 export type PdfCompressionLevel = 'none' | 'low' | 'medium' | 'high';
 
 export const PDF_COMPRESSION_PRESETS: {
   id: PdfCompressionLevel;
-  label: string;
-  description: string;
+  labelKey: TranslationKey;
+  descriptionKey: TranslationKey;
 }[] = [
-  { id: 'none', label: 'No compression', description: 'Maximum quality (PNG, large file)' },
-  { id: 'low', label: 'Low', description: 'Very high quality (JPEG 95%)' },
-  { id: 'medium', label: 'Medium', description: 'Good quality (JPEG 80%)' },
-  { id: 'high', label: 'High', description: 'Small file (JPEG 55%)' },
+  { id: 'none', labelKey: 'pdfNoneLabel', descriptionKey: 'pdfNoneDescription' },
+  { id: 'low', labelKey: 'pdfLowLabel', descriptionKey: 'pdfLowDescription' },
+  { id: 'medium', labelKey: 'pdfMediumLabel', descriptionKey: 'pdfMediumDescription' },
+  { id: 'high', labelKey: 'pdfHighLabel', descriptionKey: 'pdfHighDescription' },
 ];
 
 export interface ProjectExportContext {

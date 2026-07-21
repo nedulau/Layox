@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import useProjectStore from '../store/useProjectStore';
 import { getHandle } from '../utils/handleStore';
 import NewProjectModal from './NewProjectModal';
-import { tr, type Language } from '../i18n';
+import { tr, type Language, type TranslationKey } from '../i18n';
 import { getFileSystemPort } from '../infra/fileSystem';
 import type { RecentProject } from '../store/useProjectStore';
 import type { FileSystemFileHandleExt } from '../types';
@@ -26,7 +26,8 @@ function StartScreen({ uiTheme, setUiTheme, language, setLanguage }: StartScreen
   const [showNewProjectModal, setShowNewProjectModal] = useState(false);
   const [recoveryPoints, setRecoveryPoints] = useState<RecoverySummary[]>([]);
   const [recoveryError, setRecoveryError] = useState<string | null>(null);
-  const t = (key: string) => tr(language, key);
+  const [uiError, setUiError] = useState<string | null>(null);
+  const t = (key: TranslationKey) => tr(language, key);
 
   const resetProject = useProjectStore((s) => s.resetProject);
   const openProject = useProjectStore((s) => s.openProject);
@@ -53,7 +54,7 @@ function StartScreen({ uiTheme, setUiTheme, language, setLanguage }: StartScreen
         await openProject();
       } catch (err) {
         console.error(t('openError'), err);
-        alert(`${t('openError')}: ${err instanceof Error ? err.message : err}`);
+        setUiError(`${t('openError')}: ${err instanceof Error ? err.message : err}`);
       }
     } else {
       fileInputRef.current?.click();
@@ -67,13 +68,12 @@ function StartScreen({ uiTheme, setUiTheme, language, setLanguage }: StartScreen
       await loadFromFile(file);
     } catch (err) {
       console.error(t('loadError'), err);
-      alert(`${t('loadError')}: ${err instanceof Error ? err.message : err}`);
+      setUiError(`${t('loadError')}: ${err instanceof Error ? err.message : err}`);
     }
     e.target.value = '';
   };
 
-  // Double-click on a recent project: try to re-open from stored handle, fall back to file picker
-  const handleRecentDoubleClick = async (recentProject: RecentProject) => {
+  const handleRecentOpen = async (recentProject: RecentProject) => {
     if (recentProject.filePath) {
       const opened = await openRecentProjectByPath(recentProject.filePath);
       if (opened) return;
@@ -170,7 +170,7 @@ function StartScreen({ uiTheme, setUiTheme, language, setLanguage }: StartScreen
         {recoveryPoints.length > 0 && (
           <div className="w-full">
             <h2 className="text-sm start-recent-title font-medium mb-2 uppercase tracking-wider">
-              {language === 'de' ? 'Wiederherstellung' : 'Recovery'}
+              {t('recovery')}
             </h2>
             <div className="flex flex-col gap-1">
               {recoveryPoints.map((point) => (
@@ -185,7 +185,7 @@ function StartScreen({ uiTheme, setUiTheme, language, setLanguage }: StartScreen
                   <span className="flex flex-col min-w-0">
                     <span className="start-recent-name text-sm font-medium truncate">{point.projectName}</span>
                     <span className="text-neutral-500 text-xs">
-                      {point.pageCount} {t('pages')} · {language === 'de' ? 'Wiederherstellen' : 'Restore'}
+                      {point.pageCount} {t('pages')} · {t('restore')}
                     </span>
                   </span>
                   <span className="text-neutral-600 text-xs shrink-0 ml-4">{formatDate(point.createdAt)}</span>
@@ -201,6 +201,12 @@ function StartScreen({ uiTheme, setUiTheme, language, setLanguage }: StartScreen
           </div>
         )}
 
+        {uiError && (
+          <div className="w-full rounded-lg border border-red-800 bg-red-950/40 px-3 py-2 text-xs text-red-200" role="alert">
+            {uiError}
+          </div>
+        )}
+
         {/* Recent projects */}
         {recentProjects.length > 0 && (
           <div className="w-full">
@@ -209,13 +215,13 @@ function StartScreen({ uiTheme, setUiTheme, language, setLanguage }: StartScreen
             </h2>
             <div className="flex flex-col gap-1">
               {recentProjects.map((rp, i) => (
-                <div
+                <button
                   key={`${rp.fileName}-${i}`}
-                  onDoubleClick={() => handleRecentDoubleClick(rp)}
-                  className="flex items-center justify-between px-4 py-2.5 rounded-lg
+                  type="button"
+                  onClick={() => void handleRecentOpen(rp)}
+                  className="w-full flex items-center justify-between px-4 py-2.5 rounded-lg text-left
                              start-recent-item bg-neutral-800/60 hover:bg-neutral-700/80 transition-colors
                              cursor-pointer select-none"
-                  title={t('doubleClickOpen')}
                 >
                   <div className="flex flex-col min-w-0">
                     <span className="start-recent-name text-sm font-medium truncate">
@@ -228,7 +234,7 @@ function StartScreen({ uiTheme, setUiTheme, language, setLanguage }: StartScreen
                   <span className="text-neutral-600 text-xs shrink-0 ml-4">
                     {formatDate(rp.lastOpened)}
                   </span>
-                </div>
+                </button>
               ))}
             </div>
           </div>

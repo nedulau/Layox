@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useDialogFocus } from './common/useDialogFocus';
 
 interface CropModalProps {
   imageBlob: Blob;
@@ -24,6 +25,7 @@ export default function CropModal({
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [naturalSize, setNaturalSize] = useState<{ w: number; h: number } | null>(null);
   const [crop, setCrop] = useState(() => initialCrop ?? { x: 0, y: 0, w: 100, h: 100 });
+  const dialogRef = useDialogFocus<HTMLDivElement>(true, onCancel);
 
   useEffect(() => {
     const url = URL.createObjectURL(imageBlob);
@@ -159,16 +161,22 @@ export default function CropModal({
   // Keyboard
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onCancel();
       if (e.key === 'Enter') onConfirm({ x: Math.round(crop.x), y: Math.round(crop.y), w: Math.round(crop.w), h: Math.round(crop.h) });
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onCancel, onConfirm, crop]);
+  }, [onConfirm, crop]);
 
   if (!imageUrl || !naturalSize) {
     return (
-      <div className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={loadingLabel}
+        tabIndex={-1}
+        className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center"
+      >
         <span className="text-neutral-400 text-sm">{loadingLabel}</span>
       </div>
     );
@@ -186,7 +194,14 @@ export default function CropModal({
   const edgeHandleV = 'w-3 bg-white rounded-sm shadow-md';
 
   return (
-    <div className="fixed inset-0 z-[100] bg-black/85 flex flex-col items-center justify-center select-none">
+    <div
+      ref={dialogRef}
+      role="dialog"
+      aria-modal="true"
+      aria-label={doneLabel}
+      tabIndex={-1}
+      className="fixed inset-0 z-[100] bg-black/85 flex flex-col items-center justify-center select-none"
+    >
       <div
         className="relative overflow-hidden rounded-lg"
         style={{ width: displayW, height: displayH }}
