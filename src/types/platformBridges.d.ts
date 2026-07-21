@@ -7,6 +7,11 @@ export interface ProjectOpenPayload extends ProjectBinaryPayload {
   filePath?: string;
 }
 
+export interface ProjectSavePayload {
+  name: string;
+  filePath?: string;
+}
+
 export interface PlatformStorageBridge {
   getItem(key: string): string | null;
   setItem(key: string, value: string): void;
@@ -16,16 +21,16 @@ export interface PlatformStorageBridge {
 export interface ElectronBridge {
   openProject?: () => Promise<ProjectOpenPayload | null>;
   openProjectFromPath?: (filePath: string) => Promise<ProjectOpenPayload | null>;
-  saveProject?: (payload: ProjectBinaryPayload) => Promise<{ name: string } | null>;
-  saveProjectAs?: (payload: ProjectBinaryPayload) => Promise<{ name: string } | null>;
+  saveProject?: (payload: ProjectBinaryPayload) => Promise<ProjectSavePayload | null>;
+  saveProjectAs?: (payload: ProjectBinaryPayload) => Promise<ProjectSavePayload | null>;
   storage?: PlatformStorageBridge;
 }
 
 export interface CapacitorBridge {
   openProject?: () => Promise<ProjectOpenPayload | null>;
   openProjectFromPath?: (filePath: string) => Promise<ProjectOpenPayload | null>;
-  saveProject?: (payload: ProjectBinaryPayload) => Promise<{ name: string } | null>;
-  saveProjectAs?: (payload: ProjectBinaryPayload) => Promise<{ name: string } | null>;
+  saveProject?: (payload: ProjectBinaryPayload) => Promise<ProjectSavePayload | null>;
+  saveProjectAs?: (payload: ProjectBinaryPayload) => Promise<ProjectSavePayload | null>;
   storage?: PlatformStorageBridge;
 }
 

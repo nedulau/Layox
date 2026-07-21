@@ -133,7 +133,7 @@ export function exportCurrentPageAsJpeg(projectName: string, pageIndex: number):
 function getCurrentPageIndex(): number {
   // Access the Zustand store directly for the current page index
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const store = (globalThis as any).__layoxStore;
     return store?.getState?.()?.currentPageIndex ?? 0;
   } catch {

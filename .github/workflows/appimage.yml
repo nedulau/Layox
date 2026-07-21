@@ -8,7 +8,32 @@ on:
   pull_request:
 
 jobs:
+  quality:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run quality gates
+        run: npm run check
+
+      - name: Audit runtime and tooling dependencies
+        run: npm run audit:ci
+
   appimage:
+    needs: quality
     runs-on: ubuntu-latest
     permissions:
       contents: read

@@ -1,5 +1,5 @@
 import { Stage, Layer, Rect, Text, Image as KonvaImage, Transformer, Group, Line } from 'react-konva';
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import type Konva from 'konva';
 import useProjectStore from '../../store/useProjectStore';
 import type { ImageElement, TextElement, PageElement, LayoutSlot, SlotAssignment } from '../../types';
@@ -51,27 +51,25 @@ function useCachedBlobImage(
   assetPath: string | undefined,
   assetBlobs: Record<string, Blob>,
 ): HTMLImageElement | null {
-  const [image, setImage] = useState<HTMLImageElement | null>(null);
+  const [loaded, setLoaded] = useState<{
+    path: string;
+    blob: Blob;
+    image: HTMLImageElement;
+  } | null>(null);
 
   useEffect(() => {
-    if (!assetPath) {
-      setImage(null);
-      return;
-    }
+    if (!assetPath) return;
 
     const blob = assetBlobs[assetPath];
-    if (!blob) {
-      setImage(null);
-      return;
-    }
+    if (!blob) return;
 
     let cancelled = false;
     loadCachedBlobImage(assetPath, blob)
       .then((loadedImage) => {
-        if (!cancelled) setImage(loadedImage);
+        if (!cancelled) setLoaded({ path: assetPath, blob, image: loadedImage });
       })
       .catch(() => {
-        if (!cancelled) setImage(null);
+        // The derived return value remains null and the caller renders a placeholder.
       });
 
     return () => {
@@ -79,7 +77,9 @@ function useCachedBlobImage(
     };
   }, [assetPath, assetBlobs]);
 
-  return image;
+  if (!assetPath) return null;
+  const blob = assetBlobs[assetPath];
+  return loaded?.path === assetPath && loaded.blob === blob ? loaded.image : null;
 }
 
 function collectImagePathsFromPage(elementPage: {
@@ -131,23 +131,12 @@ function SlotComponent({
   lowResolutionHintText: (qualityPercent: number) => string;
 }) {
   const image = useCachedBlobImage(assignment?.assetPath, assetBlobs);
-  const [naturalSize, setNaturalSize] = useState<{ w: number; h: number } | null>(null);
+  const naturalSize = useMemo(
+    () => (image ? { w: image.naturalWidth, h: image.naturalHeight } : null),
+    [image],
+  );
   const [showResolutionHint, setShowResolutionHint] = useState(false);
   const [showSlotAction, setShowSlotAction] = useState(false);
-
-  useEffect(() => {
-    if (!image) {
-      setNaturalSize(null);
-      return;
-    }
-    setNaturalSize({ w: image.naturalWidth, h: image.naturalHeight });
-  }, [image]);
-
-  useEffect(() => {
-    if (!isSelected || !assignment) {
-      setShowSlotAction(false);
-    }
-  }, [assignment, isSelected]);
 
   const zoomScale = assignment?.scale ?? 1;
   const hasCrop = assignment?.cropX !== undefined && assignment?.cropW !== undefined;
@@ -244,7 +233,7 @@ function SlotComponent({
         onScaleChange(slotIndex, newScale);
       }
     },
-    [assignment, naturalSize, hasCrop, zoomScale, slotIndex, onScaleChange, onCropChange],
+    [assignment, naturalSize, hasCrop, zoomScale, slotIndex, onScaleChange, onCropChange, slot],
   );
 
   // Double-click to crop: initialize crop to current visible region or prompt-like behavior
@@ -371,7 +360,7 @@ function SlotComponent({
         />
       )}
 
-      {showSlotAction && assignment && (
+      {showSlotAction && isSelected && assignment && (
         <Group>
           <Rect
             x={slot.x + slot.width - 116}
@@ -766,7 +755,10 @@ function EditorCanvas({
   const isLayoutMode = !!layoutId;
   const layoutPadding = currentPage?.layoutPadding ?? defaultLayoutPadding;
   const layoutGap = currentPage?.layoutGap ?? defaultLayoutGap;
-  const computedSlots = layoutId ? computeLayoutSlots(layoutId, layoutPadding, layoutGap) : [];
+  const computedSlots = useMemo(
+    () => (layoutId ? computeLayoutSlots(layoutId, layoutPadding, layoutGap) : []),
+    [layoutGap, layoutId, layoutPadding],
+  );
 
   useEffect(() => {
     const neighborPages = [pages[currentPageIndex - 1], pages[currentPageIndex + 1]].filter(Boolean);
@@ -786,7 +778,7 @@ function EditorCanvas({
   }, [assetBlobs, currentPageIndex, pages]);
 
   // In layout mode: only text elements are free. In free mode: all elements.
-  const elements = currentPage?.elements ?? [];
+  const elements = useMemo(() => currentPage?.elements ?? [], [currentPage?.elements]);
   const freeElements = isLayoutMode
     ? elements.filter((el) => el.type === 'text')
     : elements;
@@ -908,7 +900,7 @@ function EditorCanvas({
   );
 
   const handleStageClick = useCallback(
-    (e: Konva.KonvaEventObject<MouseEvent>) => {
+    (e: Konva.KonvaEventObject<MouseEvent | TouchEvent>) => {
       if (e.target === e.target.getStage()) {
         setSelectedElementId(null);
         setSelectedSlotIndex(null);
@@ -1073,7 +1065,7 @@ function EditorCanvas({
         }}
         className="shrink-0 overflow-hidden"
       >
-        <Stage width={CANVAS_W} height={CANVAS_H} onClick={handleStageClick} onTap={handleStageClick as any} onDragStart={handleDragStart}>
+        <Stage width={CANVAS_W} height={CANVAS_H} onClick={handleStageClick} onTap={handleStageClick} onDragStart={handleDragStart}>
           <Layer>
             {/* Page background */}
             <Rect x={0} y={0} width={CANVAS_W} height={CANVAS_H} fill={currentPage?.background ?? '#ffffff'} />

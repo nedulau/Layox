@@ -25,6 +25,37 @@ let currentProjectPath = null;
 let storeFilePath = null;
 let storageCache = {};
 
+function isValidProjectPath(filePath) {
+  return typeof filePath === 'string' && path.isAbsolute(filePath) && filePath.toLowerCase().endsWith('.layox');
+}
+
+function isValidSavePayload(payload) {
+  return Boolean(
+    payload &&
+      typeof payload.name === 'string' &&
+      payload.name.length > 0 &&
+      payload.name.length <= 255 &&
+      payload.name.toLowerCase().endsWith('.layox') &&
+      payload.data instanceof ArrayBuffer,
+  );
+}
+
+async function writeFileAtomically(targetPath, data) {
+  const directory = path.dirname(targetPath);
+  const temporaryPath = path.join(
+    directory,
+    `.${path.basename(targetPath)}.${process.pid}.${Date.now()}.tmp`,
+  );
+
+  try {
+    await fs.writeFile(temporaryPath, toBuffer(data), { flag: 'wx' });
+    await fs.rename(temporaryPath, targetPath);
+  } catch (error) {
+    await fs.rm(temporaryPath, { force: true }).catch(() => undefined);
+    throw error;
+  }
+}
+
 function toArrayBuffer(buffer) {
   return buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
 }
@@ -81,6 +112,16 @@ function createWindow() {
     },
   });
 
+  mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  mainWindow.webContents.on('will-navigate', (event, targetUrl) => {
+    const currentUrl = mainWindow?.webContents.getURL();
+    if (currentUrl && new URL(targetUrl).origin === new URL(currentUrl).origin) return;
+    event.preventDefault();
+  });
+  mainWindow.webContents.session.setPermissionRequestHandler((_webContents, _permission, callback) => {
+    callback(false);
+  });
+
   const devServerUrl = process.env.LAYOX_DEV_SERVER_URL;
   if (devServerUrl) {
     mainWindow.loadURL(devServerUrl);
@@ -115,7 +156,7 @@ function registerIpcHandlers() {
   });
 
   ipcMain.handle(IPC_CHANNELS.openProjectFromPath, async (_event, filePath) => {
-    if (typeof filePath !== 'string' || filePath.length === 0) return null;
+    if (!isValidProjectPath(filePath)) return null;
     try {
       const fileData = await fs.readFile(filePath);
       currentProjectPath = filePath;
@@ -130,7 +171,7 @@ function registerIpcHandlers() {
   });
 
   ipcMain.handle(IPC_CHANNELS.saveProject, async (_event, payload) => {
-    if (!payload?.data || !payload?.name) return null;
+    if (!isValidSavePayload(payload)) return null;
 
     let targetPath = currentProjectPath;
     if (!targetPath) {
@@ -143,14 +184,14 @@ function registerIpcHandlers() {
       targetPath = result.filePath;
     }
 
-    await fs.writeFile(targetPath, toBuffer(payload.data));
+    await writeFileAtomically(targetPath, payload.data);
     currentProjectPath = targetPath;
 
-    return { name: path.basename(targetPath) };
+    return { name: path.basename(targetPath), filePath: targetPath };
   });
 
   ipcMain.handle(IPC_CHANNELS.saveProjectAs, async (_event, payload) => {
-    if (!payload?.data || !payload?.name) return null;
+    if (!isValidSavePayload(payload)) return null;
 
     const result = await dialog.showSaveDialog({
       title: 'Save Layox Project As',
@@ -160,10 +201,10 @@ function registerIpcHandlers() {
 
     if (result.canceled || !result.filePath) return null;
 
-    await fs.writeFile(result.filePath, toBuffer(payload.data));
+    await writeFileAtomically(result.filePath, payload.data);
     currentProjectPath = result.filePath;
 
-    return { name: path.basename(result.filePath) };
+    return { name: path.basename(result.filePath), filePath: result.filePath };
   });
 
   ipcMain.on(IPC_CHANNELS.storageGet, (event, key) => {

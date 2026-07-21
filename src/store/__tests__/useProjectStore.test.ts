@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { v4 as uuidv4 } from 'uuid';
 import type { OpenProjectDialogResult } from '../../infra/ports/fileSystemPort';
+import type { TextElement } from '../../types';
 
 // Mock fileIO and browser APIs before importing the store
 vi.mock('../../utils/fileIO', () => ({
@@ -181,7 +182,7 @@ describe('useProjectStore', () => {
       const page = getState().project.pages[1];
       const el = page.elements.find((e) => e.id === id);
       expect(el).toBeDefined();
-      expect((el as any).content).toBe('Updated');
+      expect((el as TextElement).content).toBe('Updated');
     });
 
     it('removeElement removes the element', () => {

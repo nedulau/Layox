@@ -23,4 +23,5 @@ export interface OpenProjectIpcResult {
 
 export interface SaveProjectIpcResult {
   name: string;
+  filePath: string;
 }

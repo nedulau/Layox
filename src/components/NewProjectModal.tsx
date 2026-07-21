@@ -23,16 +23,39 @@ function NewProjectModal({
   onClose,
   onConfirm,
 }: NewProjectModalProps) {
-  const [name, setName] = useState(initialName);
+  if (!open) return null;
+
+  return (
+    <NewProjectDialog
+      key={initialName}
+      title={title}
+      description={description}
+      initialName={initialName}
+      cancelLabel={cancelLabel}
+      confirmLabel={confirmLabel}
+      placeholder={placeholder}
+      onClose={onClose}
+      onConfirm={onConfirm}
+    />
+  );
+}
+
+function NewProjectDialog({
+  title,
+  description,
+  initialName,
+  cancelLabel,
+  confirmLabel,
+  placeholder,
+  onClose,
+  onConfirm,
+}: Omit<NewProjectModalProps, 'open'>) {
+  const [name, setName] = useState(initialName ?? 'New project');
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (!open) return;
-    setName(initialName);
     requestAnimationFrame(() => inputRef.current?.focus());
-  }, [open, initialName]);
-
-  if (!open) return null;
+  }, []);
 
   return (
     <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/55 backdrop-blur-sm">

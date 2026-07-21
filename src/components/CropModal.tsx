@@ -23,17 +23,20 @@ export default function CropModal({
 }: CropModalProps) {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [naturalSize, setNaturalSize] = useState<{ w: number; h: number } | null>(null);
+  const [crop, setCrop] = useState(() => initialCrop ?? { x: 0, y: 0, w: 100, h: 100 });
 
   useEffect(() => {
     const url = URL.createObjectURL(imageBlob);
     const img = new window.Image();
     img.onload = () => {
-      setNaturalSize({ w: img.naturalWidth, h: img.naturalHeight });
+      const nextNaturalSize = { w: img.naturalWidth, h: img.naturalHeight };
+      setNaturalSize(nextNaturalSize);
+      setCrop(initialCrop ?? { x: 0, y: 0, w: nextNaturalSize.w, h: nextNaturalSize.h });
       setImageUrl(url);
     };
     img.src = url;
     return () => URL.revokeObjectURL(url);
-  }, [imageBlob]);
+  }, [imageBlob, initialCrop]);
 
   // Display dimensions (fit image in 80% viewport)
   const maxW = window.innerWidth * 0.8;
@@ -43,23 +46,6 @@ export default function CropModal({
   const displayH = naturalSize ? naturalSize.h * imgScale : 0;
 
   const MIN_SIZE = 30;
-
-  // Crop state (in natural image pixels) — free aspect ratio
-  const [crop, setCrop] = useState(() => {
-    if (initialCrop) return initialCrop;
-    if (!naturalSize) return { x: 0, y: 0, w: 100, h: 100 };
-    return { x: 0, y: 0, w: naturalSize.w, h: naturalSize.h };
-  });
-
-  // Re-init crop when image loads
-  useEffect(() => {
-    if (!naturalSize) return;
-    if (initialCrop) {
-      setCrop(initialCrop);
-      return;
-    }
-    setCrop({ x: 0, y: 0, w: naturalSize.w, h: naturalSize.h });
-  }, [naturalSize, initialCrop]);
 
   // Interaction state
   const [dragging, setDragging] = useState<HandleType | null>(null);

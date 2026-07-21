@@ -5,6 +5,11 @@ import NewProjectModal from './NewProjectModal';
 import { tr, type Language } from '../i18n';
 import { getFileSystemPort } from '../infra/fileSystem';
 import type { RecentProject } from '../store/useProjectStore';
+import type { FileSystemFileHandleExt } from '../types';
+
+type PermissionAwareFileHandle = FileSystemFileHandleExt & {
+  requestPermission?: (options: { mode: 'readwrite' }) => Promise<PermissionState>;
+};
 
 type UiTheme = 'dark' | 'light';
 
@@ -68,12 +73,11 @@ function StartScreen({ uiTheme, setUiTheme, language, setLanguage }: StartScreen
       const handle = await getHandle(recentProject.fileName);
       if (handle) {
         // Request permission (needed after page reload)
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const perm = await (handle as any).requestPermission?.({ mode: 'readwrite' });
+        const permissionHandle = handle as unknown as PermissionAwareFileHandle;
+        const perm = await permissionHandle.requestPermission?.({ mode: 'readwrite' });
         if (perm === 'granted' || perm === undefined) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const file = await (handle as any).getFile();
-          await loadFromFile(file, handle as any);
+          const file = await permissionHandle.getFile();
+          await loadFromFile(file, permissionHandle);
           return;
         }
       }

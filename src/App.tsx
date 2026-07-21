@@ -12,7 +12,6 @@ import { tr, type Language } from './i18n';
 import type { Page, Project } from './types';
 import { computeLayoutSlots } from './utils/layouts';
 import { CANVAS_H, CANVAS_W } from './constants/canvas';
-import { Analytics } from '@vercel/analytics/react';
 import { readStoredBoolean, readStoredJson, readStoredString, writeStoredString } from './infra/storage';
 import { getFileSystemPort } from './infra/fileSystem';
 
@@ -49,19 +48,9 @@ function App() {
 
   const showEditor = useProjectStore((s) => s.showEditor);
   if (!showEditor) {
-    return (
-      <>
-        <StartScreen uiTheme={uiTheme} setUiTheme={setUiTheme} language={language} setLanguage={setLanguage} />
-        <Analytics />
-      </>
-    );
+    return <StartScreen uiTheme={uiTheme} setUiTheme={setUiTheme} language={language} setLanguage={setLanguage} />;
   }
-  return (
-    <>
-      <Editor uiTheme={uiTheme} setUiTheme={setUiTheme} language={language} setLanguage={setLanguage} />
-      <Analytics />
-    </>
-  );
+  return <Editor uiTheme={uiTheme} setUiTheme={setUiTheme} language={language} setLanguage={setLanguage} />;
 }
 
 // ─── Dropdown menu helper ────────────────────────────────────────────────────
@@ -120,6 +109,14 @@ function MenuDivider() {
   return <div className="h-px bg-neutral-700/80 my-1" />;
 }
 
+function BlobImage({ blob, ...props }: { blob: Blob } & Omit<React.ImgHTMLAttributes<HTMLImageElement>, 'src'>) {
+  const url = useMemo(() => URL.createObjectURL(blob), [blob]);
+
+  useEffect(() => () => URL.revokeObjectURL(url), [url]);
+
+  return <img {...props} src={url} />;
+}
+
 function PagePreviewCard({
   page,
   assetBlobs,
@@ -137,30 +134,6 @@ function PagePreviewCard({
   noPreviewLabel: string;
   metaLabel: string;
 }) {
-  const [previewUrls, setPreviewUrls] = useState<Record<string, string>>({});
-
-  useEffect(() => {
-    const paths = new Set<string>();
-    Object.values(page.slotAssignments ?? {}).forEach((slot) => {
-      if (slot?.assetPath) paths.add(slot.assetPath);
-    });
-    page.elements.forEach((element) => {
-      if (element.type === 'image') paths.add(element.src);
-    });
-
-    const nextUrls: Record<string, string> = {};
-    paths.forEach((path) => {
-      const blob = assetBlobs[path];
-      if (!blob) return;
-      nextUrls[path] = URL.createObjectURL(blob);
-    });
-    setPreviewUrls(nextUrls);
-
-    return () => {
-      Object.values(nextUrls).forEach((url) => URL.revokeObjectURL(url));
-    };
-  }, [assetBlobs, page]);
-
   const slots = useMemo(() => {
     if (!page.layoutId) return [];
     const padding = page.layoutPadding ?? 20;
@@ -171,9 +144,9 @@ function PagePreviewCard({
   const hasPreview =
     slots.some((_, slotIndex) => {
       const assignment = page.slotAssignments?.[slotIndex];
-      return !!assignment && !!previewUrls[assignment.assetPath];
+      return !!assignment && !!assetBlobs[assignment.assetPath];
     }) ||
-    page.elements.some((element) => element.type === 'image' && !!previewUrls[element.src]);
+    page.elements.some((element) => element.type === 'image' && !!assetBlobs[element.src]);
 
   return (
     <button
@@ -194,7 +167,7 @@ function PagePreviewCard({
 
         {slots.map((slot, slotIndex) => {
           const assignment = page.slotAssignments?.[slotIndex];
-          const src = assignment ? previewUrls[assignment.assetPath] : undefined;
+          const blob = assignment ? assetBlobs[assignment.assetPath] : undefined;
 
           return (
             <div
@@ -205,12 +178,12 @@ function PagePreviewCard({
                 top: `${(slot.y / CANVAS_H) * 100}%`,
                 width: `${(slot.width / CANVAS_W) * 100}%`,
                 height: `${(slot.height / CANVAS_H) * 100}%`,
-                background: src ? '#0f172a' : 'rgba(255,255,255,0.08)',
+                background: blob ? '#0f172a' : 'rgba(255,255,255,0.08)',
               }}
             >
-              {src && (
-                <img
-                  src={src}
+              {blob && (
+                <BlobImage
+                  blob={blob}
                   alt=""
                   className="w-full h-full object-cover"
                   draggable={false}
@@ -225,12 +198,12 @@ function PagePreviewCard({
           .sort((firstElement, secondElement) => firstElement.zIndex - secondElement.zIndex)
           .map((element) => {
             if (element.type === 'image') {
-              const src = previewUrls[element.src];
-              if (!src) return null;
+              const blob = assetBlobs[element.src];
+              if (!blob) return null;
               return (
-                <img
+                <BlobImage
                   key={element.id}
-                  src={src}
+                  blob={blob}
                   alt=""
                   draggable={false}
                   className="absolute object-cover rounded-[2px]"
@@ -485,21 +458,6 @@ function AssetLibraryModal({
   onClose: () => void;
 }) {
   const assetPaths = useMemo(() => Object.keys(assetBlobs).sort(), [assetBlobs]);
-  const [previewUrls, setPreviewUrls] = useState<Record<string, string>>({});
-
-  useEffect(() => {
-    if (!open) return;
-    const nextUrls: Record<string, string> = {};
-    assetPaths.forEach((path) => {
-      const blob = assetBlobs[path];
-      if (!blob) return;
-      nextUrls[path] = URL.createObjectURL(blob);
-    });
-    setPreviewUrls(nextUrls);
-    return () => {
-      Object.values(nextUrls).forEach((url) => URL.revokeObjectURL(url));
-    };
-  }, [open, assetBlobs, assetPaths]);
 
   if (!open) return null;
 
@@ -539,8 +497,8 @@ function AssetLibraryModal({
                   className="group text-left rounded-xl border border-neutral-700 bg-neutral-900/80 hover:bg-neutral-800/90 transition-colors overflow-hidden"
                 >
                   <div className="w-[180px] h-[135px] bg-neutral-950 flex items-center justify-center overflow-hidden">
-                    {previewUrls[assetPath] ? (
-                      <img src={previewUrls[assetPath]} alt="" className="w-full h-full object-cover" draggable={false} />
+                    {assetBlobs[assetPath] ? (
+                      <BlobImage blob={assetBlobs[assetPath]} alt="" className="w-full h-full object-cover" draggable={false} />
                     ) : (
                       <span className="text-xs text-neutral-500">…</span>
                     )}
@@ -571,7 +529,7 @@ function Editor({
   language: Language;
   setLanguage: (language: Language) => void;
 }) {
-  const t = (key: string) => tr(language, key);
+  const t = useCallback((key: string) => tr(language, key), [language]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -718,7 +676,6 @@ function Editor({
   const [showQuickImageBar, setShowQuickImageBar] = useState<boolean>(() => readStoredBoolean('layox_showQuickImageBar', true));
   const [deleteFromLibraryOnImageDelete, setDeleteFromLibraryOnImageDelete] = useState<boolean>(() => readStoredBoolean('layox_deleteFromLibraryOnImageDelete', false));
   const [quickInsertAssetPath, setQuickInsertAssetPath] = useState<string | null>(null);
-  const [quickInsertPreviewUrls, setQuickInsertPreviewUrls] = useState<Record<string, string>>({});
   const [canvasZoomMode] = useState<'fit' | 'manual'>('fit');
   const [canvasManualZoom] = useState(1);
   const [autoSaveTimeline, setAutoSaveTimeline] = useState<AutoSaveRestorePoint[]>(() => {
@@ -747,21 +704,6 @@ function Editor({
   }, [deleteFromLibraryOnImageDelete]);
 
   const quickInsertAssetPaths = useMemo(() => Object.keys(assetBlobs).sort(), [assetBlobs]);
-
-  useEffect(() => {
-    const nextUrls: Record<string, string> = {};
-    quickInsertAssetPaths.forEach((assetPath) => {
-      const blob = assetBlobs[assetPath];
-      if (!blob) return;
-      nextUrls[assetPath] = URL.createObjectURL(blob);
-    });
-
-    setQuickInsertPreviewUrls(nextUrls);
-
-    return () => {
-      Object.values(nextUrls).forEach((url) => URL.revokeObjectURL(url));
-    };
-  }, [assetBlobs, quickInsertAssetPaths]);
 
   useEffect(() => {
     writeStoredString('layox_autoSaveTimeline', JSON.stringify(autoSaveTimeline));
@@ -989,10 +931,7 @@ function Editor({
 
   useEffect(() => {
     if (!quickInsertAssetPath) return;
-    if (!currentLayoutId) {
-      setQuickInsertAssetPath(null);
-      return;
-    }
+    if (!currentLayoutId) return;
     if (selectedSlotIndex === null) return;
 
     snapshot();
@@ -1006,6 +945,7 @@ function Editor({
 
   const handleLayoutSelect = (layoutId: string | null) => {
     snapshot();
+    setQuickInsertAssetPath(null);
     if (layoutId) applyLayout(layoutId); else clearLayout();
   };
 
@@ -1613,9 +1553,9 @@ function Editor({
                         }`}
                         title={assetPath.split('/').pop() || assetPath}
                       >
-                        {quickInsertPreviewUrls[assetPath] ? (
-                          <img
-                            src={quickInsertPreviewUrls[assetPath]}
+                        {assetBlobs[assetPath] ? (
+                          <BlobImage
+                            blob={assetBlobs[assetPath]}
                             alt=""
                             className="w-full h-full object-cover"
                             draggable={false}
