@@ -7,7 +7,7 @@ import CropModal from './components/CropModal';
 import NewProjectModal from './components/NewProjectModal';
 import useProjectStore from './store/useProjectStore';
 import { exportAsPdf, exportCurrentPageAsPng, exportCurrentPageAsJpeg, exportAllPagesAsZip, PDF_COMPRESSION_PRESETS } from './utils/exportProject';
-import type { PdfCompressionLevel } from './utils/exportProject';
+import type { ExportJobOptions, PdfCompressionLevel, ProjectExportContext } from './utils/exportProject';
 import { tr, type Language } from './i18n';
 import type { Page } from './types';
 import { computeLayoutSlots } from './utils/layouts';
@@ -15,6 +15,7 @@ import { CANVAS_H, CANVAS_W } from './constants/canvas';
 import { readStoredBoolean, readStoredString, removeStoredValue, writeStoredString } from './infra/storage';
 import { getFileSystemPort } from './infra/fileSystem';
 import { recoveryRepository, type RecoverySummary } from './utils/recoveryRepository';
+import { konvaPageRenderer } from './utils/konvaPageRenderer';
 import { v4 as uuidv4 } from 'uuid';
 
 const FONTS = ['Arial', 'Times New Roman', 'Georgia', 'Verdana', 'Courier New', 'Trebuchet MS', 'Impact', 'Comic Sans MS'];
@@ -678,6 +679,9 @@ function Editor({
   const [recoveryPoints, setRecoveryPoints] = useState<RecoverySummary[]>([]);
   const [recoveryError, setRecoveryError] = useState<string | null>(null);
   const autoSaveRunningRef = useRef(false);
+  const exportAbortRef = useRef<AbortController | null>(null);
+  const [exportJob, setExportJob] = useState<{ label: string; completed: number; total: number } | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
   const [pdfDefaultLevel, setPdfDefaultLevel] = useState<PdfCompressionLevel>(() => {
     const saved = readStoredString('layox_pdfDefaultLevel', 'medium');
     if (saved && PDF_COMPRESSION_PRESETS.some((preset) => preset.id === saved)) {
@@ -1032,6 +1036,42 @@ function Editor({
   // ─── Export handlers ──────────────────────────────────────────────────
   const [showPdfDialog, setShowPdfDialog] = useState(false);
 
+  const exportContext = useMemo<ProjectExportContext>(() => ({
+    pages,
+    assets: assetBlobs,
+    projectName,
+    renderer: konvaPageRenderer,
+    defaultLayoutPadding,
+    defaultLayoutGap,
+  }), [assetBlobs, defaultLayoutGap, defaultLayoutPadding, pages, projectName]);
+
+  const runExport = useCallback(async (
+    label: string,
+    total: number,
+    operation: (job: ExportJobOptions) => Promise<void>,
+  ) => {
+    if (exportAbortRef.current) return;
+    const controller = new AbortController();
+    exportAbortRef.current = controller;
+    setExportError(null);
+    setExportJob({ label, completed: 0, total });
+    try {
+      await operation({
+        signal: controller.signal,
+        onProgress: (completed, progressTotal) => {
+          setExportJob({ label, completed, total: progressTotal });
+        },
+      });
+    } catch (error) {
+      if (!(error instanceof DOMException && error.name === 'AbortError')) {
+        setExportError(error instanceof Error ? error.message : String(error));
+      }
+    } finally {
+      exportAbortRef.current = null;
+      setExportJob(null);
+    }
+  }, []);
+
   const handleExportPdfPrompt = () => {
     closeMenu();
     setShowPdfDialog(true);
@@ -1040,27 +1080,27 @@ function Editor({
   const handleExportPdfConfirm = async (level: PdfCompressionLevel) => {
     setShowPdfDialog(false);
     setPdfDefaultLevel(level);
-    await exportAsPdf(pages.length, setCurrentPageIndex, projectName, level);
+    await runExport('PDF', pages.length, (job) => exportAsPdf(exportContext, level, job));
   };
 
-  const handleExportPng = () => {
+  const handleExportPng = async () => {
     closeMenu();
-    exportCurrentPageAsPng(projectName, currentPageIndex);
+    await runExport('PNG', 1, (job) => exportCurrentPageAsPng(exportContext, currentPageIndex, job));
   };
 
-  const handleExportJpeg = () => {
+  const handleExportJpeg = async () => {
     closeMenu();
-    exportCurrentPageAsJpeg(projectName, currentPageIndex);
+    await runExport('JPEG', 1, (job) => exportCurrentPageAsJpeg(exportContext, currentPageIndex, job));
   };
 
   const handleExportZipPng = async () => {
     closeMenu();
-    await exportAllPagesAsZip(pages.length, setCurrentPageIndex, projectName, 'png');
+    await runExport('PNG ZIP', pages.length, (job) => exportAllPagesAsZip(exportContext, 'png', job));
   };
 
   const handleExportZipJpeg = async () => {
     closeMenu();
-    await exportAllPagesAsZip(pages.length, setCurrentPageIndex, projectName, 'jpeg');
+    await runExport('JPEG ZIP', pages.length, (job) => exportAllPagesAsZip(exportContext, 'jpeg', job));
   };
 
   const btnPageNav =
@@ -1808,6 +1848,44 @@ function Editor({
           </button>
         )}
       </div>
+
+      {exportJob && (
+        <div
+          className="fixed inset-0 z-[150] flex items-center justify-center bg-black/70"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="layox-export-progress-title"
+        >
+          <div className="editor-dropdown w-80 rounded-2xl border border-neutral-700 bg-neutral-900 p-5 shadow-2xl">
+            <h3 id="layox-export-progress-title" className="text-base font-semibold text-white">
+              {language === 'de' ? `${exportJob.label} wird exportiert` : `Exporting ${exportJob.label}`}
+            </h3>
+            <div className="mt-3 h-2 overflow-hidden rounded-full bg-neutral-700">
+              <div
+                className="h-full bg-blue-500 transition-[width]"
+                style={{ width: `${exportJob.total > 0 ? (exportJob.completed / exportJob.total) * 100 : 0}%` }}
+              />
+            </div>
+            <div className="mt-2 text-xs text-neutral-400" aria-live="polite">
+              {exportJob.completed} / {exportJob.total}
+            </div>
+            <button
+              type="button"
+              onClick={() => exportAbortRef.current?.abort()}
+              className="mt-4 w-full rounded-lg border border-neutral-600 bg-neutral-800 py-2 text-sm text-neutral-200 hover:bg-neutral-700"
+            >
+              {t('cancel')}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {exportError && (
+        <div className="fixed bottom-5 left-1/2 z-[140] flex max-w-lg -translate-x-1/2 items-center gap-3 rounded-xl border border-red-700 bg-red-950 px-4 py-3 text-sm text-red-100 shadow-2xl" role="alert">
+          <span>{language === 'de' ? 'Export fehlgeschlagen' : 'Export failed'}: {exportError}</span>
+          <button type="button" onClick={() => setExportError(null)} className="rounded px-2 py-1 hover:bg-red-900" aria-label={t('close')}>×</button>
+        </div>
+      )}
 
       {/* ─── Crop modal ─── */}
       {cropModal && (

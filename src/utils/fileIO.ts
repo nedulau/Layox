@@ -1,4 +1,3 @@
-import { saveAs } from 'file-saver';
 import type { Project, FileSystemFileHandleExt } from '../types';
 import { createProjectArchiveBlob, loadProjectArchive } from './projectArchive';
 import type { SaveOutcome } from '../infra/ports/fileSystemPort';
@@ -13,6 +12,11 @@ async function saveToHandle(
   const writable = await handle.createWritable();
   await writable.write(blob);
   await writable.close();
+}
+
+async function downloadBlob(blob: Blob, fileName: string): Promise<void> {
+  const { saveAs } = await import('file-saver');
+  saveAs(blob, fileName);
 }
 
 /**
@@ -104,7 +108,7 @@ export async function saveProject(
   if (picker.status === 'cancelled') return { status: 'cancelled' };
 
   // Fallback: classic download
-  saveAs(blob, safeName);
+  await downloadBlob(blob, safeName);
   return { status: 'downloaded' };
 }
 
@@ -127,7 +131,7 @@ export async function saveProjectAs(
   if (picker.status === 'cancelled') return { status: 'cancelled' };
 
   // Fallback
-  saveAs(blob, safeName);
+  await downloadBlob(blob, safeName);
   return { status: 'downloaded' };
 }
 

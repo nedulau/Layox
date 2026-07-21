@@ -14,8 +14,6 @@ export default defineConfig(({ mode }) => {
         output: {
           manualChunks: {
             konva: ['konva', 'react-konva'],
-            pdf: ['jspdf'],
-            zip: ['jszip', 'file-saver'],
             react: ['react', 'react-dom'],
           },
         },

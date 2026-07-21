@@ -1,4 +1,4 @@
-import JSZip from 'jszip';
+import type JSZip from 'jszip';
 import type { Project } from '../types';
 import {
   collectReferencedAssetPaths,
@@ -11,6 +11,7 @@ export async function createProjectArchiveBlob(
   project: Project,
   assetBlobs: Record<string, Blob>,
 ): Promise<Blob> {
+  const { default: JSZip } = await import('jszip');
   const zip = new JSZip();
   zip.file('project.json', JSON.stringify(project, null, 2));
   for (const [path, blob] of Object.entries(assetBlobs)) {
@@ -29,6 +30,7 @@ export async function loadProjectArchive(
     throw new Error('The Layox project exceeds the 2 GiB archive limit.');
   }
 
+  const { default: JSZip } = await import('jszip');
   let zip: JSZip;
   try {
     zip = await JSZip.loadAsync(file);
