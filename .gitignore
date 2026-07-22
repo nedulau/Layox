@@ -12,6 +12,8 @@ dist
 dist-ssr
 dist-electron
 coverage
+playwright-report
+test-results
 *.AppImage
 *.AppImage.blockmap
 *.local

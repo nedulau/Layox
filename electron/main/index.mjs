@@ -24,6 +24,10 @@ let mainWindow = null;
 let storeFilePath = null;
 let storageCache = {};
 
+if (process.env.LAYOX_E2E) {
+  globalThis.__layoxE2E = { failNextAtomicSave: false };
+}
+
 function isValidProjectPath(filePath) {
   return typeof filePath === 'string' && path.isAbsolute(filePath) && filePath.toLowerCase().endsWith('.layox');
 }
@@ -49,6 +53,10 @@ async function writeFileAtomically(targetPath, data) {
 
   try {
     await fs.writeFile(temporaryPath, toBuffer(data), { flag: 'wx' });
+    if (process.env.LAYOX_E2E && globalThis.__layoxE2E?.failNextAtomicSave) {
+      globalThis.__layoxE2E.failNextAtomicSave = false;
+      throw new Error('simulated atomic failure');
+    }
     await fs.rename(temporaryPath, targetPath);
   } catch (error) {
     await fs.rm(temporaryPath, { force: true }).catch(() => undefined);
@@ -105,7 +113,7 @@ function createWindow() {
     backgroundColor: '#111111',
     autoHideMenuBar: true,
     webPreferences: {
-      preload: path.join(__dirname, '../preload/index.mjs'),
+      preload: path.join(__dirname, '../preload/index.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,

@@ -729,10 +729,13 @@ function Editor({
       // Ctrl+S / Ctrl+Shift+S
       if ((e.ctrlKey || e.metaKey) && e.key === 's') {
         e.preventDefault();
+        const reportSaveFailure = (error: unknown) => {
+          setUiError(`${t('saveError')}: ${error instanceof Error ? error.message : String(error)}`);
+        };
         if (e.shiftKey) {
-          void useProjectStore.getState().saveCurrentProjectAs().catch(() => undefined);
+          void useProjectStore.getState().saveCurrentProjectAs().catch(reportSaveFailure);
         } else {
-          void useProjectStore.getState().saveCurrentProject().catch(() => undefined);
+          void useProjectStore.getState().saveCurrentProject().catch(reportSaveFailure);
         }
         return;
       }
@@ -795,7 +798,7 @@ function Editor({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [addTextElement, deleteFromLibraryOnImageDelete, removeElement, removeImageFromSlot, resetProject]);
+  }, [addTextElement, deleteFromLibraryOnImageDelete, removeElement, removeImageFromSlot, resetProject, t]);
 
   useEffect(() => {
     if (!isDirty) return;

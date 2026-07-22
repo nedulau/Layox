@@ -30,8 +30,28 @@ jobs:
       - name: Audit runtime and tooling dependencies
         run: npm run audit:ci
 
+      - name: Install Chromium for browser tests
+        run: npx playwright install --with-deps chromium
+
+      - name: Run browser end-to-end tests
+        run: npm run test:e2e
+
+      - name: Run Electron end-to-end tests
+        run: xvfb-run -a npm run test:e2e:electron
+
       - name: Build AppImage
         run: npm run electron:build:appimage
+
+      - name: Smoke-test AppImage under Xvfb
+        run: |
+          artifact="$(find dist-electron -maxdepth 1 -name '*.AppImage' -print -quit)"
+          test -n "$artifact"
+          chmod +x "$artifact"
+          set +e
+          timeout 15s xvfb-run -a "$artifact" --appimage-extract-and-run
+          status=$?
+          set -e
+          test "$status" -eq 124
 
       - name: Generate and update release notes
         uses: actions/github-script@v7
