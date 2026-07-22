@@ -12,15 +12,21 @@ async function createProject(page: Page, name = 'E2E Album') {
   await expect(page.locator('.editor-ui')).toBeVisible();
 }
 
-async function selectSingleLayout(page: Page) {
+async function selectLayout(page: Page, layoutName: RegExp) {
   await page.getByRole('button', { name: 'Layout', exact: true }).click();
   await page.getByRole('button', { name: /Cover \(Full\)/ }).click();
-  await page.getByRole('button', { name: /Single/ }).click();
+  await page.getByRole('button', { name: layoutName }).click();
 }
 
 async function openMenuItem(page: Page, menu: string, item: string) {
   await page.getByRole('button', { name: menu, exact: true }).click();
   await page.getByRole('button', { name: item }).click();
+}
+
+async function insertFixtureImage(page: Page) {
+  const chooserPromise = page.waitForEvent('filechooser');
+  await openMenuItem(page, 'Einfügen', 'Bild einfügen');
+  await (await chooserPromise).setFiles(fixtureImage);
 }
 
 test.beforeEach(async ({ page }) => {
@@ -32,11 +38,10 @@ test.beforeEach(async ({ page }) => {
 
 test('creates, edits, crops, undoes and redoes an album', async ({ page }) => {
   await createProject(page);
-  await selectSingleLayout(page);
-
-  const chooserPromise = page.waitForEvent('filechooser');
-  await openMenuItem(page, 'Einfügen', 'Bild einfügen');
-  await (await chooserPromise).setFiles(fixtureImage);
+  await selectLayout(page, /Grid \(4\)/);
+  await insertFixtureImage(page);
+  await insertFixtureImage(page);
+  await expect(page.getByRole('button', { name: /icon-512\.png/ })).toHaveCount(2);
   await expect(page.locator('canvas')).toBeVisible();
   await page.locator('.konvajs-content').click({ position: { x: 120, y: 120 } });
 
@@ -53,7 +58,8 @@ test('creates, edits, crops, undoes and redoes an album', async ({ page }) => {
 
 test('downloads, reopens and exports a project without changing the editor page', async ({ page }) => {
   await createProject(page, 'Roundtrip Album');
-  await selectSingleLayout(page);
+  await selectLayout(page, /Single/);
+  await insertFixtureImage(page);
 
   const projectDownloadPromise = page.waitForEvent('download');
   await openMenuItem(page, 'Datei', 'Speichern unter');
@@ -79,6 +85,7 @@ test('downloads, reopens and exports a project without changing the editor page'
   await openMenuItem(page, 'Datei', 'Öffnen');
   await (await openChooserPromise).setFiles(projectPath!);
   await expect(page.getByTitle('Projektname bearbeiten')).toHaveValue('Roundtrip Album');
+  await expect(page.getByRole('button', { name: /icon-512\.png/ })).toBeVisible();
 });
 
 test('is usable at tablet width without document overflow', async ({ page }) => {
@@ -110,9 +117,7 @@ test('reloads from the service worker while offline after the first load', async
 
 test('auto-saves a complete recovery point and restores it after reload', async ({ page }) => {
   await createProject(page, 'Recovery E2E');
-  const chooserPromise = page.waitForEvent('filechooser');
-  await openMenuItem(page, 'Einfügen', 'Bild einfügen');
-  await (await chooserPromise).setFiles(fixtureImage);
+  await insertFixtureImage(page);
   await expect(page.getByRole('button', { name: /icon-512\.png/ })).toBeVisible();
 
   await page.getByRole('button', { name: 'Schnelleinstellungen' }).click();
