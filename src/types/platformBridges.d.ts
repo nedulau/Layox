@@ -1,3 +1,5 @@
+import type { FileSystemFileHandleExt } from './index';
+
 export interface ProjectBinaryPayload {
   name: string;
   data: ArrayBuffer;
@@ -52,6 +54,14 @@ declare global {
     electronBridge?: ElectronBridge;
     capacitorBridge?: CapacitorBridge;
     Capacitor?: typeof Capacitor;
+    showSaveFilePicker?: (options: {
+      suggestedName?: string;
+      types?: Array<{ description?: string; accept: Record<string, string[]> }>;
+    }) => Promise<FileSystemFileHandleExt>;
+    showOpenFilePicker?: (options: {
+      types?: Array<{ description?: string; accept: Record<string, string[]> }>;
+      multiple?: boolean;
+    }) => Promise<FileSystemFileHandleExt[]>;
   }
 }
 

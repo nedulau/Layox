@@ -30,10 +30,10 @@ async function showSaveAsDialog(
   | { status: 'unsupported' }
   | { status: 'cancelled' }
 > {
-  if (!('showSaveFilePicker' in window)) return { status: 'unsupported' };
+  const showSaveFilePicker = window.showSaveFilePicker;
+  if (!showSaveFilePicker) return { status: 'unsupported' };
   try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const handle = await (window as any).showSaveFilePicker({
+    const handle = await showSaveFilePicker({
       suggestedName,
       types: [
         {
@@ -57,10 +57,10 @@ export async function showOpenDialog(): Promise<{
   file: File;
   handle: FileSystemFileHandleExt;
 } | null> {
-  if (!('showOpenFilePicker' in window)) return null;
+  const showOpenFilePicker = window.showOpenFilePicker;
+  if (!showOpenFilePicker) return null;
   try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const [handle] = await (window as any).showOpenFilePicker({
+    const [handle] = await showOpenFilePicker({
       types: [
         {
           description: 'Layox Project',

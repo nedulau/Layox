@@ -1,7 +1,7 @@
 /**
  * Tiny IndexedDB-backed store for FileSystemFileHandle objects.
  * Used to persist recent project handles so users can re-open
- * them with a double-click on the start screen.
+ * them from the start screen.
  */
 
 const DB_NAME = 'layox_handles';

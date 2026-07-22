@@ -71,6 +71,10 @@ test('downloads, reopens and exports a project without changing the editor page'
   await page.getByRole('dialog', { name: 'PDF-Kompression' }).getByRole('button', { name: /Mittel/ }).click();
   expect((await pdfDownloadPromise).suggestedFilename()).toMatch(/\.pdf$/);
 
+  const zipDownloadPromise = page.waitForEvent('download');
+  await openMenuItem(page, 'Datei', 'Alle Seiten als PNG (ZIP)');
+  expect((await zipDownloadPromise).suggestedFilename()).toMatch(/\.zip$/);
+
   const openChooserPromise = page.waitForEvent('filechooser');
   await openMenuItem(page, 'Datei', 'Öffnen');
   await (await openChooserPromise).setFiles(projectPath!);
@@ -102,4 +106,23 @@ test('reloads from the service worker while offline after the first load', async
   await context.setOffline(true);
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Layox' })).toBeVisible();
+});
+
+test('auto-saves a complete recovery point and restores it after reload', async ({ page }) => {
+  await createProject(page, 'Recovery E2E');
+  const chooserPromise = page.waitForEvent('filechooser');
+  await openMenuItem(page, 'Einfügen', 'Bild einfügen');
+  await (await chooserPromise).setFiles(fixtureImage);
+  await expect(page.getByRole('button', { name: /icon-512\.png/ })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Schnelleinstellungen' }).click();
+  await page.getByRole('checkbox', { name: 'Auto-Save aktivieren' }).check();
+  await page.getByText('Intervall', { exact: true }).locator('..').getByRole('combobox').selectOption('10');
+  await page.waitForTimeout(11_000);
+
+  page.once('dialog', (dialog) => void dialog.accept());
+  await page.reload();
+  await page.getByRole('button', { name: /Recovery E2E/ }).click();
+  await expect(page.getByTitle('Projektname bearbeiten')).toHaveValue('Recovery E2E');
+  await expect(page.getByRole('button', { name: /icon-512\.png/ })).toBeVisible();
 });
