@@ -386,21 +386,22 @@ function Editor({
     const handleKeyDown = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement).tagName;
       const isInput = tag === 'INPUT' || tag === 'TEXTAREA';
+      const key = e.key.toLowerCase();
 
       // Ctrl+Z – Undo
-      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+      if ((e.ctrlKey || e.metaKey) && key === 'z' && !e.shiftKey) {
         e.preventDefault();
         useProjectStore.getState().undo();
         return;
       }
       // Ctrl+Y or Ctrl+Shift+Z – Redo
-      if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey) || (e.key === 'Z' && e.shiftKey))) {
+      if ((e.ctrlKey || e.metaKey) && (key === 'y' || (key === 'z' && e.shiftKey))) {
         e.preventDefault();
         useProjectStore.getState().redo();
         return;
       }
       // Ctrl+S / Ctrl+Shift+S
-      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+      if ((e.ctrlKey || e.metaKey) && key === 's') {
         e.preventDefault();
         const reportSaveFailure = (error: unknown) => {
           setUiError(`${t('saveError')}: ${error instanceof Error ? error.message : String(error)}`);
@@ -413,19 +414,19 @@ function Editor({
         return;
       }
       // Ctrl+O – Open
-      if ((e.ctrlKey || e.metaKey) && e.key === 'o') {
+      if ((e.ctrlKey || e.metaKey) && key === 'o') {
         e.preventDefault();
         useProjectStore.getState().openProject();
         return;
       }
       // Ctrl+N – New project
-      if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
+      if ((e.ctrlKey || e.metaKey) && key === 'n') {
         e.preventDefault();
         setShowNewProjectModal(true);
         return;
       }
       // Ctrl+T – Add text
-      if ((e.ctrlKey || e.metaKey) && e.key === 't') {
+      if ((e.ctrlKey || e.metaKey) && key === 't') {
         if (!isInput) {
           e.preventDefault();
           useProjectStore.getState().snapshot();
