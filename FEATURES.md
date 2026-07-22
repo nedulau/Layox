@@ -7,11 +7,14 @@ Detailed feature set of the local photo album editor.
 - Start screen with recently opened projects
 - Switchable language (German / English) on the start screen and in settings
 - Switchable UI theme (Dark / Light) on the start screen and in settings
-- Double-click on a recent project to reopen it directly (path is persisted)
+- Open a recent project with one click, Enter, or Space (path/handle is persisted where supported)
 - Create new projects with an automatic cover page
 - Save / Save As via native File System Access API or fallback download
 - Open existing `.layox` files (ZIP-based format)
 - Optional auto-save with configurable interval (10 s - 5 min)
+- Complete IndexedDB recovery snapshots with page position and image blobs
+- Up to twelve snapshots per project with asset deduplication, orphan cleanup, and quota-aware pruning
+- Visible saved/unsaved/saving/error status based on content revisions
 - Recent projects persisted via localStorage + IndexedDB handles
 
 ## Pages and Navigation
@@ -60,11 +63,15 @@ Detailed feature set of the local photo album editor.
   - High (JPEG 55%, smaller file)
 - PNG export of current page (2x retina resolution)
 - JPEG export of current page
+- ZIP export of all pages as PNG or JPEG
+- Shared offscreen page renderer for every export format
+- Editor overlays, selection frames, snap lines, warnings, and actions never enter exports
+- Multi-page export preserves the visible page and selection, with progress and cancellation
 
 ## Canvas
 
 - Responsive scaling to available horizontal space
-- Explicit zoom controls (`100%`, `Fit`, `+`, `-`)
+- Explicit zoom controls (`100%`, `Fit`, `+`, `-`) from 20% to 300%
 - Internal 1200 x 900 coordinate system with CSS transform scaling
 
 ## Editing
@@ -93,7 +100,16 @@ Detailed feature set of the local photo album editor.
 - Page overview supports touch-based reorder (pointer events)
 - Crop modal supports touch interaction for crop box and handles
 - Canvas elements support touch move/scale/rotate (via Konva)
-- Optimized for iPad/tablet usage in PWA mode
+- Full editing support on tablets from 768 px
+- Scrollable/collapsible editor controls between 768 and 1023 px
+- On smartphones below 768 px, start screen, project opening, and recovery remain available; editing shows a clear platform notice
+
+## Accessibility
+
+- Dialog semantics, labels, focus trapping, Escape handling, and focus restoration
+- Keyboard-operable recent projects and modal actions
+- Accessible names and 44 x 44 px targets for icon controls
+- In-app confirmation dialogs and status messages instead of native `alert`/`confirm`
 
 ## PWA (Progressive Web App)
 
@@ -101,9 +117,12 @@ Detailed feature set of the local photo album editor.
 - Standalone fullscreen app mode
 - Service worker for offline caching
 - Web app manifest with app name, icons, and theme color
-- Automatic activation of new app versions
+- Update prompt instead of automatic reload; updates cannot be applied while changes are unsaved
 
 ## File Format
 
-- `.layox` files are ZIP containers with `project.json` and `assets/`
+- `.layox` 1.1 files are ZIP containers with validated `project.json` and `assets/`
+- Unversioned and 1.0 files migrate to 1.1; unknown future versions are rejected
+- Archive, JSON, numeric range, and asset-reference validation before the open project changes
 - Offline-first architecture: no backend, no cloud, all local
+- No analytics, telemetry, or production tracking requests

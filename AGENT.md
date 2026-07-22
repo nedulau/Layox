@@ -8,12 +8,15 @@ Layox is a local-first photo album editor (no backend, no cloud), built with Rea
 
 ## Key Architecture
 
-- UI entry: `src/App.tsx`
+- UI entry/editor shell: `src/App.tsx`
 - Start screen: `src/components/StartScreen.tsx`
 - Editor canvas: `src/components/canvas/EditorCanvas.tsx`
-- State management: `src/store/useProjectStore.ts` (Zustand)
+- Pure project defaults/operations/migration: `src/domain/`
+- State management adapter: `src/store/useProjectStore.ts` (Zustand)
+- Save coordination: `src/services/saveCoordinator.ts`
 - Layout logic: `src/utils/layouts.ts`
-- File I/O (`.layox` ZIP): `src/utils/fileIO.ts`
+- Validated file codec (`.layox` ZIP): `src/utils/projectArchive.ts`
+- Recovery snapshots: `src/utils/recoveryRepository.ts`
 - Export (PDF/PNG/JPEG): `src/utils/exportProject.ts`
 
 ## Canvas Baseline (Critical)
@@ -54,7 +57,7 @@ Inline-Editor in `EditorCanvas.tsx`:
 - Recent projects:
   - List in `localStorage`
   - File Handles in IndexedDB (`src/utils/handleStore.ts`)
-- Double-clicking a recent project attempts direct reopen using the stored handle
+- Clicking or keyboard-activating a recent project attempts direct reopen using the stored handle/path
 
 ## PWA
 
@@ -70,6 +73,10 @@ Inline-Editor in `EditorCanvas.tsx`:
 - Important commands:
   - `npm test`
   - `npm run test:run`
+  - `npm run test:coverage`
+  - `npm run test:e2e`
+  - `npm run test:e2e:electron`
+  - `npm run check`
   - `npx tsc -b`
   - `npm run build`
   - `npm run preview -- --host` (local PWA testing)
