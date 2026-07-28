@@ -295,6 +295,8 @@ function EditorCanvas({
         fontSize: el.fontSize,
         fontFamily: el.fontFamily,
         color: el.color,
+        align: el.align,
+        fontStyle: el.fontStyle,
       });
     },
     [editTextPlaceholder, freeElements, snapshot],
@@ -445,7 +447,10 @@ function EditorCanvas({
                   assetBlobs={assetBlobs}
                   projectId={projectId}
                   isSelected={selectedSlotIndex === i}
-                  onSelect={() => setSelectedSlotIndex(i)}
+                  onSelect={() => {
+                    setSelectedElementId(null);
+                    setSelectedSlotIndex(i);
+                  }}
                   onOffsetChange={updateSlotOffset}
                   onScaleChange={updateSlotScale}
                   onCropChange={updateSlotCrop}
@@ -512,7 +517,10 @@ function EditorCanvas({
                 assetBlobs={assetBlobs}
                 projectId={projectId}
                 isSelected={selectedElementId === el.id && inlineEdit?.id !== el.id}
-                onSelect={() => setSelectedElementId(el.id)}
+                onSelect={() => {
+                  setSelectedSlotIndex(null);
+                  setSelectedElementId(el.id);
+                }}
                 onChange={(changes) => {
                   updateElement(el.id, changes);
                   handleElementDragEnd();
@@ -574,6 +582,7 @@ function EditorCanvas({
               color: inlineEdit.color,
               textAlign: (inlineEdit.align || 'left') as React.CSSProperties['textAlign'],
               fontWeight: inlineEdit.fontStyle?.includes('bold') ? 'bold' : 'normal',
+              fontStyle: inlineEdit.fontStyle?.includes('italic') ? 'italic' : 'normal',
               lineHeight: 1.2,
               background: 'rgba(0,0,0,0.4)',
               border: '2px solid #3b82f6',

@@ -98,6 +98,7 @@ import QuickSettingsMenu from './components/editor/QuickSettingsMenu';
 import KeyboardShortcutsDialog from './components/editor/KeyboardShortcutsDialog';
 import AssetTray, { type AssetTrayItem } from './components/editor/AssetTray';
 import PageFilmstrip from './components/editor/PageFilmstrip';
+import PropertiesInspector from './components/editor/PropertiesInspector';
 
 const LAYOUT_NAME_KEYS: Partial<Record<string, TranslationKey>> = {
   'cover-full': 'layoutCoverFull',
@@ -1423,6 +1424,13 @@ function Editor({
             </svg>
           </button>
         )}
+        <PropertiesInspector
+          t={t}
+          fonts={FONTS}
+          onStartCrop={handleStartCrop}
+          onReplaceImage={() => imageInputRef.current?.click()}
+          onDelete={handleDelete}
+        />
       </div>
 
       {showQuickImageBar && (

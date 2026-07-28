@@ -542,6 +542,9 @@ function TextElementComponent({
         fontFamily={element.fontFamily}
         fill={element.color}
         width={element.width}
+        align={element.align ?? 'left'}
+        fontStyle={element.fontStyle ?? 'normal'}
+        lineHeight={element.lineHeight ?? 1.2}
         rotation={element.rotation}
         draggable
         onClick={onSelect}
@@ -617,5 +620,4 @@ export function ElementRenderer({
       return null;
   }
 }
-
 

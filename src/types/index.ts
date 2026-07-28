@@ -23,6 +23,9 @@ export interface TextElement extends BaseElement {
   fontFamily: string;
   color: string;
   width?: number; // Wraps text if defined
+  align?: 'left' | 'center' | 'right';
+  fontStyle?: 'normal' | 'bold' | 'italic' | 'bold italic';
+  lineHeight?: number;
 }
 
 export type PageElement = ImageElement | TextElement;

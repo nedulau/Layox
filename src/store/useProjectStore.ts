@@ -107,6 +107,7 @@ interface ProjectState {
   clearSlotCrop: (slotIndex: number) => void;
   setLayoutPadding: (padding: number) => void;
   setLayoutGap: (gap: number) => void;
+  setPageBackground: (color: string) => void;
   setDefaultLayoutPadding: (padding: number) => void;
   setDefaultLayoutGap: (gap: number) => void;
   applyLayoutDefaultsToAllPages: () => void;
@@ -509,6 +510,15 @@ const useProjectStore = create<ProjectState>((baseSet, get) => {
       const page = { ...pages[state.currentPageIndex] };
       page.layoutGap = gap;
       pages[state.currentPageIndex] = page;
+      return { project: { ...state.project, pages } };
+    }),
+
+  setPageBackground: (color) =>
+    set((state) => {
+      const pages = [...state.project.pages];
+      const page = pages[state.currentPageIndex];
+      if (!page || page.background === color) return state;
+      pages[state.currentPageIndex] = { ...page, background: color };
       return { project: { ...state.project, pages } };
     }),
 

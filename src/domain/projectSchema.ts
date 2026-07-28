@@ -46,6 +46,18 @@ function optionalBoolean(value: unknown, path: string): boolean | undefined {
   return value;
 }
 
+function optionalEnum<T extends string>(
+  value: unknown,
+  allowed: readonly T[],
+  path: string,
+): T | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== 'string' || !allowed.includes(value as T)) {
+    throw new Error(`${path} is invalid.`);
+  }
+  return value as T;
+}
+
 function validateAssetPath(value: unknown, path: string): string {
   const assetPath = requireString(value, path, 1_024);
   if (!assetPath.startsWith('assets/') || assetPath.includes('..') || assetPath.endsWith('/')) {
@@ -84,6 +96,10 @@ function validateElement(value: unknown, path: string): PageElement {
     if (fontSize <= 0) throw new Error(`${path}.fontSize must be positive.`);
     const width = optionalFiniteNumber(element.width, `${path}.width`);
     if (width !== undefined && width <= 0) throw new Error(`${path}.width must be positive.`);
+    const lineHeight = optionalFiniteNumber(element.lineHeight, `${path}.lineHeight`);
+    if (lineHeight !== undefined && (lineHeight < 0.5 || lineHeight > 5)) {
+      throw new Error(`${path}.lineHeight must be between 0.5 and 5.`);
+    }
     return {
       ...base,
       type: 'text',
@@ -92,6 +108,13 @@ function validateElement(value: unknown, path: string): PageElement {
       fontFamily: requireString(element.fontFamily, `${path}.fontFamily`, 200),
       color: requireString(element.color, `${path}.color`, 100),
       width,
+      align: optionalEnum(element.align, ['left', 'center', 'right'] as const, `${path}.align`),
+      fontStyle: optionalEnum(
+        element.fontStyle,
+        ['normal', 'bold', 'italic', 'bold italic'] as const,
+        `${path}.fontStyle`,
+      ),
+      lineHeight,
     };
   }
 
