@@ -26,7 +26,6 @@ import {
   DEFAULT_LAYOUT_PADDING,
 } from './domain/projectDefaults';
 import { MenuButton, MenuDivider, MenuItem } from './components/editor/MenuComponents';
-import BlobImage from './components/common/BlobImage';
 import AssetLibraryModal from './components/editor/AssetLibraryModal';
 import { useDialogFocus } from './components/common/useDialogFocus';
 import { useMediaQuery } from './hooks/useMediaQuery';
@@ -97,6 +96,7 @@ import FileMenu from './components/editor/FileMenu';
 import SaveStatus from './components/editor/SaveStatus';
 import QuickSettingsMenu from './components/editor/QuickSettingsMenu';
 import KeyboardShortcutsDialog from './components/editor/KeyboardShortcutsDialog';
+import AssetTray, { type AssetTrayItem } from './components/editor/AssetTray';
 
 const LAYOUT_NAME_KEYS: Partial<Record<string, TranslationKey>> = {
   'cover-full': 'layoutCoverFull',
@@ -151,6 +151,7 @@ function Editor({
 
   const addImageFromFile = useProjectStore((s) => s.addImageFromFile);
   const addImageFromAsset = useProjectStore((s) => s.addImageFromAsset);
+  const removeAsset = useProjectStore((s) => s.removeAsset);
   const addTextElement = useProjectStore((s) => s.addTextElement);
   const removeElement = useProjectStore((s) => s.removeElement);
   const removeImageFromSlot = useProjectStore((s) => s.removeImageFromSlot);
@@ -292,6 +293,8 @@ function Editor({
   const [exportJob, setExportJob] = useState<{ label: string; completed: number; total: number } | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
   const [uiError, setUiError] = useState<string | null>(null);
+  const [uiNotice, setUiNotice] = useState<string | null>(null);
+  const [importJob, setImportJob] = useState<{ completed: number; total: number } | null>(null);
   const [showHomeConfirm, setShowHomeConfirm] = useState(false);
   const [showPdfDialog, setShowPdfDialog] = useState(false);
   const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false);
@@ -317,7 +320,33 @@ function Editor({
     writeStoredString('layox_deleteFromLibraryOnImageDelete', String(deleteFromLibraryOnImageDelete));
   }, [deleteFromLibraryOnImageDelete]);
 
+  useEffect(() => {
+    if (!uiNotice) return;
+    const timeout = window.setTimeout(() => setUiNotice(null), 6_000);
+    return () => window.clearTimeout(timeout);
+  }, [uiNotice]);
+
   const quickInsertAssetPaths = useMemo(() => Object.keys(assetBlobs).sort(), [assetBlobs]);
+  const assetTrayItems = useMemo<AssetTrayItem[]>(() => {
+    const usage = new Map<string, number>();
+    for (const page of pages) {
+      for (const element of page.elements) {
+        if (element.type === 'image') usage.set(element.src, (usage.get(element.src) ?? 0) + 1);
+      }
+      for (const assignment of Object.values(page.slotAssignments ?? {})) {
+        usage.set(assignment.assetPath, (usage.get(assignment.assetPath) ?? 0) + 1);
+      }
+    }
+    return quickInsertAssetPaths.map((assetPath) => ({
+      assetPath,
+      blob: assetBlobs[assetPath],
+      usageCount: usage.get(assetPath) ?? 0,
+    }));
+  }, [assetBlobs, pages, quickInsertAssetPaths]);
+  const assetUsageCounts = useMemo(
+    () => Object.fromEntries(assetTrayItems.map((item) => [item.assetPath, item.usageCount])),
+    [assetTrayItems],
+  );
 
   const refreshRecoveryPoints = useCallback(async () => {
     try {
@@ -545,10 +574,27 @@ function Editor({
 
   const handleAddImage = () => { closeMenu(); imageInputRef.current?.click(); };
   const handleImageSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = Array.from(e.target.files ?? []).filter((file) => file.type.startsWith('image/'));
+    if (files.length === 0) return;
     snapshot();
-    try { await addImageFromFile(file); } catch (err) { console.error(err); }
+    setImportJob({ completed: 0, total: files.length });
+    let unplaced = 0;
+    try {
+      for (let index = 0; index < files.length; index += 1) {
+        const result = await addImageFromFile(files[index]);
+        if (result.placement === 'library-only') unplaced += 1;
+        setImportJob({ completed: index + 1, total: files.length });
+      }
+      setUiNotice(
+        t('importSummary')
+          .replace('{count}', String(files.length))
+          .replace('{unplaced}', String(unplaced)),
+      );
+    } catch (err) {
+      setUiError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setImportJob(null);
+    }
     e.target.value = '';
   };
 
@@ -559,11 +605,15 @@ function Editor({
     await addImageFromAsset(assetPath);
   };
   const handleQuickInsertAssetPick = useCallback((assetPath: string) => {
-    if (!currentLayoutId) return;
     if (selectedSlotIndex !== null) {
       snapshot();
       void addImageFromAsset(assetPath).catch((err) => console.error(err));
       setQuickInsertAssetPath(null);
+      return;
+    }
+    if (!currentLayoutId) {
+      snapshot();
+      void addImageFromAsset(assetPath).catch((err) => console.error(err));
       return;
     }
     setQuickInsertAssetPath(assetPath);
@@ -1141,62 +1191,7 @@ function Editor({
 
         {/* Hidden file inputs */}
         <input ref={fileInputRef} type="file" accept=".layox" className="hidden" onChange={handleFileSelected} />
-        <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageSelected} />
-
-        {showQuickImageBar && currentLayoutId && (
-          <div className="editor-context-bar order-3 basis-full mt-2 pt-2 border-t border-neutral-800/90 flex items-center gap-3 px-1 pb-1 text-sm">
-            <div className="flex-1 min-w-0 overflow-x-auto">
-              {quickInsertAssetPaths.length === 0 ? (
-                <div className="text-xs text-neutral-500 py-1">{t('noAssets')}</div>
-              ) : (
-                <div className="flex items-center gap-2 pr-1">
-                  <button
-                    onClick={() => {
-                      setQuickInsertAssetPath(null);
-                      setShowAssetLibrary(true);
-                    }}
-                    className="shrink-0 h-14 px-3 rounded-md border border-neutral-700 bg-neutral-900 text-neutral-200 text-xs hover:border-neutral-500 transition-colors cursor-pointer select-none"
-                  >
-                    {t('assetLibrary')}
-                  </button>
-
-                  {quickInsertAssetPaths.map((assetPath) => {
-                    const isActive = quickInsertAssetPath === assetPath;
-                    return (
-                      <button
-                        key={`quick-insert-${assetPath}`}
-                        onClick={() => handleQuickInsertAssetPick(assetPath)}
-                        className={`shrink-0 w-14 h-14 rounded-md border overflow-hidden transition-colors cursor-pointer select-none ${
-                          isActive
-                            ? 'border-blue-500 ring-1 ring-blue-500/80'
-                            : 'border-neutral-700 hover:border-neutral-500'
-                        }`}
-                        title={assetPath.split('/').pop() || assetPath}
-                      >
-                        {assetBlobs[assetPath] ? (
-                          <BlobImage
-                            blob={assetBlobs[assetPath]}
-                            alt=""
-                            className="w-full h-full object-cover"
-                            draggable={false}
-                          />
-                        ) : (
-                          <div className="w-full h-full bg-neutral-900 flex items-center justify-center text-[10px] text-neutral-500">
-                            ...
-                          </div>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-            {quickInsertAssetPath && (
-              <span className="text-[11px] text-blue-300 whitespace-nowrap">{t('insertFromLibrary')}</span>
-            )}
-          </div>
-        )}
+        <input ref={imageInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleImageSelected} />
 
         {(selectedTextElement || currentIsCover) && (
           <div className="editor-context-bar order-2 basis-full mt-2 pt-2 border-t border-neutral-800/90 flex items-center gap-3 px-1 pb-1 text-sm">
@@ -1392,6 +1387,23 @@ function Editor({
         )}
       </div>
 
+      {showQuickImageBar && (
+        <AssetTray
+          t={t}
+          items={assetTrayItems}
+          selectedAssetPath={quickInsertAssetPath}
+          importing={importJob !== null}
+          onImport={() => imageInputRef.current?.click()}
+          onSelect={handleQuickInsertAssetPick}
+          onOpenLibrary={() => setShowAssetLibrary(true)}
+          onRemove={(assetPath) => {
+            if (removeAsset(assetPath) && quickInsertAssetPath === assetPath) {
+              setQuickInsertAssetPath(null);
+            }
+          }}
+        />
+      )}
+
       {exportJob && (
         <div
           ref={exportDialogRef}
@@ -1436,6 +1448,19 @@ function Editor({
         <div className="fixed bottom-5 left-1/2 z-[140] flex max-w-lg -translate-x-1/2 items-center gap-3 rounded-xl border border-red-700 bg-red-950 px-4 py-3 text-sm text-red-100 shadow-2xl" role="alert">
           <span>{uiError}</span>
           <button type="button" onClick={() => setUiError(null)} className="rounded px-2 py-1 hover:bg-red-900" aria-label={t('close')}>×</button>
+        </div>
+      )}
+
+      {(uiNotice || importJob) && (
+        <div className="fixed bottom-5 left-1/2 z-[140] flex max-w-lg -translate-x-1/2 items-center gap-3 rounded-xl border border-blue-700 bg-blue-950 px-4 py-3 text-sm text-blue-100 shadow-2xl" role="status" aria-live="polite">
+          <span>
+            {importJob
+              ? `${t('importingImages')} ${importJob.completed} / ${importJob.total}`
+              : uiNotice}
+          </span>
+          {!importJob && (
+            <button type="button" onClick={() => setUiNotice(null)} className="rounded px-2 py-1 hover:bg-blue-900" aria-label={t('close')}>×</button>
+          )}
         </div>
       )}
 
@@ -1542,7 +1567,15 @@ function Editor({
         title={t('assetLibrary')}
         closeLabel={t('close')}
         emptyLabel={t('noAssets')}
+        searchPlaceholder={t('searchImages')}
+        usageLabel={(count) => t('imageUsage').replace('{count}', String(count))}
+        removeLabel={t('removeUnusedAsset')}
+        unusedLabel={t('assetsUnused')}
+        usageCounts={assetUsageCounts}
         onInsert={handleInsertFromAssetLibrary}
+        onRemove={(assetPath) => {
+          removeAsset(assetPath);
+        }}
         onClose={() => setShowAssetLibrary(false)}
       />
 

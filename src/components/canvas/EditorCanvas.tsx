@@ -64,6 +64,7 @@ function EditorCanvas({
   const updateSlotOffset = useProjectStore((s) => s.updateSlotOffset);
   const updateSlotScale = useProjectStore((s) => s.updateSlotScale);
   const addImageFromFile = useProjectStore((s) => s.addImageFromFile);
+  const addImageFromAsset = useProjectStore((s) => s.addImageFromAsset);
   const setCoverTitle = useProjectStore((s) => s.setCoverTitle);
   const setCoverSubtitle = useProjectStore((s) => s.setCoverSubtitle);
   const setCoverTitlePosition = useProjectStore((s) => s.setCoverTitlePosition);
@@ -176,7 +177,10 @@ function EditorCanvas({
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (e.dataTransfer.types.includes('Files')) {
+    if (
+      e.dataTransfer.types.includes('Files') ||
+      e.dataTransfer.types.includes('application/x-layox-asset')
+    ) {
       setDragOver(true);
     }
   }, []);
@@ -190,14 +194,48 @@ function EditorCanvas({
     async (e: React.DragEvent) => {
       e.preventDefault();
       setDragOver(false);
+      const existingAssetPath = e.dataTransfer.getData('application/x-layox-asset');
+      if (existingAssetPath) {
+        snapshot();
+        if (isLayoutMode) {
+          const rect = containerRef.current?.getBoundingClientRect();
+          if (rect) {
+            const canvasWidth = CANVAS_W * displayScale;
+            const canvasHeight = CANVAS_H * displayScale;
+            const canvasLeft = rect.left + (rect.width - canvasWidth) / 2;
+            const canvasTop = rect.top + (rect.height - canvasHeight) / 2;
+            const canvasX = (e.clientX - canvasLeft) / displayScale;
+            const canvasY = (e.clientY - canvasTop) / displayScale;
+            const slotIndex = computedSlots.findIndex((slot) =>
+              canvasX >= slot.x &&
+              canvasX <= slot.x + slot.width &&
+              canvasY >= slot.y &&
+              canvasY <= slot.y + slot.height,
+            );
+            if (slotIndex >= 0) setSelectedSlotIndex(slotIndex);
+          }
+        }
+        await addImageFromAsset(existingAssetPath);
+        return;
+      }
+
       const files = Array.from(e.dataTransfer.files).filter((f) =>
         f.type.startsWith('image/'),
       );
+      if (files.length > 0) snapshot();
       for (const file of files) {
         await addImageFromFile(file);
       }
     },
-    [addImageFromFile],
+    [
+      addImageFromAsset,
+      addImageFromFile,
+      computedSlots,
+      displayScale,
+      isLayoutMode,
+      setSelectedSlotIndex,
+      snapshot,
+    ],
   );
 
   const handleEmptySlotDblClick = useCallback(

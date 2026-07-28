@@ -22,6 +22,7 @@ import {
 import {
   addElementAt,
   appendPage,
+  collectUsedAssetPaths,
   movePageAt,
   pruneUnusedAssetBlobs,
   removeElementAt,
@@ -40,6 +41,11 @@ interface RecentProject {
 }
 
 export type { RecentProject };
+
+export interface AddImageResult {
+  assetPath: string;
+  placement: 'placed' | 'library-only';
+}
 
 interface HistoryEntry {
   project: Project;
@@ -87,8 +93,9 @@ interface ProjectState {
   setSelectedElementId: (id: string | null) => void;
   setSelectedSlotIndex: (index: number | null) => void;
 
-  addImageFromFile: (file: File) => Promise<void>;
+  addImageFromFile: (file: File) => Promise<AddImageResult>;
   addImageFromAsset: (assetPath: string) => Promise<void>;
+  removeAsset: (assetPath: string) => boolean;
   pruneUnusedAssets: () => void;
   addTextElement: () => void;
   removeImageFromSlot: (slotIndex: number) => void;
@@ -749,23 +756,33 @@ const useProjectStore = create<ProjectState>((baseSet, get) => {
 
   addImageFromFile: async (file) => {
     const page = get().currentPage();
-    if (!page) return;
+    if (!page) throw new Error('No active page.');
 
     const id = uuidv4();
-    const assetPath = `assets/${id}_${file.name}`;
+    const safeFileName = file.name
+      .replace(/\.\.+/g, '.')
+      .replace(/[^\p{L}\p{N}._ -]/gu, '_')
+      .slice(0, 240) || 'image';
+    const assetPath = `assets/${id}_${safeFileName}`;
     const blob = file.slice();
 
     if (page.layoutId) {
       // Layout mode: assign to slot
       const layout = getLayoutById(page.layoutId);
-      if (!layout) return;
+      if (!layout) {
+        set((state) => ({ assetBlobs: { ...state.assetBlobs, [assetPath]: blob } }));
+        return { assetPath, placement: 'library-only' };
+      }
 
       let targetSlot = get().selectedSlotIndex;
       if (targetSlot === null) {
         // Find next empty slot
         const assignments = page.slotAssignments ?? {};
         const emptyIdx = layout.slots.findIndex((_, i) => !assignments[i]);
-        if (emptyIdx === -1) return; // all slots full
+        if (emptyIdx === -1) {
+          set((state) => ({ assetBlobs: { ...state.assetBlobs, [assetPath]: blob } }));
+          return { assetPath, placement: 'library-only' };
+        }
         targetSlot = emptyIdx;
       }
 
@@ -781,6 +798,7 @@ const useProjectStore = create<ProjectState>((baseSet, get) => {
           selectedSlotIndex: null,
         };
       });
+      return { assetPath, placement: 'placed' };
     } else {
       // Free mode: create ImageElement
       const dimensions = await new Promise<{ w: number; h: number }>((resolve) => {
@@ -816,8 +834,22 @@ const useProjectStore = create<ProjectState>((baseSet, get) => {
         src: assetPath,
       };
 
-      get().addAsset(assetPath, blob);
-      get().addElement(element);
+      set((state) => {
+        const pages = [...state.project.pages];
+        const current = pages[state.currentPageIndex];
+        if (!current) return state;
+        pages[state.currentPageIndex] = {
+          ...current,
+          elements: [...current.elements, element],
+        };
+        return {
+          project: { ...state.project, pages },
+          assetBlobs: { ...state.assetBlobs, [assetPath]: blob },
+          selectedElementId: element.id,
+          selectedSlotIndex: null,
+        };
+      });
+      return { assetPath, placement: 'placed' };
     }
   },
 
@@ -892,6 +924,17 @@ const useProjectStore = create<ProjectState>((baseSet, get) => {
     };
 
     get().addElement(element);
+  },
+
+  removeAsset: (assetPath) => {
+    if (collectUsedAssetPaths(get().project).has(assetPath)) return false;
+    if (!get().assetBlobs[assetPath]) return false;
+    set((state) => {
+      const nextAssets = { ...state.assetBlobs };
+      delete nextAssets[assetPath];
+      return { assetBlobs: nextAssets };
+    });
+    return true;
   },
 
   pruneUnusedAssets: () =>

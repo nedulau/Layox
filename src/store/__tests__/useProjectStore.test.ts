@@ -632,6 +632,35 @@ describe('useProjectStore', () => {
       expect(getState().project.pages[1].slotAssignments?.[0]).toEqual(assignment);
     });
 
+    it('keeps a newly imported image in the library when the layout is full', async () => {
+      getState().setCurrentPageIndex(1);
+      getState().applyLayout('single');
+      getState().addAsset('assets/existing.jpg', new Blob(['existing']));
+      await getState().addImageFromAsset('assets/existing.jpg');
+
+      const result = await getState().addImageFromFile(
+        new File(['new'], '../new?.jpg', { type: 'image/jpeg' }),
+      );
+
+      expect(result.placement).toBe('library-only');
+      expect(result.assetPath).not.toContain('..');
+      expect(getState().assetBlobs[result.assetPath]).toBeDefined();
+      expect(getState().project.pages[1].slotAssignments?.[0].assetPath).toBe('assets/existing.jpg');
+    });
+
+    it('only removes unused assets', async () => {
+      getState().setCurrentPageIndex(1);
+      getState().applyLayout('single');
+      getState().addAsset('assets/used.jpg', new Blob(['used']));
+      getState().addAsset('assets/unused.jpg', new Blob(['unused']));
+      await getState().addImageFromAsset('assets/used.jpg');
+
+      expect(getState().removeAsset('assets/used.jpg')).toBe(false);
+      expect(getState().removeAsset('assets/unused.jpg')).toBe(true);
+      expect(getState().assetBlobs['assets/used.jpg']).toBeDefined();
+      expect(getState().assetBlobs['assets/unused.jpg']).toBeUndefined();
+    });
+
     it('adds and scales an existing asset in free mode', async () => {
       class LoadedImage {
         naturalWidth = 2400;
