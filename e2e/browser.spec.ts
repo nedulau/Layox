@@ -14,19 +14,25 @@ async function createProject(page: Page, name = 'E2E Album') {
 
 async function selectLayout(page: Page, layoutName: RegExp) {
   await page.getByRole('button', { name: 'Layout', exact: true }).click();
-  await page.getByRole('button', { name: /Cover \(Full\)/ }).click();
+  await page.getByRole('button', { name: /Deckblatt \(vollflächig\)/ }).click();
   await page.getByRole('button', { name: layoutName }).click();
 }
 
 async function openMenuItem(page: Page, menu: string, item: string) {
   await page.getByRole('button', { name: menu, exact: true }).click();
-  await page.getByRole('button', { name: item }).click();
+  const escapedItem = item.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  await page.getByRole('button', { name: new RegExp(`^${escapedItem}(?:\\s|$)`) }).click();
 }
 
 async function insertFixtureImage(page: Page) {
   const chooserPromise = page.waitForEvent('filechooser');
   await openMenuItem(page, 'Einfügen', 'Bild einfügen');
   await (await chooserPromise).setFiles(fixtureImage);
+}
+
+async function openExportDialog(page: Page) {
+  await openMenuItem(page, 'Datei', 'Exportieren');
+  return page.getByRole('dialog', { name: 'Exportieren' });
 }
 
 test.beforeEach(async ({ page }) => {
@@ -38,7 +44,7 @@ test.beforeEach(async ({ page }) => {
 
 test('creates, edits, crops, undoes and redoes an album', async ({ page }) => {
   await createProject(page);
-  await selectLayout(page, /Grid \(4\)/);
+  await selectLayout(page, /Raster \(4\)/);
   await insertFixtureImage(page);
   await insertFixtureImage(page);
   await expect(page.getByRole('button', { name: /icon-512\.png/ })).toHaveCount(2);
@@ -58,7 +64,7 @@ test('creates, edits, crops, undoes and redoes an album', async ({ page }) => {
 
 test('downloads, reopens and exports a project without changing the editor page', async ({ page }) => {
   await createProject(page, 'Roundtrip Album');
-  await selectLayout(page, /Single/);
+  await selectLayout(page, /Einzelbild/);
   await insertFixtureImage(page);
 
   const projectDownloadPromise = page.waitForEvent('download');
@@ -69,16 +75,23 @@ test('downloads, reopens and exports a project without changing the editor page'
   expect(projectPath).toBeTruthy();
 
   const pngDownloadPromise = page.waitForEvent('download');
-  await openMenuItem(page, 'Datei', 'Seite als PNG');
+  let exportDialog = await openExportDialog(page);
+  await exportDialog.getByRole('combobox', { name: 'Format' }).selectOption('png');
+  await exportDialog.getByRole('button', { name: 'Aktuelle Seite' }).click();
+  await exportDialog.getByRole('button', { name: 'Export starten' }).click();
   expect((await pngDownloadPromise).suggestedFilename()).toMatch(/\.png$/);
 
   const pdfDownloadPromise = page.waitForEvent('download');
-  await openMenuItem(page, 'Datei', 'Exportieren als PDF');
-  await page.getByRole('dialog', { name: 'PDF-Kompression' }).getByRole('button', { name: /Mittel/ }).click();
+  exportDialog = await openExportDialog(page);
+  await exportDialog.getByRole('combobox', { name: 'Format' }).selectOption('pdf');
+  await exportDialog.getByRole('button', { name: 'Export starten' }).click();
   expect((await pdfDownloadPromise).suggestedFilename()).toMatch(/\.pdf$/);
 
   const zipDownloadPromise = page.waitForEvent('download');
-  await openMenuItem(page, 'Datei', 'Alle Seiten als PNG (ZIP)');
+  exportDialog = await openExportDialog(page);
+  await exportDialog.getByRole('combobox', { name: 'Format' }).selectOption('png');
+  await exportDialog.getByRole('button', { name: 'Alle Seiten' }).click();
+  await exportDialog.getByRole('button', { name: 'Export starten' }).click();
   expect((await zipDownloadPromise).suggestedFilename()).toMatch(/\.zip$/);
 
   const openChooserPromise = page.waitForEvent('filechooser');

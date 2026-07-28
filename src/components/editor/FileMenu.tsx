@@ -10,11 +10,7 @@ export interface FileMenuProps {
   onOpen: () => void;
   onSave: () => void;
   onSaveAs: () => void;
-  onExportPdf: () => void;
-  onExportPng: () => void;
-  onExportJpeg: () => void;
-  onExportZipPng: () => void;
-  onExportZipJpeg: () => void;
+  onExport: () => void;
   onHome: () => void;
 }
 
@@ -31,11 +27,7 @@ export default function FileMenu(props: FileMenuProps) {
           <MenuItem label={t('save')} shortcut="Ctrl+S" onClick={props.onSave} disabled={props.isSaving} />
           <MenuItem label={t('saveAs')} shortcut="Ctrl+Shift+S" onClick={props.onSaveAs} disabled={props.isSaving} />
           <MenuDivider />
-          <MenuItem label={t('exportPdf')} onClick={props.onExportPdf} />
-          <MenuItem label={t('exportPng')} onClick={props.onExportPng} />
-          <MenuItem label={t('exportJpeg')} onClick={props.onExportJpeg} />
-          <MenuItem label={t('exportZipPng')} onClick={props.onExportZipPng} />
-          <MenuItem label={t('exportZipJpeg')} onClick={props.onExportZipJpeg} />
+          <MenuItem label={t('export')} onClick={props.onExport} />
           <MenuDivider />
           <MenuItem label={t('home')} onClick={props.onHome} />
         </div>

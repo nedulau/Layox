@@ -2,6 +2,7 @@ import type { Page } from '../types';
 import type { PageRenderer, PageRenderOptions } from '../ports/pageRenderer';
 import { CANVAS_H, CANVAS_W } from '../constants/canvas';
 import type { TranslationKey } from '../i18n';
+import { computeLayoutSlots } from './layouts';
 
 export type PdfCompressionLevel = 'none' | 'low' | 'medium' | 'high';
 
@@ -30,6 +31,13 @@ export interface ExportJobOptions {
   onProgress?: (completed: number, total: number) => void;
 }
 
+export interface ExportPreflight {
+  pageCount: number;
+  emptySlotCount: number;
+  missingAssetCount: number;
+  lowResolutionCount: number;
+}
+
 interface RenderFormat {
   mimeType: 'image/png' | 'image/jpeg';
   quality: number;
@@ -46,6 +54,19 @@ function compressionConfig(level: PdfCompressionLevel): RenderFormat & { pdfForm
       return { mimeType: 'image/jpeg', quality: 0.8, pdfFormat: 'JPEG', pixelRatio: 2 };
     case 'high':
       return { mimeType: 'image/jpeg', quality: 0.55, pdfFormat: 'JPEG', pixelRatio: 1.5 };
+  }
+}
+
+function jpegCompressionConfig(level: PdfCompressionLevel): RenderFormat {
+  switch (level) {
+    case 'none':
+      return { mimeType: 'image/jpeg', quality: 1, pixelRatio: 2 };
+    case 'low':
+      return { mimeType: 'image/jpeg', quality: 0.95, pixelRatio: 2 };
+    case 'medium':
+      return { mimeType: 'image/jpeg', quality: 0.8, pixelRatio: 2 };
+    case 'high':
+      return { mimeType: 'image/jpeg', quality: 0.55, pixelRatio: 1.5 };
   }
 }
 
@@ -74,13 +95,16 @@ export async function renderProjectPages(
   context: ProjectExportContext,
   format: RenderFormat,
   job: ExportJobOptions = {},
+  pageIndices: number[] = context.pages.map((_, index) => index),
 ): Promise<Blob[]> {
   const blobs: Blob[] = [];
-  job.onProgress?.(0, context.pages.length);
-  for (const [index, page] of context.pages.entries()) {
+  job.onProgress?.(0, pageIndices.length);
+  for (const [progressIndex, pageIndex] of pageIndices.entries()) {
     throwIfAborted(job.signal);
+    const page = context.pages[pageIndex];
+    if (!page) throw new Error(`Page ${pageIndex + 1} no longer exists.`);
     blobs.push(await context.renderer.renderPage(page, context.assets, renderOptions(context, format, job.signal)));
-    job.onProgress?.(index + 1, context.pages.length);
+    job.onProgress?.(progressIndex + 1, pageIndices.length);
   }
   return blobs;
 }
@@ -94,11 +118,13 @@ export async function exportAsPdf(
   context: ProjectExportContext,
   compression: PdfCompressionLevel = 'none',
   job: ExportJobOptions = {},
+  pageIndices: number[] = context.pages.map((_, index) => index),
+  fileName = context.projectName,
 ): Promise<void> {
   const config = compressionConfig(compression);
   const [{ jsPDF }, pageBlobs] = await Promise.all([
     import('jspdf'),
-    renderProjectPages(context, config, job),
+    renderProjectPages(context, config, job, pageIndices),
   ]);
   throwIfAborted(job.signal);
 
@@ -126,7 +152,7 @@ export async function exportAsPdf(
     );
   }
   throwIfAborted(job.signal);
-  await saveBlob(pdf.output('blob'), `${safeProjectName(context.projectName)}.pdf`);
+  await saveBlob(pdf.output('blob'), `${safeProjectName(fileName)}.pdf`);
 }
 
 async function exportCurrentPage(
@@ -135,6 +161,7 @@ async function exportCurrentPage(
   format: RenderFormat,
   extension: 'png' | 'jpg',
   job: ExportJobOptions = {},
+  fileName = context.projectName,
 ): Promise<void> {
   const page = context.pages[pageIndex];
   if (!page) throw new Error('The selected page no longer exists.');
@@ -142,13 +169,14 @@ async function exportCurrentPage(
   const blob = await context.renderer.renderPage(page, context.assets, renderOptions(context, format, job.signal));
   throwIfAborted(job.signal);
   job.onProgress?.(1, 1);
-  await saveBlob(blob, `${safeProjectName(context.projectName)}_Page${pageIndex + 1}.${extension}`);
+  await saveBlob(blob, `${safeProjectName(fileName)}_Page${pageIndex + 1}.${extension}`);
 }
 
 export function exportCurrentPageAsPng(
   context: ProjectExportContext,
   pageIndex: number,
   job?: ExportJobOptions,
+  fileName?: string,
 ): Promise<void> {
   return exportCurrentPage(
     context,
@@ -156,6 +184,7 @@ export function exportCurrentPageAsPng(
     { mimeType: 'image/png', quality: 1, pixelRatio: 2 },
     'png',
     job,
+    fileName,
   );
 }
 
@@ -163,13 +192,16 @@ export function exportCurrentPageAsJpeg(
   context: ProjectExportContext,
   pageIndex: number,
   job?: ExportJobOptions,
+  fileName?: string,
+  compression: PdfCompressionLevel = 'low',
 ): Promise<void> {
   return exportCurrentPage(
     context,
     pageIndex,
-    { mimeType: 'image/jpeg', quality: 0.92, pixelRatio: 2 },
+    jpegCompressionConfig(compression),
     'jpg',
     job,
+    fileName,
   );
 }
 
@@ -177,22 +209,122 @@ export async function exportAllPagesAsZip(
   context: ProjectExportContext,
   format: 'png' | 'jpeg' = 'png',
   job: ExportJobOptions = {},
+  pageIndices: number[] = context.pages.map((_, index) => index),
+  fileName = context.projectName,
+  compression: PdfCompressionLevel = 'low',
 ): Promise<void> {
   const renderFormat: RenderFormat = format === 'jpeg'
-    ? { mimeType: 'image/jpeg', quality: 0.92, pixelRatio: 2 }
+    ? jpegCompressionConfig(compression)
     : { mimeType: 'image/png', quality: 1, pixelRatio: 2 };
   const [{ default: JSZip }, blobs] = await Promise.all([
     import('jszip'),
-    renderProjectPages(context, renderFormat, job),
+    renderProjectPages(context, renderFormat, job, pageIndices),
   ]);
   throwIfAborted(job.signal);
 
   const zip = new JSZip();
   const extension = format === 'jpeg' ? 'jpg' : 'png';
   blobs.forEach((blob, index) => {
-    zip.file(`Page_${String(index + 1).padStart(3, '0')}.${extension}`, blob);
+    const pageNumber = pageIndices[index] + 1;
+    zip.file(`Page_${String(pageNumber).padStart(3, '0')}.${extension}`, blob);
   });
   const zipBlob = await zip.generateAsync({ type: 'blob' });
   throwIfAborted(job.signal);
-  await saveBlob(zipBlob, `${safeProjectName(context.projectName)}_Images.zip`);
+  await saveBlob(zipBlob, `${safeProjectName(fileName)}_Images.zip`);
+}
+
+async function decodeBlobDimensions(blob: Blob): Promise<{ width: number; height: number }> {
+  if (typeof createImageBitmap === 'function') {
+    const bitmap = await createImageBitmap(blob);
+    const dimensions = { width: bitmap.width, height: bitmap.height };
+    bitmap.close();
+    return dimensions;
+  }
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(blob);
+    const image = new Image();
+    image.onload = () => {
+      resolve({ width: image.naturalWidth, height: image.naturalHeight });
+      URL.revokeObjectURL(url);
+    };
+    image.onerror = () => {
+      reject(new Error('Image metadata could not be decoded.'));
+      URL.revokeObjectURL(url);
+    };
+    image.src = url;
+  });
+}
+
+export async function analyzeExportPreflight(
+  context: ProjectExportContext,
+  pageIndices: number[],
+): Promise<ExportPreflight> {
+  let emptySlotCount = 0;
+  let missingAssetCount = 0;
+  let lowResolutionCount = 0;
+  const dimensions = new Map<string, Promise<{ width: number; height: number }>>();
+  const dimensionFor = (assetPath: string) => {
+    const existing = dimensions.get(assetPath);
+    if (existing) return existing;
+    const blob = context.assets[assetPath];
+    if (!blob) return null;
+    const pending = decodeBlobDimensions(blob);
+    dimensions.set(assetPath, pending);
+    return pending;
+  };
+
+  for (const pageIndex of pageIndices) {
+    const page = context.pages[pageIndex];
+    if (!page) continue;
+    if (page.layoutId) {
+      const slots = computeLayoutSlots(
+        page.layoutId,
+        page.layoutPadding ?? context.defaultLayoutPadding,
+        page.layoutGap ?? context.defaultLayoutGap,
+      );
+      for (const [slotIndex, slot] of slots.entries()) {
+        const assignment = page.slotAssignments?.[slotIndex];
+        if (!assignment) {
+          emptySlotCount += 1;
+          continue;
+        }
+        const pendingDimensions = dimensionFor(assignment.assetPath);
+        if (!pendingDimensions) {
+          missingAssetCount += 1;
+          continue;
+        }
+        try {
+          const natural = await pendingDimensions;
+          const sourceWidth = assignment.cropW ?? natural.width;
+          const sourceHeight = assignment.cropH ?? natural.height;
+          if (sourceWidth < slot.width * 2 || sourceHeight < slot.height * 2) lowResolutionCount += 1;
+        } catch {
+          missingAssetCount += 1;
+        }
+      }
+    }
+    for (const element of page.elements) {
+      if (element.type !== 'image') continue;
+      const pendingDimensions = dimensionFor(element.src);
+      if (!pendingDimensions) {
+        missingAssetCount += 1;
+        continue;
+      }
+      try {
+        const natural = await pendingDimensions;
+        if (natural.width < element.width * 2 || natural.height < element.height * 2) {
+          lowResolutionCount += 1;
+        }
+      } catch {
+        missingAssetCount += 1;
+      }
+    }
+  }
+
+  return {
+    pageCount: pageIndices.filter((index) => context.pages[index] !== undefined).length,
+    emptySlotCount,
+    missingAssetCount,
+    lowResolutionCount,
+  };
 }

@@ -6,7 +6,7 @@ import StartScreen from './components/StartScreen';
 import CropModal from './components/CropModal';
 import NewProjectModal from './components/NewProjectModal';
 import useProjectStore from './store/useProjectStore';
-import { exportAsPdf, exportCurrentPageAsPng, exportCurrentPageAsJpeg, exportAllPagesAsZip, PDF_COMPRESSION_PRESETS } from './utils/exportProject';
+import { exportAsPdf, exportCurrentPageAsPng, exportCurrentPageAsJpeg, exportAllPagesAsZip } from './utils/exportProject';
 import type { ExportJobOptions, PdfCompressionLevel, ProjectExportContext } from './utils/exportProject';
 import { tr, type Language, type TranslationKey } from './i18n';
 import type { Page } from './types';
@@ -34,6 +34,7 @@ import PwaUpdatePrompt from './components/PwaUpdatePrompt';
 import { useAutoSave } from './hooks/useAutoSave';
 
 const FONTS = ['Arial', 'Times New Roman', 'Georgia', 'Verdana', 'Courier New', 'Trebuchet MS', 'Impact', 'Comic Sans MS'];
+const PDF_LEVELS: PdfCompressionLevel[] = ['none', 'low', 'medium', 'high'];
 type UiTheme = 'dark' | 'light';
 const fileSystemPort = getFileSystemPort();
 
@@ -99,6 +100,7 @@ import KeyboardShortcutsDialog from './components/editor/KeyboardShortcutsDialog
 import AssetTray, { type AssetTrayItem } from './components/editor/AssetTray';
 import PageFilmstrip from './components/editor/PageFilmstrip';
 import PropertiesInspector from './components/editor/PropertiesInspector';
+import ExportDialog, { type ExportRequest } from './components/editor/ExportDialog';
 
 const LAYOUT_NAME_KEYS: Partial<Record<string, TranslationKey>> = {
   'cover-full': 'layoutCoverFull',
@@ -300,13 +302,12 @@ function Editor({
   const [noticeCanUndo, setNoticeCanUndo] = useState(false);
   const [importJob, setImportJob] = useState<{ completed: number; total: number } | null>(null);
   const [showHomeConfirm, setShowHomeConfirm] = useState(false);
-  const [showPdfDialog, setShowPdfDialog] = useState(false);
+  const [showExportDialog, setShowExportDialog] = useState(false);
   const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false);
-  const pdfDialogRef = useDialogFocus<HTMLDivElement>(showPdfDialog, () => setShowPdfDialog(false));
   const exportDialogRef = useDialogFocus<HTMLDivElement>(exportJob !== null, () => exportAbortRef.current?.abort());
   const [pdfDefaultLevel, setPdfDefaultLevel] = useState<PdfCompressionLevel>(() => {
     const saved = readStoredString('layox_pdfDefaultLevel', 'medium');
-    if (saved && PDF_COMPRESSION_PRESETS.some((preset) => preset.id === saved)) {
+    if (saved && PDF_LEVELS.includes(saved as PdfCompressionLevel)) {
       return saved as PdfCompressionLevel;
     }
     return 'medium';
@@ -752,35 +753,43 @@ function Editor({
     }
   }, []);
 
-  const handleExportPdfPrompt = () => {
+  const handleOpenExport = () => {
     closeMenu();
-    setShowPdfDialog(true);
+    setShowExportDialog(true);
   };
 
-  const handleExportPdfConfirm = async (level: PdfCompressionLevel) => {
-    setShowPdfDialog(false);
-    setPdfDefaultLevel(level);
-    await runExport('PDF', pages.length, (job) => exportAsPdf(exportContext, level, job));
-  };
-
-  const handleExportPng = async () => {
-    closeMenu();
-    await runExport('PNG', 1, (job) => exportCurrentPageAsPng(exportContext, currentPageIndex, job));
-  };
-
-  const handleExportJpeg = async () => {
-    closeMenu();
-    await runExport('JPEG', 1, (job) => exportCurrentPageAsJpeg(exportContext, currentPageIndex, job));
-  };
-
-  const handleExportZipPng = async () => {
-    closeMenu();
-    await runExport('PNG ZIP', pages.length, (job) => exportAllPagesAsZip(exportContext, 'png', job));
-  };
-
-  const handleExportZipJpeg = async () => {
-    closeMenu();
-    await runExport('JPEG ZIP', pages.length, (job) => exportAllPagesAsZip(exportContext, 'jpeg', job));
+  const handleExportRequest = async (request: ExportRequest) => {
+    setShowExportDialog(false);
+    setPdfDefaultLevel(request.compression);
+    const total = request.pageIndices.length;
+    if (request.format === 'pdf') {
+      await runExport('PDF', total, (job) => exportAsPdf(
+        exportContext,
+        request.compression,
+        job,
+        request.pageIndices,
+        request.fileName,
+      ));
+      return;
+    }
+    if (request.scope === 'current') {
+      const pageIndex = request.pageIndices[0];
+      await runExport(request.format.toUpperCase(), 1, (job) => (
+        request.format === 'png'
+          ? exportCurrentPageAsPng(exportContext, pageIndex, job, request.fileName)
+          : exportCurrentPageAsJpeg(exportContext, pageIndex, job, request.fileName, request.compression)
+      ));
+      return;
+    }
+    const zipFormat = request.format === 'png' ? 'png' : 'jpeg';
+    await runExport(`${request.format.toUpperCase()} ZIP`, total, (job) => exportAllPagesAsZip(
+      exportContext,
+      zipFormat,
+      job,
+      request.pageIndices,
+      request.fileName,
+      request.compression,
+    ));
   };
 
   const setManualCanvasZoom = (scale: number) => {
@@ -904,11 +913,7 @@ function Editor({
           onOpen={handleOpen}
           onSave={handleSave}
           onSaveAs={handleSaveAs}
-          onExportPdf={handleExportPdfPrompt}
-          onExportPng={handleExportPng}
-          onExportJpeg={handleExportJpeg}
-          onExportZipPng={handleExportZipPng}
-          onExportZipJpeg={handleExportZipJpeg}
+          onExport={handleOpenExport}
           onHome={handleGoHome}
         />
 
@@ -1553,52 +1558,15 @@ function Editor({
         />
       )}
 
-      {/* ─── PDF compression dialog ─── */}
-      {showPdfDialog && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60">
-          <div
-            ref={pdfDialogRef}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="pdf-compression-title"
-            tabIndex={-1}
-            className="editor-dropdown bg-neutral-900 border border-neutral-700 rounded-2xl shadow-2xl p-5 w-80"
-          >
-            <h3 id="pdf-compression-title" className="text-white font-semibold text-base mb-3">{t('pdfCompression')}</h3>
-            <div className="flex flex-col gap-2">
-              {PDF_COMPRESSION_PRESETS.map((preset) => (
-                <button
-                  key={preset.id}
-                  onClick={() => handleExportPdfConfirm(preset.id)}
-                  className={`text-left px-3 py-2.5 rounded-lg border transition-colors
-                             cursor-pointer select-none ${
-                               preset.id === pdfDefaultLevel
-                                 ? 'bg-blue-600/15 border-blue-500'
-                                 : 'bg-neutral-800 border-neutral-600 hover:bg-blue-600/20 hover:border-blue-500'
-                             }`}
-                >
-                  <div className="text-sm text-white font-medium flex items-center gap-2">
-                    {t(preset.labelKey)}
-                    {preset.id === pdfDefaultLevel && (
-                      <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded border border-blue-500/70 text-blue-200">
-                        {t('pdfDefault')}
-                      </span>
-                    )}
-                  </div>
-                  <div className="text-xs text-neutral-400 mt-0.5">{t(preset.descriptionKey)}</div>
-                </button>
-              ))}
-            </div>
-            <div className="mt-2 text-[11px] text-neutral-500">{t('pdfRemembered')}</div>
-            <button
-              onClick={() => setShowPdfDialog(false)}
-              className="mt-3 w-full py-1.5 text-sm rounded-lg bg-neutral-800 hover:bg-neutral-700
-                         text-neutral-300 border border-neutral-600 cursor-pointer select-none transition-colors"
-            >
-              {t('cancel')}
-            </button>
-          </div>
-        </div>
+      {showExportDialog && (
+        <ExportDialog
+          t={t}
+          context={exportContext}
+          currentPageIndex={currentPageIndex}
+          defaultCompression={pdfDefaultLevel}
+          onClose={() => setShowExportDialog(false)}
+          onExport={(request) => void handleExportRequest(request)}
+        />
       )}
 
       <PageOverviewModal

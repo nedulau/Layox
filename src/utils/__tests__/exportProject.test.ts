@@ -3,6 +3,7 @@ import { Blob as NodeBlob } from 'node:buffer';
 import type { Page } from '../../types';
 import type { PageRenderer } from '../../ports/pageRenderer';
 import {
+  analyzeExportPreflight,
   exportAllPagesAsZip,
   exportAsPdf,
   exportCurrentPageAsJpeg,
@@ -179,5 +180,50 @@ describe('project export rendering', () => {
     await expect(exportCurrentPageAsPng(context, 0, { signal: controller.signal }))
       .rejects.toMatchObject({ name: 'AbortError' });
     expect(exportMocks.saveAs).not.toHaveBeenCalled();
+  });
+
+  it('exports selected pages with a custom filename', async () => {
+    exportMocks.saveAs.mockClear();
+    exportMocks.addImage.mockClear();
+    exportMocks.zipFile.mockClear();
+    const renderer: PageRenderer = {
+      renderPage: vi.fn().mockResolvedValue(new NodeBlob(['page']) as unknown as Blob),
+    };
+
+    await exportAsPdf(createContext(renderer), 'medium', {}, [1], 'Selected pages');
+    await exportAllPagesAsZip(createContext(renderer), 'png', {}, [1], 'Selected pages');
+
+    expect(renderer.renderPage).toHaveBeenCalledWith(
+      pages[1],
+      {},
+      expect.any(Object),
+    );
+    expect(exportMocks.addImage).toHaveBeenCalledTimes(1);
+    expect(exportMocks.zipFile).toHaveBeenCalledWith('Page_002.png', expect.anything());
+    expect(exportMocks.saveAs).toHaveBeenNthCalledWith(1, expect.any(Blob), 'Selected pages.pdf');
+    expect(exportMocks.saveAs).toHaveBeenNthCalledWith(2, expect.any(Blob), 'Selected pages_Images.zip');
+  });
+
+  it('reports empty slots and missing assets before export', async () => {
+    const renderer: PageRenderer = { renderPage: vi.fn() };
+    const context: ProjectExportContext = {
+      ...createContext(renderer),
+      pages: [{
+        id: 'layout',
+        background: '#fff',
+        elements: [],
+        layoutId: 'two-side',
+        slotAssignments: {
+          0: { assetPath: 'assets/missing.jpg', offsetX: 0, offsetY: 0, scale: 1 },
+        },
+      }],
+    };
+
+    await expect(analyzeExportPreflight(context, [0])).resolves.toEqual({
+      pageCount: 1,
+      emptySlotCount: 1,
+      missingAssetCount: 1,
+      lowResolutionCount: 0,
+    });
   });
 });
