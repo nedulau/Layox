@@ -96,6 +96,24 @@ import PageOverviewModal from './components/editor/PageOverviewModal';
 import FileMenu from './components/editor/FileMenu';
 import SaveStatus from './components/editor/SaveStatus';
 import QuickSettingsMenu from './components/editor/QuickSettingsMenu';
+import KeyboardShortcutsDialog from './components/editor/KeyboardShortcutsDialog';
+
+const LAYOUT_NAME_KEYS: Partial<Record<string, TranslationKey>> = {
+  'cover-full': 'layoutCoverFull',
+  'cover-center': 'layoutCoverCentered',
+  single: 'layoutSingle',
+  'two-side': 'layoutTwoSide',
+  'two-stack': 'layoutTwoStack',
+  'three-cols': 'layoutThreeColumns',
+  'grid-4': 'layoutGrid4',
+  'one-big-two-small': 'layoutLargeTwoSmall',
+  'three-rows': 'layoutThreeRows',
+  'grid-6': 'layoutGrid6',
+  'one-top-two-bottom': 'layoutTopTwoBottom',
+  'two-top-one-bottom': 'layoutTwoTopBottom',
+  'sidebar-left': 'layoutSidebarLeft',
+  'mosaic-5': 'layoutMosaic5',
+};
 
 // ─── Editor ──────────────────────────────────────────────────────────────────
 
@@ -155,6 +173,7 @@ function Editor({
   const setCoverTitleStyle = useProjectStore((s) => s.setCoverTitleStyle);
   const setCoverSubtitleStyle = useProjectStore((s) => s.setCoverSubtitleStyle);
   const setCurrentPageChapterTitle = useProjectStore((s) => s.setCurrentPageChapterTitle);
+  const setCurrentPageSubchapterTitle = useProjectStore((s) => s.setCurrentPageSubchapterTitle);
   const setCoverTitle = useProjectStore((s) => s.setCoverTitle);
   const setCoverSubtitle = useProjectStore((s) => s.setCoverSubtitle);
   const toggleCover = useProjectStore((s) => s.toggleCover);
@@ -223,6 +242,9 @@ function Editor({
       return page.chapterTitle ?? (page.isCover ? (page.coverTitle ?? '') : '');
     },
   );
+  const currentSubchapterTitle = useProjectStore(
+    (s) => s.project.pages[s.currentPageIndex]?.subchapterTitle ?? '',
+  );
   const autoSaveEnabled = useProjectStore((s) => s.autoSaveEnabled);
   const autoSaveInterval = useProjectStore((s) => s.autoSaveInterval);
   const setAutoSaveEnabled = useProjectStore((s) => s.setAutoSaveEnabled);
@@ -272,6 +294,7 @@ function Editor({
   const [uiError, setUiError] = useState<string | null>(null);
   const [showHomeConfirm, setShowHomeConfirm] = useState(false);
   const [showPdfDialog, setShowPdfDialog] = useState(false);
+  const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false);
   const pdfDialogRef = useDialogFocus<HTMLDivElement>(showPdfDialog, () => setShowPdfDialog(false));
   const exportDialogRef = useDialogFocus<HTMLDivElement>(exportJob !== null, () => exportAbortRef.current?.abort());
   const [pdfDefaultLevel, setPdfDefaultLevel] = useState<PdfCompressionLevel>(() => {
@@ -432,6 +455,12 @@ function Editor({
           useProjectStore.getState().snapshot();
           addTextElement();
         }
+        return;
+      }
+      // Ctrl+I – Add image
+      if ((e.ctrlKey || e.metaKey) && key === 'i') {
+        e.preventDefault();
+        imageInputRef.current?.click();
         return;
       }
       // Escape – Deselect / close menu
@@ -756,7 +785,10 @@ function Editor({
     }
 
     const chapter = (page.chapterTitle ?? '').trim();
+    const subchapter = (page.subchapterTitle ?? '').trim();
+    if (chapter && subchapter) return `${chapter} • ${subchapter}`;
     if (chapter) return chapter;
+    if (subchapter) return subchapter;
     return '—';
   }, [t]);
 
@@ -820,6 +852,10 @@ function Editor({
               <MenuItem label={t('redo')} shortcut="Ctrl+Y" onClick={handleRedo} disabled={!canRedo} />
               <MenuDivider />
               <MenuItem label={t('delete')} shortcut="Del" onClick={handleDelete} disabled={!canDelete} danger />
+              <MenuItem label={t('shortcutOverview')} onClick={() => {
+                closeMenu();
+                setShowKeyboardShortcuts(true);
+              }} />
               {canDeleteSlot && (
                 <>
                   <MenuDivider />
@@ -865,6 +901,10 @@ function Editor({
                   freeThumbLabel={t('freeShort')}
                   slotSingularLabel={t('slotSingular')}
                   slotPluralLabel={t('slotPlural')}
+                  getLayoutName={(layout) => {
+                    const key = LAYOUT_NAME_KEYS[layout.id];
+                    return key ? t(key) : layout.name;
+                  }}
                   onSelect={(id) => { handleLayoutSelect(id); closeMenu(); }}
                 />
               </div>
@@ -943,6 +983,15 @@ function Editor({
                   className="editor-input w-full px-2 py-1 text-xs rounded-md bg-neutral-800 text-white border border-neutral-600"
                   title={t('chapter')}
                 />
+                <input
+                  type="text"
+                  placeholder={t('subchapter')}
+                  value={currentSubchapterTitle}
+                  onFocus={() => snapshot()}
+                  onChange={(e) => setCurrentPageSubchapterTitle(e.target.value)}
+                  className="editor-input w-full px-2 py-1 text-xs rounded-md bg-neutral-800 text-white border border-neutral-600"
+                  title={t('subchapter')}
+                />
                 {currentChapterTitle && (
                   <button
                     onClick={() => {
@@ -952,6 +1001,17 @@ function Editor({
                     className="editor-surface-control w-full px-2 py-1 text-xs rounded-md border border-neutral-600 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 transition-colors cursor-pointer select-none"
                   >
                     {t('removeChapter')}
+                  </button>
+                )}
+                {currentSubchapterTitle && (
+                  <button
+                    onClick={() => {
+                      snapshot();
+                      setCurrentPageSubchapterTitle('');
+                    }}
+                    className="editor-surface-control w-full px-2 py-1 text-xs rounded-md border border-neutral-600 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 transition-colors cursor-pointer select-none"
+                  >
+                    {t('removeSubchapter')}
                   </button>
                 )}
               </div>
@@ -1498,6 +1558,12 @@ function Editor({
           resetProject(name);
           setShowNewProjectModal(false);
         }}
+      />
+
+      <KeyboardShortcutsDialog
+        open={showKeyboardShortcuts}
+        t={t}
+        onClose={() => setShowKeyboardShortcuts(false)}
       />
     </div>
   );

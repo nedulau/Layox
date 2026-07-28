@@ -35,6 +35,7 @@ export default function LayoutPicker({
   freeThumbLabel,
   slotSingularLabel,
   slotPluralLabel,
+  getLayoutName,
   onSelect,
 }: {
   currentLayoutId?: string;
@@ -44,6 +45,7 @@ export default function LayoutPicker({
   freeThumbLabel: string;
   slotSingularLabel: string;
   slotPluralLabel: string;
+  getLayoutName: (layout: LayoutTemplate) => string;
   onSelect: (layoutId: string | null) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -74,7 +76,7 @@ export default function LayoutPicker({
         {active ? (
           <>
             <LayoutThumb layout={active} isActive />
-            <span className="max-w-24 truncate">{active.name}</span>
+            <span className="max-w-24 truncate">{getLayoutName(active)}</span>
           </>
         ) : (
           <span className={isLight ? 'text-slate-500' : 'text-neutral-400'}>{layoutPlaceholder}</span>
@@ -135,7 +137,7 @@ export default function LayoutPicker({
             >
               <LayoutThumb layout={layout} isActive={currentLayoutId === layout.id} />
               <div>
-                <div className="font-medium">{layout.name}</div>
+                <div className="font-medium">{getLayoutName(layout)}</div>
                 <div className={`text-xs ${isLight ? 'text-slate-500' : 'text-neutral-500'}`}>
                   {layout.slots.length} {layout.slots.length === 1 ? slotSingularLabel : slotPluralLabel}
                 </div>
