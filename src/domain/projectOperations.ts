@@ -14,6 +14,23 @@ export function removePageAt(project: Project, index: number): Project {
   return { ...project, pages: project.pages.filter((_, pageIndex) => pageIndex !== index) };
 }
 
+export function duplicatePageAt(
+  project: Project,
+  index: number,
+  createId: () => string,
+): { project: Project; pageIndex: number } {
+  const source = project.pages[index];
+  if (!source) {
+    return { project, pageIndex: Math.max(0, Math.min(index, project.pages.length - 1)) };
+  }
+  const duplicate = structuredClone(source);
+  duplicate.id = createId();
+  duplicate.elements = duplicate.elements.map((element) => ({ ...element, id: createId() }));
+  const pages = [...project.pages];
+  pages.splice(index + 1, 0, duplicate);
+  return { project: { ...project, pages }, pageIndex: index + 1 };
+}
+
 export function movePageAt(
   project: Project,
   fromIndex: number,

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Project, TextElement } from '../../types';
 import {
   addElementAt,
+  duplicatePageAt,
   movePageAt,
   pruneUnusedAssetBlobs,
   removeElementAt,
@@ -51,6 +52,23 @@ describe('project operations', () => {
 
     expect(moved.project.pages.map((page) => page.id)).toEqual(['second', 'third', 'first']);
     expect(moved.currentPageIndex).toBe(0);
+  });
+
+  it('duplicates pages with fresh page and element ids', () => {
+    const withElement = addElementAt(project, 1, textElement);
+    const ids = ['new-page', 'new-text'];
+    const duplicated = duplicatePageAt(withElement, 1, () => ids.shift() ?? 'fallback');
+
+    expect(duplicated.pageIndex).toBe(2);
+    expect(duplicated.project.pages[2]).toMatchObject({
+      id: 'new-page',
+      background: '#fff',
+    });
+    expect(duplicated.project.pages[2].elements[0]).toMatchObject({
+      id: 'new-text',
+      content: 'Text',
+    });
+    expect(duplicated.project.pages[1].id).toBe('second');
   });
 
   it('keeps at least one page', () => {

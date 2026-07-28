@@ -97,6 +97,7 @@ import SaveStatus from './components/editor/SaveStatus';
 import QuickSettingsMenu from './components/editor/QuickSettingsMenu';
 import KeyboardShortcutsDialog from './components/editor/KeyboardShortcutsDialog';
 import AssetTray, { type AssetTrayItem } from './components/editor/AssetTray';
+import PageFilmstrip from './components/editor/PageFilmstrip';
 
 const LAYOUT_NAME_KEYS: Partial<Record<string, TranslationKey>> = {
   'cover-full': 'layoutCoverFull',
@@ -205,6 +206,7 @@ function Editor({
   const addPage = useProjectStore((s) => s.addPage);
   const removePage = useProjectStore((s) => s.removePage);
   const movePage = useProjectStore((s) => s.movePage);
+  const duplicatePage = useProjectStore((s) => s.duplicatePage);
 
   const currentIsCover = useProjectStore(
     (s) => s.project.pages[s.currentPageIndex]?.isCover ?? false,
@@ -294,6 +296,7 @@ function Editor({
   const [exportError, setExportError] = useState<string | null>(null);
   const [uiError, setUiError] = useState<string | null>(null);
   const [uiNotice, setUiNotice] = useState<string | null>(null);
+  const [noticeCanUndo, setNoticeCanUndo] = useState(false);
   const [importJob, setImportJob] = useState<{ completed: number; total: number } | null>(null);
   const [showHomeConfirm, setShowHomeConfirm] = useState(false);
   const [showPdfDialog, setShowPdfDialog] = useState(false);
@@ -322,7 +325,10 @@ function Editor({
 
   useEffect(() => {
     if (!uiNotice) return;
-    const timeout = window.setTimeout(() => setUiNotice(null), 6_000);
+    const timeout = window.setTimeout(() => {
+      setUiNotice(null);
+      setNoticeCanUndo(false);
+    }, 6_000);
     return () => window.clearTimeout(timeout);
   }, [uiNotice]);
 
@@ -590,6 +596,7 @@ function Editor({
           .replace('{count}', String(files.length))
           .replace('{unplaced}', String(unplaced)),
       );
+      setNoticeCanUndo(false);
     } catch (err) {
       setUiError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -634,6 +641,17 @@ function Editor({
   const handleRemoveCover = () => { closeMenu(); snapshot(); toggleCover(false); };
   const handleMakeCover = () => { closeMenu(); snapshot(); toggleCover(true); };
   const handleAddPageFromMenu = () => { closeMenu(); snapshot(); addPage(); };
+  const handleDuplicatePage = useCallback((index: number) => {
+    snapshot();
+    duplicatePage(index);
+  }, [duplicatePage, snapshot]);
+  const handleDeletePage = useCallback((index: number) => {
+    if (pages.length <= 1) return;
+    snapshot();
+    removePage(index);
+    setUiNotice(t('pageDeleted'));
+    setNoticeCanUndo(true);
+  }, [pages.length, removePage, snapshot, t]);
 
   const handleLayoutSelect = (layoutId: string | null) => {
     snapshot();
@@ -1178,7 +1196,7 @@ function Editor({
             </button>
             {pages.length > 1 && (
               <button
-                onClick={() => { snapshot(); removePage(currentPageIndex); }}
+                onClick={() => handleDeletePage(currentPageIndex)}
                 className={`editor-page-chip editor-page-chip-danger ${btnPageNav} bg-red-900/60 border-red-800 hover:bg-red-800/70 text-red-200`}
                 title={t('pageDelete')}
               >
@@ -1324,6 +1342,26 @@ function Editor({
 
       {/* ─── Canvas area with page arrows on sides ─── */}
       <div className="relative z-0 flex-1 min-h-0 flex items-center justify-center overflow-hidden gap-2 px-0 py-2">
+        <PageFilmstrip
+          t={t}
+          pages={pages}
+          assetBlobs={assetBlobs}
+          currentPageIndex={currentPageIndex}
+          defaultLayoutPadding={defaultLayoutPadding}
+          defaultLayoutGap={defaultLayoutGap}
+          getMetaLabel={getPageOverviewMetaLabel}
+          onSelect={setCurrentPageIndex}
+          onMove={(fromIndex, toIndex) => {
+            snapshot();
+            movePage(fromIndex, toIndex);
+          }}
+          onDuplicate={handleDuplicatePage}
+          onDelete={handleDeletePage}
+          onAdd={() => {
+            snapshot();
+            addPage();
+          }}
+        />
         {/* Left arrow */}
         <button
           onClick={goPrevPage}
@@ -1458,8 +1496,24 @@ function Editor({
               ? `${t('importingImages')} ${importJob.completed} / ${importJob.total}`
               : uiNotice}
           </span>
+          {!importJob && noticeCanUndo && (
+            <button
+              type="button"
+              onClick={() => {
+                undo();
+                setUiNotice(null);
+                setNoticeCanUndo(false);
+              }}
+              className="min-h-9 rounded-lg bg-blue-800 px-3 font-medium hover:bg-blue-700"
+            >
+              {t('undo')}
+            </button>
+          )}
           {!importJob && (
-            <button type="button" onClick={() => setUiNotice(null)} className="rounded px-2 py-1 hover:bg-blue-900" aria-label={t('close')}>×</button>
+            <button type="button" onClick={() => {
+              setUiNotice(null);
+              setNoticeCanUndo(false);
+            }} className="rounded px-2 py-1 hover:bg-blue-900" aria-label={t('close')}>×</button>
           )}
         </div>
       )}

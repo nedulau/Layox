@@ -23,6 +23,7 @@ import {
   addElementAt,
   appendPage,
   collectUsedAssetPaths,
+  duplicatePageAt,
   movePageAt,
   pruneUnusedAssetBlobs,
   removeElementAt,
@@ -86,6 +87,7 @@ interface ProjectState {
   addPage: () => void;
   removePage: (index: number) => void;
   movePage: (fromIndex: number, toIndex: number) => void;
+  duplicatePage: (index: number) => void;
 
   addElement: (element: PageElement) => void;
   updateElement: (elementId: string, changes: Partial<PageElement>) => void;
@@ -378,6 +380,18 @@ const useProjectStore = create<ProjectState>((baseSet, get) => {
       return {
         project: moved.project,
         currentPageIndex: moved.currentPageIndex,
+        selectedElementId: null,
+        selectedSlotIndex: null,
+      };
+    }),
+
+  duplicatePage: (index) =>
+    set((state) => {
+      const result = duplicatePageAt(state.project, index, uuidv4);
+      if (result.project === state.project) return state;
+      return {
+        project: result.project,
+        currentPageIndex: result.pageIndex,
         selectedElementId: null,
         selectedSlotIndex: null,
       };

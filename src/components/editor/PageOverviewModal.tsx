@@ -4,6 +4,7 @@ import { computeLayoutSlots } from '../../utils/layouts';
 import { CANVAS_H, CANVAS_W } from '../../constants/canvas';
 import BlobImage from '../common/BlobImage';
 import { useDialogFocus } from '../common/useDialogFocus';
+import PageThumbnail from './PageThumbnail';
 
 function PagePreviewCard({
   page,
@@ -55,6 +56,15 @@ function PagePreviewCard({
         className="relative bg-neutral-950"
         style={{ width: 220, height: 165 }}
       >
+        <div className="absolute inset-0 z-10">
+          <PageThumbnail
+            page={page}
+            assetBlobs={assetBlobs}
+            defaultLayoutPadding={defaultLayoutPadding}
+            defaultLayoutGap={defaultLayoutGap}
+            className="h-full w-full"
+          />
+        </div>
         <div className="absolute inset-0" style={{ background: page.background || '#111111' }} />
 
         {slots.map((slot, slotIndex) => {
@@ -334,5 +344,4 @@ export default function PageOverviewModal({
     </div>
   );
 }
-
 
