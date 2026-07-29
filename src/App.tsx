@@ -1,6 +1,5 @@
 import { useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import './index.css';
-import EditorCanvas from './components/canvas/EditorCanvas';
 import LayoutPicker from './components/LayoutPicker';
 import StartScreen from './components/StartScreen';
 import CropModal from './components/CropModal';
@@ -15,17 +14,10 @@ import { getFileSystemPort } from './infra/fileSystem';
 import type { RecoverySummary } from './utils/recoveryRepository';
 import { konvaPageRenderer } from './utils/konvaPageRenderer';
 import {
-  DEFAULT_COVER_SUBTITLE_COLOR,
-  DEFAULT_COVER_SUBTITLE_FONT_FAMILY,
-  DEFAULT_COVER_SUBTITLE_FONT_SIZE,
-  DEFAULT_COVER_TITLE_COLOR,
-  DEFAULT_COVER_TITLE_FONT_FAMILY,
-  DEFAULT_COVER_TITLE_FONT_SIZE,
   DEFAULT_LAYOUT_GAP,
   DEFAULT_LAYOUT_PADDING,
 } from './domain/projectDefaults';
 import { MenuButton, MenuDivider, MenuItem } from './components/editor/MenuComponents';
-import BlobImage from './components/common/BlobImage';
 import AssetLibraryModal from './components/editor/AssetLibraryModal';
 import { useDialogFocus } from './components/common/useDialogFocus';
 import { useMediaQuery } from './hooks/useMediaQuery';
@@ -33,8 +25,17 @@ import ConfirmDialog from './components/common/ConfirmDialog';
 import PwaUpdatePrompt from './components/PwaUpdatePrompt';
 import { useEditorKeyboardShortcuts } from './hooks/useEditorKeyboardShortcuts';
 import { useEditorRecovery } from './hooks/useEditorRecovery';
+import PageOverviewModal from './components/editor/PageOverviewModal';
+import FileMenu from './components/editor/FileMenu';
+import SaveStatus from './components/editor/SaveStatus';
+import QuickSettingsMenu from './components/editor/QuickSettingsMenu';
+import KeyboardShortcutsDialog from './components/editor/KeyboardShortcutsDialog';
+import ExportDialog, { type ExportRequest } from './components/editor/ExportDialog';
+import EditorContextControls from './components/editor/EditorContextControls';
+import QuickImageBar from './components/editor/QuickImageBar';
+import EditorPageNavigation from './components/editor/EditorPageNavigation';
+import EditorCanvasWorkspace from './components/editor/EditorCanvasWorkspace';
 
-const FONTS = ['Arial', 'Times New Roman', 'Georgia', 'Verdana', 'Courier New', 'Trebuchet MS', 'Impact', 'Comic Sans MS'];
 const PDF_LEVELS: PdfCompressionLevel[] = ['none', 'low', 'medium', 'high'];
 type UiTheme = 'dark' | 'light';
 const fileSystemPort = getFileSystemPort();
@@ -92,13 +93,6 @@ function App() {
     </>
   );
 }
-
-import PageOverviewModal from './components/editor/PageOverviewModal';
-import FileMenu from './components/editor/FileMenu';
-import SaveStatus from './components/editor/SaveStatus';
-import QuickSettingsMenu from './components/editor/QuickSettingsMenu';
-import KeyboardShortcutsDialog from './components/editor/KeyboardShortcutsDialog';
-import ExportDialog, { type ExportRequest } from './components/editor/ExportDialog';
 
 const LAYOUT_NAME_KEYS: Partial<Record<string, TranslationKey>> = {
   'cover-full': 'layoutCoverFull',
@@ -165,19 +159,13 @@ function Editor({
   const setSelectedSlotIndex = useProjectStore((s) => s.setSelectedSlotIndex);
   const applyLayout = useProjectStore((s) => s.applyLayout);
   const clearLayout = useProjectStore((s) => s.clearLayout);
-  const updateElement = useProjectStore((s) => s.updateElement);
   const setLayoutPadding = useProjectStore((s) => s.setLayoutPadding);
   const setLayoutGap = useProjectStore((s) => s.setLayoutGap);
   const setDefaultLayoutPadding = useProjectStore((s) => s.setDefaultLayoutPadding);
   const setDefaultLayoutGap = useProjectStore((s) => s.setDefaultLayoutGap);
   const applyLayoutDefaultsToAllPages = useProjectStore((s) => s.applyLayoutDefaultsToAllPages);
-  const setCoverSubtitleVisible = useProjectStore((s) => s.setCoverSubtitleVisible);
-  const setCoverTitleStyle = useProjectStore((s) => s.setCoverTitleStyle);
-  const setCoverSubtitleStyle = useProjectStore((s) => s.setCoverSubtitleStyle);
   const setCurrentPageChapterTitle = useProjectStore((s) => s.setCurrentPageChapterTitle);
   const setCurrentPageSubchapterTitle = useProjectStore((s) => s.setCurrentPageSubchapterTitle);
-  const setCoverTitle = useProjectStore((s) => s.setCoverTitle);
-  const setCoverSubtitle = useProjectStore((s) => s.setCoverSubtitle);
   const toggleCover = useProjectStore((s) => s.toggleCover);
   const assetBlobs = useProjectStore((s) => s.assetBlobs);
   const setShowEditor = useProjectStore((s) => s.setShowEditor);
@@ -211,33 +199,6 @@ function Editor({
   const currentIsCover = useProjectStore(
     (s) => s.project.pages[s.currentPageIndex]?.isCover ?? false,
   );
-  const currentCoverTitle = useProjectStore(
-    (s) => s.project.pages[s.currentPageIndex]?.coverTitle ?? '',
-  );
-  const currentCoverSubtitle = useProjectStore(
-    (s) => s.project.pages[s.currentPageIndex]?.coverSubtitle ?? '',
-  );
-  const currentCoverTitleFontSize = useProjectStore(
-    (s) => s.project.pages[s.currentPageIndex]?.coverTitleFontSize ?? DEFAULT_COVER_TITLE_FONT_SIZE,
-  );
-  const currentCoverTitleFontFamily = useProjectStore(
-    (s) => s.project.pages[s.currentPageIndex]?.coverTitleFontFamily ?? DEFAULT_COVER_TITLE_FONT_FAMILY,
-  );
-  const currentCoverTitleColor = useProjectStore(
-    (s) => s.project.pages[s.currentPageIndex]?.coverTitleColor ?? DEFAULT_COVER_TITLE_COLOR,
-  );
-  const currentCoverSubtitleFontSize = useProjectStore(
-    (s) => s.project.pages[s.currentPageIndex]?.coverSubtitleFontSize ?? DEFAULT_COVER_SUBTITLE_FONT_SIZE,
-  );
-  const currentCoverSubtitleFontFamily = useProjectStore(
-    (s) => s.project.pages[s.currentPageIndex]?.coverSubtitleFontFamily ?? DEFAULT_COVER_SUBTITLE_FONT_FAMILY,
-  );
-  const currentCoverSubtitleColor = useProjectStore(
-    (s) => s.project.pages[s.currentPageIndex]?.coverSubtitleColor ?? DEFAULT_COVER_SUBTITLE_COLOR,
-  );
-  const currentShowCoverSubtitle = useProjectStore(
-    (s) => s.project.pages[s.currentPageIndex]?.showCoverSubtitle ?? false,
-  );
   const currentChapterTitle = useProjectStore(
     (s) => {
       const page = s.project.pages[s.currentPageIndex];
@@ -268,15 +229,6 @@ function Editor({
   const canDelete = !!selectedElementId || canDeleteSlot;
   const isSingleLayout = currentLayoutId === 'single';
   const showGap = !!currentLayoutId && !isSingleLayout;
-
-  const selectedTextElement = useProjectStore((s) => {
-    if (!s.selectedElementId) return null;
-    const page = s.project.pages[s.currentPageIndex];
-    if (!page) return null;
-    const el = page.elements.find((e) => e.id === s.selectedElementId);
-    if (el && el.type === 'text') return el;
-    return null;
-  });
 
   // ─── Dropdown menu state ────────────────────────────────────────────────
   const [openMenu, setOpenMenu] = useState<string | null>(null);
@@ -381,14 +333,6 @@ function Editor({
     initialCrop?: { x: number; y: number; w: number; h: number };
     slotIndex: number;
   } | null>(null);
-
-  // ─── Page navigation ──────────────────────────────────────────────────
-  const goPrevPage = () => {
-    if (currentPageIndex > 0) setCurrentPageIndex(currentPageIndex - 1);
-  };
-  const goNextPage = () => {
-    if (currentPageIndex < pages.length - 1) setCurrentPageIndex(currentPageIndex + 1);
-  };
 
   const reportShortcutSaveFailure = useCallback((error: unknown) => {
     setUiError(`${t('saveError')}: ${error instanceof Error ? error.message : String(error)}`);
@@ -668,32 +612,6 @@ function Editor({
     'min-w-11 h-11 px-2 flex items-center justify-center rounded-lg border text-sm transition-all cursor-pointer select-none';
   const btnIcon =
     'w-11 h-11 flex items-center justify-center rounded-lg border text-sm transition-all cursor-pointer select-none disabled:opacity-35 disabled:cursor-not-allowed';
-
-  const getVisiblePageItems = useCallback((total: number, current: number): Array<number | 'ellipsis-left' | 'ellipsis-right'> => {
-    if (total <= 9) return Array.from({ length: total }, (_, i) => i);
-
-    const items: Array<number | 'ellipsis-left' | 'ellipsis-right'> = [0];
-
-    let start = Math.max(1, current - 1);
-    let end = Math.min(total - 2, current + 1);
-
-    if (current <= 2) {
-      start = 1;
-      end = 3;
-    } else if (current >= total - 3) {
-      start = total - 4;
-      end = total - 2;
-    }
-
-    if (start > 1) items.push('ellipsis-left');
-    for (let i = start; i <= end; i++) items.push(i);
-    if (end < total - 2) items.push('ellipsis-right');
-
-    items.push(total - 1);
-    return items;
-  }, []);
-
-  const pageItems = getVisiblePageItems(pages.length, currentPageIndex);
 
   const chapterJumpTargets = useMemo(() => {
     const seen = new Set<string>();
@@ -1000,342 +918,64 @@ function Editor({
         {/* ── Spacer ── */}
         <div className="flex-1" />
 
-        {/* ── Page navigation (numbers + add/delete) ── */}
-        <div className="relative flex items-center" data-menu>
-          <QuickSettingsMenu
-            t={t}
-            buttonClassName={btnPageNav}
-            open={openMenu === 'quick-settings'}
-            onToggle={() => toggleMenu('quick-settings')}
-            uiTheme={uiTheme}
-            setUiTheme={setUiTheme}
-            language={language}
-            setLanguage={setLanguage}
-            showQuickImageBar={showQuickImageBar}
-            setShowQuickImageBar={setShowQuickImageBar}
-            deleteFromLibraryOnImageDelete={deleteFromLibraryOnImageDelete}
-            setDeleteFromLibraryOnImageDelete={setDeleteFromLibraryOnImageDelete}
-            autoSaveEnabled={autoSaveEnabled}
-            setAutoSaveEnabled={setAutoSaveEnabled}
-            autoSaveInterval={autoSaveInterval}
-            setAutoSaveInterval={setAutoSaveInterval}
-            recoveryPoints={recoveryPoints}
-            recoveryError={recoveryError}
-            onRestore={(point) => void handleRestoreRecoveryPoint(point)}
-          />
-
-          <button
-            onClick={() => setShowPageOverview(true)}
-            className="editor-page-label mr-2 px-2.5 py-1 rounded-md border border-neutral-700 bg-neutral-900 text-[11px] uppercase tracking-wide text-neutral-400 hover:bg-neutral-800 transition-colors cursor-pointer select-none"
-            title={t('openPageOverview')}
-          >
-            {t('pages')}
-          </button>
-
-          <div className="flex items-center gap-1">
-            {pageItems.map((item) => {
-              if (item === 'ellipsis-left' || item === 'ellipsis-right') {
-                return (
-                  <span key={item} className="px-1 text-neutral-500 text-sm select-none">…</span>
-                );
-              }
-
-              const i = item;
-              return (
-                <button
-                  key={i}
-                  onClick={() => setCurrentPageIndex(i)}
-                  className={`editor-page-chip ${btnPageNav} ${
-                    i === currentPageIndex
-                      ? 'is-active bg-blue-600/90 border-blue-500 text-white shadow-sm'
-                      : 'bg-neutral-900 border-neutral-700 hover:bg-neutral-800 text-neutral-300'
-                  }`}
-                >
-                  {i + 1}
-                </button>
-              );
-            })}
-          </div>
-
-          <span className="editor-page-count ml-2 text-xs text-neutral-400 tabular-nums select-none">
-            {currentPageIndex + 1} / {pages.length}
-          </span>
-
-          <div className="flex items-center gap-1 ml-3 pl-3 border-l border-neutral-700/80">
-            <button
-              onClick={() => { snapshot(); addPage(); }}
-              className={`editor-page-chip ${btnPageNav} bg-neutral-900 border-neutral-700 hover:bg-neutral-800 text-neutral-300`}
-              title={t('pageNew')}
-            >
-              +
-            </button>
-            {pages.length > 1 && (
-              <button
-                onClick={() => handleDeletePage(currentPageIndex)}
-                className={`editor-page-chip editor-page-chip-danger ${btnPageNav} bg-red-900/60 border-red-800 hover:bg-red-800/70 text-red-200`}
-                title={t('pageDelete')}
-              >
-                −
-              </button>
-            )}
-          </div>
-
-        </div>
+        <EditorPageNavigation
+          t={t}
+          buttonClassName={btnPageNav}
+          onOpenOverview={() => setShowPageOverview(true)}
+          onDeletePage={handleDeletePage}
+          settings={(
+            <QuickSettingsMenu
+              t={t}
+              buttonClassName={btnPageNav}
+              open={openMenu === 'quick-settings'}
+              onToggle={() => toggleMenu('quick-settings')}
+              uiTheme={uiTheme}
+              setUiTheme={setUiTheme}
+              language={language}
+              setLanguage={setLanguage}
+              showQuickImageBar={showQuickImageBar}
+              setShowQuickImageBar={setShowQuickImageBar}
+              deleteFromLibraryOnImageDelete={deleteFromLibraryOnImageDelete}
+              setDeleteFromLibraryOnImageDelete={setDeleteFromLibraryOnImageDelete}
+              autoSaveEnabled={autoSaveEnabled}
+              setAutoSaveEnabled={setAutoSaveEnabled}
+              autoSaveInterval={autoSaveInterval}
+              setAutoSaveInterval={setAutoSaveInterval}
+              recoveryPoints={recoveryPoints}
+              recoveryError={recoveryError}
+              onRestore={(point) => void handleRestoreRecoveryPoint(point)}
+            />
+          )}
+        />
 
         {/* Hidden file inputs */}
         <input ref={fileInputRef} type="file" accept=".layox" className="hidden" onChange={handleFileSelected} />
         <input ref={imageInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleImageSelected} />
 
         {showQuickImageBar && currentLayoutId && (
-          <div className="editor-context-bar order-3 basis-full mt-2 pt-2 border-t border-neutral-800/90 flex items-center gap-3 px-1 pb-1 text-sm">
-            <div className="flex-1 min-w-0 overflow-x-auto">
-              {quickInsertAssetPaths.length === 0 ? (
-                <div className="text-xs text-neutral-500 py-1">{t('noAssets')}</div>
-              ) : (
-                <div className="flex items-center gap-2 pr-1">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setQuickInsertAssetPath(null);
-                      setShowAssetLibrary(true);
-                    }}
-                    className="shrink-0 h-14 px-3 rounded-md border border-neutral-700 bg-neutral-900 text-neutral-200 text-xs hover:border-neutral-500 transition-colors cursor-pointer select-none"
-                  >
-                    {t('assetLibrary')}
-                  </button>
-
-                  {quickInsertAssetPaths.map((assetPath) => {
-                    const isActive = quickInsertAssetPath === assetPath;
-                    return (
-                      <button
-                        key={`quick-insert-${assetPath}`}
-                        type="button"
-                        onClick={() => handleQuickInsertAssetPick(assetPath)}
-                        className={`shrink-0 w-14 h-14 rounded-md border overflow-hidden transition-colors cursor-pointer select-none ${
-                          isActive
-                            ? 'border-blue-500 ring-1 ring-blue-500/80'
-                            : 'border-neutral-700 hover:border-neutral-500'
-                        }`}
-                        title={assetPath.split('/').pop() || assetPath}
-                      >
-                        {assetBlobs[assetPath] ? (
-                          <BlobImage
-                            blob={assetBlobs[assetPath]}
-                            alt=""
-                            className="w-full h-full object-cover"
-                            draggable={false}
-                          />
-                        ) : (
-                          <div className="w-full h-full bg-neutral-900 flex items-center justify-center text-[10px] text-neutral-500">
-                            ...
-                          </div>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-            {quickInsertAssetPath && (
-              <span className="text-[11px] text-blue-300 whitespace-nowrap">{t('insertFromLibrary')}</span>
-            )}
-          </div>
-        )}
-
-        {(selectedTextElement || currentIsCover) && (
-          <div className="editor-context-bar order-2 basis-full mt-2 pt-2 border-t border-neutral-800/90 flex items-center gap-3 px-1 pb-1 text-sm">
-            {selectedTextElement ? (
-              <>
-            <label className="text-xs text-neutral-500">{t('font')}</label>
-            <select
-              value={selectedTextElement.fontFamily}
-              onChange={(e) => { snapshot(); updateElement(selectedTextElement.id, { fontFamily: e.target.value }); }}
-              className="editor-input px-2 py-0.5 text-sm rounded-md bg-neutral-800 text-white border border-neutral-600"
-            >
-              {FONTS.map((f) => (
-                <option key={f} value={f} style={{ fontFamily: f }}>{f}</option>
-              ))}
-            </select>
-            <label className="text-xs text-neutral-500">{t('size')}</label>
-            <input
-              type="number" min={1} max={200} value={selectedTextElement.fontSize}
-              onFocus={() => snapshot()}
-              onChange={(e) => updateElement(selectedTextElement.id, { fontSize: Math.max(1, parseInt(e.target.value) || 24) })}
-              className="editor-input w-16 px-2 py-0.5 text-sm rounded-md bg-neutral-800 text-white border border-neutral-600"
-            />
-            <label className="text-xs text-neutral-500">{t('color')}</label>
-            <input
-              type="color" value={selectedTextElement.color}
-              onFocus={() => snapshot()}
-              onChange={(e) => updateElement(selectedTextElement.id, { color: e.target.value })}
-              className="editor-color-input w-8 h-8 rounded-md border border-neutral-600 cursor-pointer p-0.5 bg-neutral-800"
-            />
-              </>
-            ) : currentIsCover ? (
-              <>
-            <label className="text-[11px] text-neutral-500">{t('title')}</label>
-            <input
-              type="text" value={currentCoverTitle}
-              onFocus={() => snapshot()}
-              onChange={(e) => setCoverTitle(e.target.value)}
-              className="editor-input w-36 px-2 py-0.5 text-xs rounded-md bg-neutral-800 text-white border border-neutral-600"
-              placeholder={t('title')}
-            />
-            <select
-              value={currentCoverTitleFontFamily}
-              onChange={(e) => { snapshot(); setCoverTitleStyle({ fontFamily: e.target.value }); }}
-              className="editor-input w-24 px-1.5 py-0.5 text-xs rounded-md bg-neutral-800 text-white border border-neutral-600"
-            >
-              {FONTS.map((f) => (
-                <option key={`cover-title-${f}`} value={f}>{f}</option>
-              ))}
-            </select>
-            <input
-              type="number"
-              min={1}
-              max={300}
-              value={currentCoverTitleFontSize}
-              onFocus={() => snapshot()}
-              onChange={(e) => setCoverTitleStyle({ fontSize: Math.max(1, parseInt(e.target.value) || 48) })}
-              className="editor-input w-14 px-1.5 py-0.5 text-xs rounded-md bg-neutral-800 text-white border border-neutral-600"
-            />
-            <input
-              type="color"
-              value={currentCoverTitleColor}
-              onFocus={() => snapshot()}
-              onChange={(e) => setCoverTitleStyle({ color: e.target.value })}
-              className="editor-color-input w-7 h-7 rounded-md border border-neutral-600 cursor-pointer p-0.5 bg-neutral-800"
-            />
-
-            <label className="text-[11px] text-neutral-400 flex items-center gap-1 ml-1 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={currentShowCoverSubtitle}
-                onChange={(e) => {
-                  snapshot();
-                  setCoverSubtitleVisible(e.target.checked);
-                }}
-                className="accent-blue-500"
-              />
-              {t('showSubtitle')}
-            </label>
-
-            {currentShowCoverSubtitle && (
-              <>
-                <label className="text-[11px] text-neutral-500">{t('subtitle')}</label>
-                <input
-                  type="text" value={currentCoverSubtitle}
-                  onFocus={() => snapshot()}
-                  onChange={(e) => setCoverSubtitle(e.target.value)}
-                  className="editor-input w-28 px-2 py-0.5 text-xs rounded-md bg-neutral-800 text-white border border-neutral-600"
-                  placeholder={t('subtitle')}
-                />
-                <select
-                  value={currentCoverSubtitleFontFamily}
-                  onChange={(e) => { snapshot(); setCoverSubtitleStyle({ fontFamily: e.target.value }); }}
-                  className="editor-input w-24 px-1.5 py-0.5 text-xs rounded-md bg-neutral-800 text-white border border-neutral-600"
-                >
-                  {FONTS.map((f) => (
-                    <option key={`cover-sub-${f}`} value={f}>{f}</option>
-                  ))}
-                </select>
-                <input
-                  type="number"
-                  min={1}
-                  max={300}
-                  value={currentCoverSubtitleFontSize}
-                  onFocus={() => snapshot()}
-                  onChange={(e) => setCoverSubtitleStyle({ fontSize: Math.max(1, parseInt(e.target.value) || 24) })}
-                  className="editor-input w-14 px-1.5 py-0.5 text-xs rounded-md bg-neutral-800 text-white border border-neutral-600"
-                />
-                <input
-                  type="color"
-                  value={currentCoverSubtitleColor}
-                  onFocus={() => snapshot()}
-                  onChange={(e) => setCoverSubtitleStyle({ color: e.target.value })}
-                  className="editor-color-input w-7 h-7 rounded-md border border-neutral-600 cursor-pointer p-0.5 bg-neutral-800"
-                />
-              </>
-            )}
-
-            <button
-              onClick={() => { snapshot(); toggleCover(false); }}
-              className="ml-auto px-2 py-0.5 text-[11px] rounded-md border border-red-800 bg-red-900/50 hover:bg-red-800/60 text-red-200 transition-colors cursor-pointer select-none"
-              title={t('removeCoverLabel')}
-            >
-              {t('removeCoverLabel')}
-            </button>
-              </>
-            ) : null}
-          </div>
-        )}
-      </div>
-
-      {/* ─── Canvas area with page arrows on sides ─── */}
-      <div className="relative z-0 flex-1 min-h-0 flex items-center justify-center overflow-hidden gap-2 px-0 py-2">
-        {/* Left arrow */}
-        <button
-          onClick={goPrevPage}
-          disabled={currentPageIndex === 0}
-          aria-label={t('pagePrev')}
-          className="editor-side-nav shrink-0 w-11 h-11 flex items-center justify-center rounded-2xl border border-neutral-600
-                     bg-gradient-to-b from-neutral-800 to-neutral-900 hover:from-neutral-700 hover:to-neutral-800 text-neutral-200 disabled:opacity-25
-                     disabled:cursor-not-allowed transition-all shadow-[0_8px_18px_rgba(0,0,0,0.35)] cursor-pointer select-none"
-          title={t('pagePrev')}
-        >
-          <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="M20 12H6" />
-            <path d="M12 18l-6-6 6-6" />
-          </svg>
-        </button>
-
-        <div className="h-full max-w-full aspect-[4/3] min-w-0">
-          <EditorCanvas
-            zoomMode={canvasZoomMode}
-            manualZoom={canvasManualZoom}
-            onDisplayScaleChange={setCanvasDisplayScale}
-            onRequestSlotDelete={handleSlotDeleteFromCanvas}
-            dropImagesLabel={t('dropImagesHere')}
-            imageLabelPrefix={t('imageSlotLabel')}
-            editTextPlaceholder={t('editTextPlaceholder')}
-            deleteImageLabel={t('imageDelete')}
-            coverTitleFallback={t('title')}
-            coverSubtitleFallback={t('subtitle')}
-            lowResolutionHintText={(percent) =>
-              t('lowResolutionHint').replace('{percent}', String(percent))
-            }
+          <QuickImageBar
+            t={t}
+            assetPaths={quickInsertAssetPaths}
+            assetBlobs={assetBlobs}
+            selectedAssetPath={quickInsertAssetPath}
+            onSelect={handleQuickInsertAssetPick}
+            onOpenLibrary={() => {
+              setQuickInsertAssetPath(null);
+              setShowAssetLibrary(true);
+            }}
           />
-        </div>
-
-        {/* Right arrow / Add page */}
-        {currentPageIndex >= pages.length - 1 ? (
-          <button
-            onClick={() => { snapshot(); addPage(); }}
-            aria-label={t('pageAdd')}
-            className="editor-side-nav shrink-0 w-11 h-11 flex items-center justify-center rounded-xl border border-green-700/50
-                       bg-neutral-900 hover:bg-green-900/40 text-green-300
-                       transition-all cursor-pointer select-none text-2xl leading-none"
-            title={t('pageAdd')}
-          >
-            +
-          </button>
-        ) : (
-          <button
-            onClick={goNextPage}
-            aria-label={t('pageNext')}
-            className="editor-side-nav shrink-0 w-11 h-11 flex items-center justify-center rounded-2xl border border-neutral-600
-                       bg-gradient-to-b from-neutral-800 to-neutral-900 hover:from-neutral-700 hover:to-neutral-800 text-neutral-200
-                       transition-all shadow-[0_8px_18px_rgba(0,0,0,0.35)] cursor-pointer select-none"
-            title={t('pageNext')}
-          >
-            <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M4 12h14" />
-              <path d="M12 6l6 6-6 6" />
-            </svg>
-          </button>
         )}
+
+        <EditorContextControls t={t} />
       </div>
+
+      <EditorCanvasWorkspace
+        t={t}
+        zoomMode={canvasZoomMode}
+        manualZoom={canvasManualZoom}
+        onDisplayScaleChange={setCanvasDisplayScale}
+        onRequestSlotDelete={handleSlotDeleteFromCanvas}
+      />
 
       {exportJob && (
         <div
