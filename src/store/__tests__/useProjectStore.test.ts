@@ -1,7 +1,11 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { v4 as uuidv4 } from 'uuid';
-import type { FileSystemPort, OpenProjectDialogResult, SaveOutcome } from '../../infra/ports/fileSystemPort';
-import type { Project, TextElement } from '../../types';
+import type {
+  FileSystemPort,
+  OpenProjectDialogResult,
+  SaveOutcome,
+} from '../../infra/ports/fileSystemPort';
+import type { FileSystemFileHandleExt, Project, TextElement } from '../../types';
 
 // Mock fileIO and browser APIs before importing the store
 vi.mock('../../utils/fileIO', () => ({
@@ -43,6 +47,21 @@ function getState() {
   return useProjectStore.getState();
 }
 
+function createTextElement(id: string): TextElement {
+  return {
+    id,
+    type: 'text',
+    x: 10,
+    y: 10,
+    rotation: 0,
+    zIndex: 0,
+    content: id,
+    fontSize: 24,
+    fontFamily: 'Arial',
+    color: '#000000',
+  };
+}
+
 describe('useProjectStore', () => {
   beforeEach(() => {
     localStorageMock.clear();
@@ -51,6 +70,8 @@ describe('useProjectStore', () => {
     // Clear history
     useProjectStore.setState({ historyPast: [], historyFuture: [], recentProjects: [] });
     vi.mocked(mockedFileSystemPort.openProjectFromPath).mockReset();
+    vi.mocked(mockedFileSystemPort.openProjectDialog).mockReset();
+    vi.mocked(mockedFileSystemPort.openProjectDialog).mockResolvedValue(null);
     vi.mocked(mockedFileSystemPort.saveProject).mockReset();
     vi.mocked(mockedFileSystemPort.saveProjectAs).mockReset();
     vi.mocked(mockedFileSystemPort.saveProject).mockResolvedValue({ status: 'cancelled' });
@@ -78,6 +99,11 @@ describe('useProjectStore', () => {
 
     it('showEditor is true after reset', () => {
       expect(getState().showEditor).toBe(true);
+    });
+
+    it('uses the default name when resetting without a name', () => {
+      getState().resetProject();
+      expect(getState().project.meta.name).toBe('Untitled Project');
     });
   });
 
@@ -126,6 +152,13 @@ describe('useProjectStore', () => {
       getState().removePage(2);
       expect(getState().currentPageIndex).toBeLessThanOrEqual(getState().project.pages.length - 1);
     });
+
+    it('ignores invalid page moves and duplicate indices', () => {
+      const before = getState().project;
+      getState().movePage(-1, 1);
+      getState().duplicatePage(99);
+      expect(getState().project).toBe(before);
+    });
   });
 
   describe('element CRUD', () => {
@@ -147,6 +180,17 @@ describe('useProjectStore', () => {
       const page = getState().project.pages[1];
       expect(page.elements).toHaveLength(1);
       expect(page.elements[0].id).toBe(el.id);
+    });
+
+    it('keeps selection when removing a different element', () => {
+      getState().setCurrentPageIndex(1);
+      getState().addElement(createTextElement('selected'));
+      getState().addElement(createTextElement('removed'));
+      getState().setSelectedElementId('selected');
+
+      getState().removeElement('removed');
+
+      expect(getState().selectedElementId).toBe('selected');
     });
 
     it('addElement selects the new element', () => {
@@ -443,6 +487,66 @@ describe('useProjectStore', () => {
 
       expect(getState().project.pages[1].slotAssignments?.[0].assetPath).toBe('assets/photo.jpg');
     });
+
+    it('ignores surplus images and invalid assignments during layout conversion', () => {
+      getState().setCurrentPageIndex(1);
+      getState().addElement({
+        id: 'first-image',
+        type: 'image',
+        x: 0,
+        y: 0,
+        width: 100,
+        height: 100,
+        rotation: 0,
+        zIndex: 0,
+        src: 'assets/first.jpg',
+      });
+      getState().addElement({
+        id: 'surplus-image',
+        type: 'image',
+        x: 100,
+        y: 100,
+        width: 100,
+        height: 100,
+        rotation: 0,
+        zIndex: 1,
+        src: 'assets/surplus.jpg',
+      });
+
+      getState().applyLayout('single');
+      expect(Object.keys(getState().project.pages[1].slotAssignments ?? {})).toHaveLength(1);
+
+      const pages = [...getState().project.pages];
+      pages[1] = {
+        ...pages[1],
+        slotAssignments: {
+          ...pages[1].slotAssignments,
+          99: {
+            assetPath: 'assets/outside.jpg',
+            offsetX: 0,
+            offsetY: 0,
+            scale: 1,
+          },
+        },
+      };
+      useProjectStore.setState({ project: { ...getState().project, pages } });
+      getState().clearLayout();
+      expect(getState().project.pages[1].elements.some(
+        (element) => element.type === 'image' && element.src === 'assets/outside.jpg',
+      )).toBe(false);
+    });
+
+    it('creates an empty assignment map when switching a legacy layout', () => {
+      getState().setCurrentPageIndex(1);
+      const pages = [...getState().project.pages];
+      pages[1] = { ...pages[1], layoutId: 'single' };
+      delete pages[1].slotAssignments;
+      useProjectStore.setState({ project: { ...getState().project, pages } });
+
+      getState().applyLayout('two-side');
+
+      expect(getState().project.pages[1].slotAssignments).toEqual({});
+    });
   });
 
   describe('layout padding & gap', () => {
@@ -466,6 +570,16 @@ describe('useProjectStore', () => {
       expect(getState().project.meta.defaultLayoutPadding).toBe(32);
       expect(getState().project.meta.defaultLayoutGap).toBe(14);
       expect(getState().project.pages.every((page) => page.layoutPadding === 32 && page.layoutGap === 14)).toBe(true);
+    });
+
+    it('does not dirty the project when the background is unchanged', () => {
+      getState().setCurrentPageIndex(1);
+      const page = getState().project.pages[1];
+      const revision = getState().revision;
+
+      getState().setPageBackground(page.background);
+
+      expect(getState().revision).toBe(revision);
     });
   });
 
@@ -524,6 +638,15 @@ describe('useProjectStore', () => {
       getState().updateSlotScale(9, 2);
       getState().updateSlotCrop(9, 0, 0, 10, 10);
       getState().clearSlotCrop(9);
+      expect(getState().project).toBe(before);
+    });
+
+    it('ignores removal when the page has no slot assignments', () => {
+      getState().clearLayout();
+      const before = getState().project;
+
+      getState().removeImageFromSlot(0);
+
       expect(getState().project).toBe(before);
     });
   });
@@ -588,6 +711,17 @@ describe('useProjectStore', () => {
       expect(JSON.parse(localStorageMock.getItem('layox_recentProjects') ?? '[]')).toEqual(
         getState().recentProjects,
       );
+    });
+
+    it('removes browser recents by file name', () => {
+      getState().addRecentProject('Browser', 'browser.layox');
+      getState().removeRecentProject('browser.layox');
+      expect(getState().recentProjects).toEqual([]);
+    });
+
+    it('returns false when a recent native path is no longer available', async () => {
+      vi.mocked(mockedFileSystemPort.openProjectFromPath).mockResolvedValueOnce(null);
+      await expect(getState().openRecentProjectByPath('/tmp/missing.layox')).resolves.toBe(false);
     });
 
     it('openRecentProjectByPath loads and activates project', async () => {
@@ -661,6 +795,33 @@ describe('useProjectStore', () => {
       expect(getState().project.pages[1].slotAssignments?.[0].assetPath).toBe('assets/existing.jpg');
     });
 
+    it('imports directly into a selected slot', async () => {
+      getState().setCurrentPageIndex(1);
+      getState().applyLayout('two-side');
+      getState().setSelectedSlotIndex(1);
+
+      const result = await getState().addImageFromFile(
+        new File(['selected'], 'selected.jpg', { type: 'image/jpeg' }),
+      );
+
+      expect(result.placement).toBe('placed');
+      expect(getState().project.pages[1].slotAssignments?.[1].assetPath).toBe(result.assetPath);
+    });
+
+    it('keeps imports as library assets for an unknown legacy layout', async () => {
+      getState().setCurrentPageIndex(1);
+      const pages = [...getState().project.pages];
+      pages[1] = { ...pages[1], layoutId: 'legacy-layout' };
+      useProjectStore.setState({ project: { ...getState().project, pages } });
+
+      const result = await getState().addImageFromFile(
+        new File(['legacy'], '', { type: 'image/jpeg' }),
+      );
+
+      expect(result.placement).toBe('library-only');
+      expect(result.assetPath).toContain('_image');
+    });
+
     it('only removes unused assets', async () => {
       getState().setCurrentPageIndex(1);
       getState().applyLayout('single');
@@ -672,6 +833,7 @@ describe('useProjectStore', () => {
       expect(getState().removeAsset('assets/unused.jpg')).toBe(true);
       expect(getState().assetBlobs['assets/used.jpg']).toBeDefined();
       expect(getState().assetBlobs['assets/unused.jpg']).toBeUndefined();
+      expect(getState().removeAsset('assets/missing.jpg')).toBe(false);
     });
 
     it('adds and scales an existing asset in free mode', async () => {
@@ -694,6 +856,75 @@ describe('useProjectStore', () => {
         width: 900,
         height: 675,
       });
+    });
+
+    it('handles asset operations without an active page', async () => {
+      useProjectStore.setState({
+        project: { ...getState().project, pages: [] },
+        currentPageIndex: 0,
+      });
+      getState().addAsset('assets/photo.jpg', new Blob(['photo']));
+
+      await expect(getState().addImageFromFile(
+        new File(['photo'], 'photo.jpg', { type: 'image/jpeg' }),
+      )).rejects.toThrow('No active page');
+      await expect(getState().addImageFromAsset('assets/photo.jpg')).resolves.toBeUndefined();
+      expect(() => getState().addTextElement()).not.toThrow();
+    });
+  });
+
+  describe('project file loading', () => {
+    const loadedProject: Project = {
+      meta: { id: 'loaded-id', name: 'Loaded Album', version: '1.1' },
+      pages: [{ id: 'loaded-page', background: '#ffffff', elements: [] }],
+    };
+
+    it('keeps the current project when the open dialog is cancelled', async () => {
+      const before = getState().project;
+      vi.mocked(mockedFileSystemPort.openProjectDialog).mockResolvedValueOnce(null);
+
+      await getState().openProject();
+
+      expect(getState().project).toBe(before);
+    });
+
+    it('opens a project from a native path', async () => {
+      const file = new File(['archive'], 'native.layox', { type: 'application/zip' });
+      vi.mocked(mockedFileSystemPort.openProjectDialog).mockResolvedValueOnce({
+        file,
+        location: { kind: 'native-path', filePath: '/tmp/native.layox' },
+      });
+      vi.mocked(loadProject).mockResolvedValueOnce({ project: loadedProject, assetBlobs: {} });
+
+      await getState().openProject();
+
+      expect(getState().project.meta.name).toBe('Loaded Album');
+      expect(getState().projectLocation).toEqual({
+        kind: 'native-path',
+        filePath: '/tmp/native.layox',
+      });
+      expect(getState().recentProjects[0].filePath).toBe('/tmp/native.layox');
+    });
+
+    it('loads browser files with and without a persisted handle', async () => {
+      const file = new File(['archive'], 'browser.layox', { type: 'application/zip' });
+      const handle = {
+        kind: 'file',
+        name: 'handled.layox',
+        getFile: async () => file,
+        createWritable: vi.fn(),
+      } as unknown as FileSystemFileHandleExt;
+      vi.mocked(loadProject)
+        .mockResolvedValueOnce({ project: loadedProject, assetBlobs: {} })
+        .mockResolvedValueOnce({ project: loadedProject, assetBlobs: {} });
+
+      await getState().loadFromFile(file, { kind: 'web-handle', handle });
+      expect(getState().projectLocation?.kind).toBe('web-handle');
+      expect(getState().recentProjects[0].fileName).toBe('handled.layox');
+
+      await getState().loadFromFile(file);
+      expect(getState().projectLocation).toBeNull();
+      expect(getState().recentProjects[0].fileName).toBe('browser.layox');
     });
   });
 
