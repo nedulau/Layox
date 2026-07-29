@@ -26,6 +26,7 @@ import {
   DEFAULT_LAYOUT_PADDING,
 } from './domain/projectDefaults';
 import { MenuButton, MenuDivider, MenuItem } from './components/editor/MenuComponents';
+import BlobImage from './components/common/BlobImage';
 import AssetLibraryModal from './components/editor/AssetLibraryModal';
 import { useDialogFocus } from './components/common/useDialogFocus';
 import { useMediaQuery } from './hooks/useMediaQuery';
@@ -97,9 +98,6 @@ import FileMenu from './components/editor/FileMenu';
 import SaveStatus from './components/editor/SaveStatus';
 import QuickSettingsMenu from './components/editor/QuickSettingsMenu';
 import KeyboardShortcutsDialog from './components/editor/KeyboardShortcutsDialog';
-import AssetTray, { type AssetTrayItem } from './components/editor/AssetTray';
-import PageFilmstrip from './components/editor/PageFilmstrip';
-import PropertiesInspector from './components/editor/PropertiesInspector';
 import ExportDialog, { type ExportRequest } from './components/editor/ExportDialog';
 
 const LAYOUT_NAME_KEYS: Partial<Record<string, TranslationKey>> = {
@@ -335,7 +333,7 @@ function Editor({
   }, [uiNotice]);
 
   const quickInsertAssetPaths = useMemo(() => Object.keys(assetBlobs).sort(), [assetBlobs]);
-  const assetTrayItems = useMemo<AssetTrayItem[]>(() => {
+  const assetUsageCounts = useMemo(() => {
     const usage = new Map<string, number>();
     for (const page of pages) {
       for (const element of page.elements) {
@@ -345,16 +343,10 @@ function Editor({
         usage.set(assignment.assetPath, (usage.get(assignment.assetPath) ?? 0) + 1);
       }
     }
-    return quickInsertAssetPaths.map((assetPath) => ({
-      assetPath,
-      blob: assetBlobs[assetPath],
-      usageCount: usage.get(assetPath) ?? 0,
-    }));
-  }, [assetBlobs, pages, quickInsertAssetPaths]);
-  const assetUsageCounts = useMemo(
-    () => Object.fromEntries(assetTrayItems.map((item) => [item.assetPath, item.usageCount])),
-    [assetTrayItems],
-  );
+    return Object.fromEntries(
+      quickInsertAssetPaths.map((assetPath) => [assetPath, usage.get(assetPath) ?? 0]),
+    );
+  }, [pages, quickInsertAssetPaths]);
 
   const refreshRecoveryPoints = useCallback(async () => {
     try {
@@ -938,6 +930,13 @@ function Editor({
               <MenuItem label={t('undo')} shortcut="Ctrl+Z" onClick={handleUndo} disabled={!canUndo} />
               <MenuItem label={t('redo')} shortcut="Ctrl+Y" onClick={handleRedo} disabled={!canRedo} />
               <MenuDivider />
+              <MenuItem
+                label={t('duplicatePage')}
+                onClick={() => {
+                  closeMenu();
+                  handleDuplicatePage(currentPageIndex);
+                }}
+              />
               <MenuItem label={t('delete')} shortcut="Del" onClick={handleDelete} disabled={!canDelete} danger />
               <MenuItem label={t('shortcutOverview')} onClick={() => {
                 closeMenu();
@@ -1230,6 +1229,63 @@ function Editor({
         <input ref={fileInputRef} type="file" accept=".layox" className="hidden" onChange={handleFileSelected} />
         <input ref={imageInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleImageSelected} />
 
+        {showQuickImageBar && currentLayoutId && (
+          <div className="editor-context-bar order-3 basis-full mt-2 pt-2 border-t border-neutral-800/90 flex items-center gap-3 px-1 pb-1 text-sm">
+            <div className="flex-1 min-w-0 overflow-x-auto">
+              {quickInsertAssetPaths.length === 0 ? (
+                <div className="text-xs text-neutral-500 py-1">{t('noAssets')}</div>
+              ) : (
+                <div className="flex items-center gap-2 pr-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setQuickInsertAssetPath(null);
+                      setShowAssetLibrary(true);
+                    }}
+                    className="shrink-0 h-14 px-3 rounded-md border border-neutral-700 bg-neutral-900 text-neutral-200 text-xs hover:border-neutral-500 transition-colors cursor-pointer select-none"
+                  >
+                    {t('assetLibrary')}
+                  </button>
+
+                  {quickInsertAssetPaths.map((assetPath) => {
+                    const isActive = quickInsertAssetPath === assetPath;
+                    return (
+                      <button
+                        key={`quick-insert-${assetPath}`}
+                        type="button"
+                        onClick={() => handleQuickInsertAssetPick(assetPath)}
+                        className={`shrink-0 w-14 h-14 rounded-md border overflow-hidden transition-colors cursor-pointer select-none ${
+                          isActive
+                            ? 'border-blue-500 ring-1 ring-blue-500/80'
+                            : 'border-neutral-700 hover:border-neutral-500'
+                        }`}
+                        title={assetPath.split('/').pop() || assetPath}
+                      >
+                        {assetBlobs[assetPath] ? (
+                          <BlobImage
+                            blob={assetBlobs[assetPath]}
+                            alt=""
+                            className="w-full h-full object-cover"
+                            draggable={false}
+                          />
+                        ) : (
+                          <div className="w-full h-full bg-neutral-900 flex items-center justify-center text-[10px] text-neutral-500">
+                            ...
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {quickInsertAssetPath && (
+              <span className="text-[11px] text-blue-300 whitespace-nowrap">{t('insertFromLibrary')}</span>
+            )}
+          </div>
+        )}
+
         {(selectedTextElement || currentIsCover) && (
           <div className="editor-context-bar order-2 basis-full mt-2 pt-2 border-t border-neutral-800/90 flex items-center gap-3 px-1 pb-1 text-sm">
             {selectedTextElement ? (
@@ -1361,26 +1417,6 @@ function Editor({
 
       {/* ─── Canvas area with page arrows on sides ─── */}
       <div className="relative z-0 flex-1 min-h-0 flex items-center justify-center overflow-hidden gap-2 px-0 py-2">
-        <PageFilmstrip
-          t={t}
-          pages={pages}
-          assetBlobs={assetBlobs}
-          currentPageIndex={currentPageIndex}
-          defaultLayoutPadding={defaultLayoutPadding}
-          defaultLayoutGap={defaultLayoutGap}
-          getMetaLabel={getPageOverviewMetaLabel}
-          onSelect={setCurrentPageIndex}
-          onMove={(fromIndex, toIndex) => {
-            snapshot();
-            movePage(fromIndex, toIndex);
-          }}
-          onDuplicate={handleDuplicatePage}
-          onDelete={handleDeletePage}
-          onAdd={() => {
-            snapshot();
-            addPage();
-          }}
-        />
         {/* Left arrow */}
         <button
           onClick={goPrevPage}
@@ -1442,31 +1478,7 @@ function Editor({
             </svg>
           </button>
         )}
-        <PropertiesInspector
-          t={t}
-          fonts={FONTS}
-          onStartCrop={handleStartCrop}
-          onReplaceImage={() => imageInputRef.current?.click()}
-          onDelete={handleDelete}
-        />
       </div>
-
-      {showQuickImageBar && (
-        <AssetTray
-          t={t}
-          items={assetTrayItems}
-          selectedAssetPath={quickInsertAssetPath}
-          importing={importJob !== null}
-          onImport={() => imageInputRef.current?.click()}
-          onSelect={handleQuickInsertAssetPick}
-          onOpenLibrary={() => setShowAssetLibrary(true)}
-          onRemove={(assetPath) => {
-            if (removeAsset(assetPath) && quickInsertAssetPath === assetPath) {
-              setQuickInsertAssetPath(null);
-            }
-          }}
-        />
-      )}
 
       {exportJob && (
         <div
