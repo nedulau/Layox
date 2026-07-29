@@ -34,9 +34,11 @@ export function createSaveCoordinator({
   onSavedProject: (details: SavedProjectDetails) => void;
 }) {
   let activeSave: Promise<SaveOutcome> | null = null;
+  let activeSaveIsSaveAs = false;
+  let queuedSaveAs: Promise<SaveOutcome> | null = null;
 
-  return (saveAs: boolean): Promise<SaveOutcome> => {
-    if (activeSave) return activeSave;
+  const startSave = (saveAs: boolean): Promise<SaveOutcome> => {
+    activeSaveIsSaveAs = saveAs;
     const task = (async () => {
       const stateAtStart = getState();
       const revisionAtStart = stateAtStart.revision;
@@ -82,9 +84,30 @@ export function createSaveCoordinator({
         throw error;
       } finally {
         activeSave = null;
+        activeSaveIsSaveAs = false;
       }
     })();
     activeSave = task;
     return task;
+  };
+
+  return (saveAs: boolean): Promise<SaveOutcome> => {
+    if (!activeSave) return startSave(saveAs);
+
+    // Repeated in-place saves can share the current write. Save As is a
+    // distinct user request, though, and must run after an in-place save.
+    if (!saveAs || activeSaveIsSaveAs) return activeSave;
+    if (!queuedSaveAs) {
+      const currentSave = activeSave;
+      queuedSaveAs = currentSave
+        .then(
+          () => startSave(true),
+          () => startSave(true),
+        )
+        .finally(() => {
+          queuedSaveAs = null;
+        });
+    }
+    return queuedSaveAs;
   };
 }

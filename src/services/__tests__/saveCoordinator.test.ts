@@ -103,13 +103,13 @@ describe('saveCoordinator', () => {
     ]);
   });
 
-  it('coalesces concurrent saves and permits a later save', async () => {
+  it('coalesces concurrent in-place saves and permits a later save', async () => {
     let finish: ((outcome: SaveOutcome) => void) | undefined;
     vi.mocked(port.saveProject).mockReturnValueOnce(new Promise((resolve) => { finish = resolve; }));
     const save = coordinator();
 
     const first = save(false);
-    const second = save(true);
+    const second = save(false);
     expect(second).toBe(first);
     finish?.({ status: 'cancelled' });
     await first;
@@ -117,6 +117,24 @@ describe('saveCoordinator', () => {
     vi.mocked(port.saveProject).mockResolvedValueOnce({ status: 'cancelled' });
     await save(false);
     expect(port.saveProject).toHaveBeenCalledTimes(2);
+  });
+
+  it('queues Save As when an in-place save is still running', async () => {
+    let finish: ((outcome: SaveOutcome) => void) | undefined;
+    vi.mocked(port.saveProject).mockReturnValueOnce(new Promise((resolve) => { finish = resolve; }));
+    vi.mocked(port.saveProjectAs).mockResolvedValueOnce({ status: 'cancelled' });
+    const save = coordinator();
+
+    const inPlaceSave = save(false);
+    const saveAs = save(true);
+
+    expect(saveAs).not.toBe(inPlaceSave);
+    expect(port.saveProjectAs).not.toHaveBeenCalled();
+    finish?.({ status: 'cancelled' });
+    await inPlaceSave;
+    await saveAs;
+
+    expect(port.saveProjectAs).toHaveBeenCalledOnce();
   });
 
   it.each([new Error('disk full'), 'native failure'])('surfaces save failure %s', async (failure) => {
