@@ -4,7 +4,6 @@ import type { Project, Page, PageElement, ImageElement, TextElement, SlotAssignm
 import { loadProject } from '../utils/fileIO';
 import { getLayoutById, computeLayoutSlots } from '../utils/layouts';
 import { storeHandle } from '../utils/handleStore';
-import { CANVAS_H, CANVAS_IMAGE_MAX_H, CANVAS_IMAGE_MAX_W, CANVAS_W } from '../constants/canvas';
 import { readStoredBoolean, readStoredJson, readStoredNumber, writeStoredString } from '../infra/storage';
 import { getFileSystemPort } from '../infra/fileSystem';
 import type { ProjectLocation, SaveOutcome } from '../infra/ports/fileSystemPort';
@@ -32,6 +31,7 @@ import {
   updateElementAt,
 } from '../domain/projectOperations';
 import { createSaveCoordinator } from '../services/saveCoordinator';
+import { createCenteredImageElement } from '../services/imageElementFactory';
 const fileSystemPort = getFileSystemPort();
 
 interface RecentProject {
@@ -840,38 +840,12 @@ const useProjectStore = create<ProjectState>((baseSet, get) => {
       return { assetPath, placement: 'placed' };
     } else {
       // Free mode: create ImageElement
-      const dimensions = await new Promise<{ w: number; h: number }>((resolve) => {
-        const url = URL.createObjectURL(blob);
-        const img = new window.Image();
-        img.onload = () => {
-          resolve({ w: img.naturalWidth, h: img.naturalHeight });
-          URL.revokeObjectURL(url);
-        };
-        img.onerror = () => {
-          resolve({ w: 300, h: 200 });
-          URL.revokeObjectURL(url);
-        };
-        img.src = url;
-      });
-
-      let { w, h } = dimensions;
-      if (w > CANVAS_IMAGE_MAX_W || h > CANVAS_IMAGE_MAX_H) {
-        const scale = Math.min(CANVAS_IMAGE_MAX_W / w, CANVAS_IMAGE_MAX_H / h);
-        w = Math.round(w * scale);
-        h = Math.round(h * scale);
-      }
-
-      const element: ImageElement = {
+      const element = await createCenteredImageElement({
         id,
-        type: 'image',
-        x: Math.round((CANVAS_W - w) / 2),
-        y: Math.round((CANVAS_H - h) / 2),
-        width: w,
-        height: h,
-        rotation: 0,
+        assetPath,
+        blob,
         zIndex: get().currentPage()?.elements.length ?? 0,
-        src: assetPath,
-      };
+      });
 
       set((state) => {
         const pages = [...state.project.pages];
@@ -929,38 +903,12 @@ const useProjectStore = create<ProjectState>((baseSet, get) => {
       return;
     }
 
-    const dimensions = await new Promise<{ w: number; h: number }>((resolve) => {
-      const url = URL.createObjectURL(blob);
-      const img = new window.Image();
-      img.onload = () => {
-        resolve({ w: img.naturalWidth, h: img.naturalHeight });
-        URL.revokeObjectURL(url);
-      };
-      img.onerror = () => {
-        resolve({ w: 300, h: 200 });
-        URL.revokeObjectURL(url);
-      };
-      img.src = url;
-    });
-
-    let { w, h } = dimensions;
-    if (w > CANVAS_IMAGE_MAX_W || h > CANVAS_IMAGE_MAX_H) {
-      const scale = Math.min(CANVAS_IMAGE_MAX_W / w, CANVAS_IMAGE_MAX_H / h);
-      w = Math.round(w * scale);
-      h = Math.round(h * scale);
-    }
-
-    const element: ImageElement = {
+    const element = await createCenteredImageElement({
       id: uuidv4(),
-      type: 'image',
-      x: Math.round((CANVAS_W - w) / 2),
-      y: Math.round((CANVAS_H - h) / 2),
-      width: w,
-      height: h,
-      rotation: 0,
+      assetPath,
+      blob,
       zIndex: get().currentPage()?.elements.length ?? 0,
-      src: assetPath,
-    };
+    });
 
     get().addElement(element);
   },
