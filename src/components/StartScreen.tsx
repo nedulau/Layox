@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import useProjectStore from '../store/useProjectStore';
 import { getHandle } from '../utils/handleStore';
 import NewProjectModal from './NewProjectModal';
@@ -8,7 +8,6 @@ import type { RecentProject } from '../store/useProjectStore';
 import type { FileSystemFileHandleExt } from '../types';
 import { recoveryRepository, type RecoverySummary } from '../utils/recoveryRepository';
 import ConfirmDialog from './common/ConfirmDialog';
-import RecoveryPreview from './editor/RecoveryPreview';
 
 type PermissionAwareFileHandle = FileSystemFileHandleExt & {
   requestPermission?: (options: { mode: 'readwrite' }) => Promise<PermissionState>;
@@ -31,7 +30,7 @@ function StartScreen({ uiTheme, setUiTheme, language, setLanguage }: StartScreen
   const [uiError, setUiError] = useState<string | null>(null);
   const [unavailableRecents, setUnavailableRecents] = useState<Set<string>>(() => new Set());
   const [deleteRecoveryPoint, setDeleteRecoveryPoint] = useState<RecoverySummary | null>(null);
-  const t = useCallback((key: TranslationKey) => tr(language, key), [language]);
+  const t = (key: TranslationKey) => tr(language, key);
 
   const resetProject = useProjectStore((state) => state.resetProject);
   const openProject = useProjectStore((state) => state.openProject);
@@ -43,21 +42,21 @@ function StartScreen({ uiTheme, setUiTheme, language, setLanguage }: StartScreen
 
   const hasFileSystemAccess = getFileSystemPort().supportsNativePicker();
 
-  const refreshRecovery = useCallback(async () => {
+  const refreshRecovery = async () => {
     try {
-      setRecoveryPoints(await recoveryRepository.list());
+      setRecoveryPoints((await recoveryRepository.list()).slice(0, 8));
       setRecoveryError(null);
     } catch (error) {
       setRecoveryError(error instanceof Error ? error.message : String(error));
     }
-  }, []);
+  };
 
   useEffect(() => {
     let active = true;
     void recoveryRepository.list()
       .then((points) => {
         if (!active) return;
-        setRecoveryPoints(points);
+        setRecoveryPoints(points.slice(0, 8));
         setRecoveryError(null);
       })
       .catch((error) => {
@@ -68,16 +67,6 @@ function StartScreen({ uiTheme, setUiTheme, language, setLanguage }: StartScreen
       active = false;
     };
   }, []);
-
-  const recoveryGroups = useMemo(() => {
-    const groups = new Map<string, RecoverySummary[]>();
-    for (const point of recoveryPoints) {
-      const current = groups.get(point.projectId) ?? [];
-      current.push(point);
-      groups.set(point.projectId, current);
-    }
-    return [...groups.values()].sort((first, second) => second[0].createdAt - first[0].createdAt);
-  }, [recoveryPoints]);
 
   const recentKey = (recentProject: RecentProject) => recentProject.filePath ?? recentProject.fileName;
 
@@ -149,169 +138,157 @@ function StartScreen({ uiTheme, setUiTheme, language, setLanguage }: StartScreen
     }
   };
 
-  const latestRecent = recentProjects[0];
-
   return (
-    <div className="app-ui start-ui h-screen w-screen overflow-y-auto" data-ui-theme={uiTheme}>
-      <main className="mx-auto flex min-h-full w-full max-w-6xl flex-col px-5 py-6 md:px-8">
-        <header className="flex items-center justify-between gap-4">
-          <div>
-            <h1 className="start-title text-3xl font-bold tracking-tight">Layox</h1>
-            <p className="start-subtitle mt-1 text-sm">{t('startSubtitle')}</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <select
-              value={language}
-              onChange={(event) => setLanguage(event.target.value === 'en' ? 'en' : 'de')}
-              className="editor-input min-h-11 rounded-lg border border-neutral-600 bg-neutral-800 px-3 text-xs text-white"
-              aria-label={t('language')}
-            >
-              <option value="de">{t('german')}</option>
-              <option value="en">{t('english')}</option>
-            </select>
-            <select
-              value={uiTheme}
-              onChange={(event) => setUiTheme(event.target.value === 'light' ? 'light' : 'dark')}
-              className="editor-input min-h-11 rounded-lg border border-neutral-600 bg-neutral-800 px-3 text-xs text-white"
-              aria-label={t('uiMode')}
-            >
-              <option value="dark">{t('dark')}</option>
-              <option value="light">{t('light')}</option>
-            </select>
-          </div>
-        </header>
+    <div className="app-ui start-ui w-screen h-screen flex items-center justify-center" data-ui-theme={uiTheme}>
+      <div className="flex flex-col items-center gap-8 max-w-lg w-full px-6">
+        <div className="w-full flex items-center justify-end gap-2">
+          <select
+            value={language}
+            onChange={(event) => setLanguage(event.target.value === 'en' ? 'en' : 'de')}
+            className="editor-input px-2 py-1 text-xs rounded-md bg-neutral-800 text-white border border-neutral-600"
+            title={t('language')}
+          >
+            <option value="de">{t('german')}</option>
+            <option value="en">{t('english')}</option>
+          </select>
+          <select
+            value={uiTheme}
+            onChange={(event) => setUiTheme(event.target.value === 'light' ? 'light' : 'dark')}
+            className="editor-input px-2 py-1 text-xs rounded-md bg-neutral-800 text-white border border-neutral-600"
+            title={t('uiMode')}
+          >
+            <option value="dark">{t('dark')}</option>
+            <option value="light">{t('light')}</option>
+          </select>
+        </div>
 
-        <section className="mt-8 rounded-3xl border border-neutral-800 bg-neutral-900/70 p-6 shadow-xl md:flex md:items-center md:justify-between md:gap-8">
-          <div>
-            <h2 className="start-title text-2xl font-semibold">{t('projectDashboard')}</h2>
-            <p className="start-subtitle mt-2 max-w-xl text-sm leading-6">{t('recentProjectsDescription')}</p>
-          </div>
-          <div className="mt-5 flex flex-wrap gap-3 md:mt-0">
-            {latestRecent && (
-              <button
-                type="button"
-                onClick={() => void handleRecentOpen(latestRecent)}
-                className="min-h-12 rounded-xl bg-blue-600 px-5 font-semibold text-white hover:bg-blue-500"
-              >
-                {t('continueEditing')}
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={() => setShowNewProjectModal(true)}
-              className="min-h-12 rounded-xl bg-blue-600 px-5 font-semibold text-white hover:bg-blue-500"
-            >
-              {t('newProject')}
-            </button>
-            <button
-              type="button"
-              onClick={() => void handleOpen()}
-              className="start-open-btn min-h-12 rounded-xl bg-neutral-700 px-5 font-semibold text-white hover:bg-neutral-600"
-            >
-              {t('openProject')}
-            </button>
-          </div>
-        </section>
+        <div className="text-center">
+          <h1 className="text-5xl font-bold start-title tracking-tight">Layox</h1>
+          <p className="start-subtitle mt-2 text-sm">{t('startSubtitle')}</p>
+        </div>
 
-        {(uiError || recoveryError) && (
-          <div className="mt-5 rounded-xl border border-red-800 bg-red-950/40 px-4 py-3 text-sm text-red-200" role="alert">
-            {uiError ?? recoveryError}
+        <div className="flex gap-3">
+          <button
+            type="button"
+            onClick={() => setShowNewProjectModal(true)}
+            className="px-5 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-medium
+                       transition-colors cursor-pointer select-none"
+          >
+            {t('newProject')}
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleOpen()}
+            className="start-open-btn px-5 py-2.5 rounded-lg bg-neutral-700 hover:bg-neutral-600 text-white font-medium
+                       transition-colors cursor-pointer select-none"
+          >
+            {t('openProject')}
+          </button>
+        </div>
+
+        {recoveryPoints.length > 0 && (
+          <div className="w-full">
+            <h2 className="text-sm start-recent-title font-medium mb-2 uppercase tracking-wider">
+              {t('recovery')}
+            </h2>
+            <div className="flex flex-col gap-1">
+              {recoveryPoints.map((point) => (
+                <div
+                  key={point.id}
+                  className="w-full flex items-center rounded-lg start-recent-item bg-neutral-800/60 hover:bg-neutral-700/80 transition-colors"
+                >
+                  <button
+                    type="button"
+                    onClick={() => void handleRecovery(point)}
+                    className="min-w-0 flex-1 flex items-center justify-between px-4 py-2.5 text-left cursor-pointer select-none"
+                  >
+                    <span className="flex flex-col min-w-0">
+                      <span className="start-recent-name text-sm font-medium truncate">{point.projectName}</span>
+                      <span className="text-neutral-500 text-xs">
+                        {point.pageCount} {t('pages')} · {t('restore')}
+                      </span>
+                    </span>
+                    <span className="text-neutral-600 text-xs shrink-0 ml-4">{formatDate(point.createdAt)}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDeleteRecoveryPoint(point)}
+                    className="min-h-11 min-w-11 text-neutral-500 hover:text-red-300"
+                    aria-label={t('deleteRecovery')}
+                    title={t('deleteRecovery')}
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
-        <div className="mt-8 grid flex-1 gap-8 lg:grid-cols-[1fr_1.1fr]">
-          <section>
-            <h2 className="start-recent-title text-xs font-semibold uppercase tracking-wider">{t('recentOpened')}</h2>
-            <div className="mt-3 space-y-2">
-              {recentProjects.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-neutral-700 p-6 text-sm text-neutral-500">
-                  {t('recentProjectsDescription')}
-                </div>
-              ) : recentProjects.map((recentProject) => {
+        {recoveryError && (
+          <div className="w-full rounded-lg border border-red-800 bg-red-950/40 px-3 py-2 text-xs text-red-200">
+            {recoveryError}
+          </div>
+        )}
+
+        {uiError && (
+          <div className="w-full rounded-lg border border-red-800 bg-red-950/40 px-3 py-2 text-xs text-red-200" role="alert">
+            {uiError}
+          </div>
+        )}
+
+        {recentProjects.length > 0 && (
+          <div className="w-full">
+            <h2 className="text-sm start-recent-title font-medium mb-2 uppercase tracking-wider">
+              {t('recentOpened')}
+            </h2>
+            <div className="flex flex-col gap-1">
+              {recentProjects.map((recentProject) => {
                 const unavailable = unavailableRecents.has(recentKey(recentProject));
                 return (
-                  <article key={recentKey(recentProject)} className="start-recent-item rounded-xl border border-neutral-800 bg-neutral-900/70 p-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <button type="button" onClick={() => void handleRecentOpen(recentProject)} className="min-w-0 flex-1 text-left">
-                        <div className="start-recent-name truncate text-sm font-semibold">{recentProject.name}</div>
-                        <div className="mt-1 truncate text-xs text-neutral-500">{recentProject.filePath ?? recentProject.fileName}</div>
-                        <div className="mt-2 text-[11px] text-neutral-600">{formatDate(recentProject.lastOpened)}</div>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => removeRecentProject(recentProject.fileName, recentProject.filePath)}
-                        className="min-h-11 min-w-11 rounded-lg text-neutral-500 hover:bg-neutral-800 hover:text-red-300"
-                        aria-label={t('removeRecent')}
-                        title={t('removeRecent')}
-                      >
-                        ×
-                      </button>
-                    </div>
-                    {unavailable && (
-                      <button type="button" onClick={() => void handleOpen()} className="mt-3 w-full rounded-lg border border-amber-800 bg-amber-950/30 px-3 py-2 text-left text-xs text-amber-200">
-                        <span className="block">{t('fileUnavailable')}</span>
-                        <span className="mt-1 block font-semibold">{t('chooseFileAgain')}</span>
-                      </button>
-                    )}
-                  </article>
-                );
-              })}
-            </div>
-          </section>
-
-          <section>
-            <h2 className="start-recent-title text-xs font-semibold uppercase tracking-wider">{t('recovery')}</h2>
-            <p className="mt-2 text-xs text-neutral-500">{t('recoveryDescription')}</p>
-            <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              {recoveryGroups.length === 0 ? (
-                <div className="col-span-full rounded-xl border border-dashed border-neutral-700 p-6 text-sm text-neutral-500">
-                  {t('noRestorePoints')}
-                </div>
-              ) : recoveryGroups.map((points) => {
-                const latest = points[0];
-                return (
-                  <article key={latest.projectId} className="overflow-hidden rounded-xl border border-neutral-800 bg-neutral-900/70">
-                    <button type="button" onClick={() => void handleRecovery(latest)} className="block w-full text-left">
-                      <RecoveryPreview snapshotId={latest.id} />
-                      <div className="p-3">
-                        <div className="start-recent-name truncate text-sm font-semibold">{latest.projectName}</div>
-                        <div className="mt-1 text-xs text-neutral-500">
-                          {t('recoverySnapshots').replace('{count}', String(points.length))} · {latest.pageCount} {t('pages')}
-                        </div>
-                        <div className="mt-1 text-[11px] text-neutral-600">{formatDate(latest.createdAt)}</div>
-                        <div className="mt-2 text-[10px] text-blue-300">{t('recoveredCopy')}</div>
-                      </div>
+                  <div
+                    key={recentKey(recentProject)}
+                    className="w-full flex items-center rounded-lg start-recent-item bg-neutral-800/60 hover:bg-neutral-700/80 transition-colors"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => void handleRecentOpen(recentProject)}
+                      className="min-w-0 flex-1 flex items-center justify-between px-4 py-2.5 text-left cursor-pointer select-none"
+                    >
+                      <span className="flex flex-col min-w-0">
+                        <span className="start-recent-name text-sm font-medium truncate">{recentProject.name}</span>
+                        <span className={`text-xs truncate ${unavailable ? 'text-amber-300' : 'text-neutral-500'}`}>
+                          {unavailable ? t('fileUnavailable') : (recentProject.filePath ?? recentProject.fileName)}
+                        </span>
+                      </span>
+                      <span className="text-neutral-600 text-xs shrink-0 ml-4">
+                        {formatDate(recentProject.lastOpened)}
+                      </span>
                     </button>
-                    <details className="border-t border-neutral-800">
-                      <summary className="cursor-pointer px-3 py-2 text-xs text-neutral-400">{t('recoverySnapshots').replace('{count}', String(points.length))}</summary>
-                      <div className="space-y-1 px-2 pb-2">
-                        {points.map((point) => (
-                          <div key={point.id} className="flex items-center gap-1 rounded-lg bg-neutral-950/50 p-1">
-                            <button type="button" onClick={() => void handleRecovery(point)} className="min-h-10 min-w-0 flex-1 rounded px-2 text-left text-[11px] text-neutral-300 hover:bg-neutral-800">
-                              {formatDate(point.createdAt)} · {point.pageIndex + 1}/{point.pageCount}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setDeleteRecoveryPoint(point)}
-                              className="min-h-10 min-w-10 rounded text-red-300 hover:bg-red-950"
-                              aria-label={t('deleteRecovery')}
-                              title={t('deleteRecovery')}
-                            >
-                              ×
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    </details>
-                  </article>
+                    <button
+                      type="button"
+                      onClick={() => removeRecentProject(recentProject.fileName, recentProject.filePath)}
+                      className="min-h-11 min-w-11 text-neutral-500 hover:text-red-300"
+                      aria-label={t('removeRecent')}
+                      title={t('removeRecent')}
+                    >
+                      ×
+                    </button>
+                  </div>
                 );
               })}
             </div>
-          </section>
-        </div>
+          </div>
+        )}
 
-        <input ref={fileInputRef} type="file" accept=".layox" className="hidden" onChange={handleFileSelected} />
-      </main>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".layox"
+          className="hidden"
+          onChange={handleFileSelected}
+        />
+      </div>
 
       <NewProjectModal
         open={showNewProjectModal}
