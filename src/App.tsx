@@ -10,11 +10,10 @@ import { exportAsPdf, exportCurrentPageAsPng, exportCurrentPageAsJpeg, exportAll
 import type { ExportJobOptions, PdfCompressionLevel, ProjectExportContext } from './utils/exportProject';
 import { tr, type Language, type TranslationKey } from './i18n';
 import type { Page } from './types';
-import { readStoredBoolean, readStoredString, removeStoredValue, writeStoredString } from './infra/storage';
+import { readStoredBoolean, readStoredString, writeStoredString } from './infra/storage';
 import { getFileSystemPort } from './infra/fileSystem';
-import { recoveryRepository, type RecoverySummary } from './utils/recoveryRepository';
+import type { RecoverySummary } from './utils/recoveryRepository';
 import { konvaPageRenderer } from './utils/konvaPageRenderer';
-import { v4 as uuidv4 } from 'uuid';
 import {
   DEFAULT_COVER_SUBTITLE_COLOR,
   DEFAULT_COVER_SUBTITLE_FONT_FAMILY,
@@ -32,8 +31,8 @@ import { useDialogFocus } from './components/common/useDialogFocus';
 import { useMediaQuery } from './hooks/useMediaQuery';
 import ConfirmDialog from './components/common/ConfirmDialog';
 import PwaUpdatePrompt from './components/PwaUpdatePrompt';
-import { useAutoSave } from './hooks/useAutoSave';
 import { useEditorKeyboardShortcuts } from './hooks/useEditorKeyboardShortcuts';
+import { useEditorRecovery } from './hooks/useEditorRecovery';
 
 const FONTS = ['Arial', 'Times New Roman', 'Georgia', 'Verdana', 'Courier New', 'Trebuchet MS', 'Impact', 'Comic Sans MS'];
 const PDF_LEVELS: PdfCompressionLevel[] = ['none', 'low', 'medium', 'high'];
@@ -141,7 +140,6 @@ function Editor({
   const saveCurrentProjectAs = useProjectStore((s) => s.saveCurrentProjectAs);
   const openProject = useProjectStore((s) => s.openProject);
   const loadFromFile = useProjectStore((s) => s.loadFromFile);
-  const restoreRecoveredProject = useProjectStore((s) => s.restoreRecoveredProject);
   const resetProject = useProjectStore((s) => s.resetProject);
   const setProjectName = useProjectStore((s) => s.setProjectName);
   const projectName = useProjectStore((s) => s.project.meta.name);
@@ -291,8 +289,6 @@ function Editor({
   const [canvasZoomMode, setCanvasZoomMode] = useState<'fit' | 'manual'>('fit');
   const [canvasManualZoom, setCanvasManualZoom] = useState(1);
   const [canvasDisplayScale, setCanvasDisplayScale] = useState(1);
-  const [recoveryPoints, setRecoveryPoints] = useState<RecoverySummary[]>([]);
-  const [recoveryError, setRecoveryError] = useState<string | null>(null);
   const exportAbortRef = useRef<AbortController | null>(null);
   const [exportJob, setExportJob] = useState<{ label: string; completed: number; total: number } | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
@@ -303,6 +299,11 @@ function Editor({
   const [showHomeConfirm, setShowHomeConfirm] = useState(false);
   const [showExportDialog, setShowExportDialog] = useState(false);
   const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false);
+  const toggleMenu = useCallback(
+    (name: string) => setOpenMenu((prev) => (prev === name ? null : name)),
+    [],
+  );
+  const closeMenu = useCallback(() => setOpenMenu(null), []);
   const exportDialogRef = useDialogFocus<HTMLDivElement>(exportJob !== null, () => exportAbortRef.current?.abort());
   const [pdfDefaultLevel, setPdfDefaultLevel] = useState<PdfCompressionLevel>(() => {
     const saved = readStoredString('layox_pdfDefaultLevel', 'medium');
@@ -349,77 +350,19 @@ function Editor({
     );
   }, [pages, quickInsertAssetPaths]);
 
-  const refreshRecoveryPoints = useCallback(async () => {
-    try {
-      setRecoveryPoints(await recoveryRepository.list(projectId));
-      setRecoveryError(null);
-    } catch (error) {
-      setRecoveryError(error instanceof Error ? error.message : String(error));
-    }
-  }, [projectId]);
-
-  useEffect(() => {
-    removeStoredValue('layox_autoSaveTimeline');
-    let active = true;
-    void recoveryRepository.list(projectId)
-      .then((points) => {
-        if (!active) return;
-        setRecoveryPoints(points);
-        setRecoveryError(null);
-      })
-      .catch((error) => {
-        if (!active) return;
-        setRecoveryError(error instanceof Error ? error.message : String(error));
-      });
-    return () => {
-      active = false;
-    };
-  }, [projectId]);
-
-  const createRecoveryPoint = useCallback(async () => {
-    const state = useProjectStore.getState();
-    const projectCopy = structuredClone(state.project);
-    await recoveryRepository.save({
-      id: uuidv4(),
-      projectId: projectCopy.meta.id,
-      createdAt: Date.now(),
-      pageIndex: state.currentPageIndex,
-      pageCount: projectCopy.pages.length,
-      projectName: projectCopy.meta.name,
-      project: projectCopy,
-    }, state.assetBlobs);
-    await refreshRecoveryPoints();
-  }, [refreshRecoveryPoints]);
-
-  const handleAutoSaveSuccess = useCallback(() => setRecoveryError(null), []);
-  const handleAutoSaveError = useCallback((error: unknown) => {
-    setRecoveryError(error instanceof Error ? error.message : String(error));
-  }, []);
-  useAutoSave({
-    enabled: autoSaveEnabled,
-    intervalSeconds: autoSaveInterval,
-    createRecoveryPoint,
-    onSuccess: handleAutoSaveSuccess,
-    onError: handleAutoSaveError,
+  const {
+    recoveryPoints,
+    recoveryError,
+    restoreRecoveryPoint,
+  } = useEditorRecovery({
+    projectId,
+    autoSaveEnabled,
+    autoSaveInterval,
   });
 
   const handleRestoreRecoveryPoint = useCallback(async (point: RecoverySummary) => {
-    try {
-      const recovered = await recoveryRepository.restore(point.id);
-      snapshot();
-      restoreRecoveredProject(recovered.project, recovered.assetBlobs, recovered.pageIndex);
-      setRecoveryError(null);
-      setOpenMenu(null);
-    } catch (error) {
-      setRecoveryError(error instanceof Error ? error.message : String(error));
-    }
-  }, [restoreRecoveredProject, snapshot]);
-
-  const toggleMenu = useCallback(
-    (name: string) => setOpenMenu((prev) => (prev === name ? null : name)),
-    [],
-  );
-  const closeMenu = useCallback(() => setOpenMenu(null), []);
+    if (await restoreRecoveryPoint(point)) closeMenu();
+  }, [closeMenu, restoreRecoveryPoint]);
 
   // Close menu on outside click
   useEffect(() => {
