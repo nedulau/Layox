@@ -1,4 +1,4 @@
-import type { Page, PageElement, Project } from '../types';
+import type { Page, PageElement, Project, SlotAssignment } from '../types';
 
 export function renameProject(project: Project, name: string): Project {
   if (project.meta.name === name) return project;
@@ -100,6 +100,167 @@ export function removeElementAt(project: Project, pageIndex: number, elementId: 
     const elements = page.elements.filter((element) => element.id !== elementId);
     return elements.length === page.elements.length ? page : { ...page, elements };
   });
+}
+
+export function patchPageAt(
+  project: Project,
+  pageIndex: number,
+  changes: Partial<Page>,
+): Project {
+  return updatePageAt(project, pageIndex, (page) => ({ ...page, ...changes }));
+}
+
+export function removeSlotAssignmentAt(
+  project: Project,
+  pageIndex: number,
+  slotIndex: number,
+): Project {
+  return updatePageAt(project, pageIndex, (page) => {
+    if (!page.slotAssignments) return page;
+    const slotAssignments = { ...page.slotAssignments };
+    delete slotAssignments[slotIndex];
+    return { ...page, slotAssignments };
+  });
+}
+
+export function updateSlotAssignmentAt(
+  project: Project,
+  pageIndex: number,
+  slotIndex: number,
+  changes: Partial<SlotAssignment>,
+): Project {
+  return updatePageAt(project, pageIndex, (page) => {
+    const assignment = page.slotAssignments?.[slotIndex];
+    if (!assignment) return page;
+    return {
+      ...page,
+      slotAssignments: {
+        ...page.slotAssignments,
+        [slotIndex]: { ...assignment, ...changes },
+      },
+    };
+  });
+}
+
+export function clearSlotCropAt(
+  project: Project,
+  pageIndex: number,
+  slotIndex: number,
+): Project {
+  return updatePageAt(project, pageIndex, (page) => {
+    const current = page.slotAssignments?.[slotIndex];
+    if (!current) return page;
+    const assignment = { ...current };
+    delete assignment.cropX;
+    delete assignment.cropY;
+    delete assignment.cropW;
+    delete assignment.cropH;
+    return {
+      ...page,
+      slotAssignments: {
+        ...page.slotAssignments,
+        [slotIndex]: assignment,
+      },
+    };
+  });
+}
+
+export function setProjectLayoutDefault(
+  project: Project,
+  property: 'defaultLayoutPadding' | 'defaultLayoutGap',
+  value: number,
+): Project {
+  if (project.meta[property] === value) return project;
+  return {
+    ...project,
+    meta: {
+      ...project.meta,
+      [property]: value,
+    },
+  };
+}
+
+export function applyLayoutDefaults(
+  project: Project,
+  defaultPadding: number,
+  defaultGap: number,
+): Project {
+  return {
+    ...project,
+    pages: project.pages.map((page) => ({
+      ...page,
+      layoutPadding: defaultPadding,
+      layoutGap: defaultGap,
+    })),
+  };
+}
+
+export function setCoverTitleAt(
+  project: Project,
+  pageIndex: number,
+  title: string,
+): Project {
+  return updatePageAt(project, pageIndex, (page) => {
+    const nextPage = { ...page, coverTitle: title };
+    if (page.isCover) {
+      const trimmed = title.trim();
+      if (trimmed) nextPage.chapterTitle = trimmed;
+      else delete nextPage.chapterTitle;
+    }
+    return nextPage;
+  });
+}
+
+export function setCoverStyleAt(
+  project: Project,
+  pageIndex: number,
+  target: 'title' | 'subtitle',
+  changes: { fontSize?: number; fontFamily?: string; color?: string },
+): Project {
+  return updatePageAt(project, pageIndex, (page) => {
+    const nextPage = { ...page };
+    const prefix = target === 'title' ? 'coverTitle' : 'coverSubtitle';
+    if (changes.fontSize !== undefined) {
+      if (prefix === 'coverTitle') nextPage.coverTitleFontSize = Math.max(1, changes.fontSize);
+      else nextPage.coverSubtitleFontSize = Math.max(1, changes.fontSize);
+    }
+    if (changes.fontFamily !== undefined) {
+      if (prefix === 'coverTitle') nextPage.coverTitleFontFamily = changes.fontFamily;
+      else nextPage.coverSubtitleFontFamily = changes.fontFamily;
+    }
+    if (changes.color !== undefined) {
+      if (prefix === 'coverTitle') nextPage.coverTitleColor = changes.color;
+      else nextPage.coverSubtitleColor = changes.color;
+    }
+    return nextPage;
+  });
+}
+
+export function setTrimmedPageLabelAt(
+  project: Project,
+  pageIndex: number,
+  property: 'chapterTitle' | 'subchapterTitle',
+  value: string,
+): Project {
+  return updatePageAt(project, pageIndex, (page) => {
+    const nextPage = { ...page };
+    const trimmed = value.trim();
+    if (trimmed) nextPage[property] = trimmed;
+    else delete nextPage[property];
+    return nextPage;
+  });
+}
+
+export function toggleCoverAt(
+  project: Project,
+  pageIndex: number,
+  isCover: boolean,
+): Project {
+  return updatePageAt(project, pageIndex, (page) => ({
+    ...page,
+    isCover,
+    coverTitle: isCover && !page.coverTitle ? project.meta.name : page.coverTitle,
+  }));
 }
 
 export function collectUsedAssetPaths(project: Project): Set<string> {

@@ -20,15 +20,25 @@ import {
 } from '../domain/projectDefaults';
 import {
   addElementAt,
+  applyLayoutDefaults,
   appendPage,
+  clearSlotCropAt,
   collectUsedAssetPaths,
   duplicatePageAt,
   movePageAt,
+  patchPageAt,
   pruneUnusedAssetBlobs,
   removeElementAt,
   removePageAt,
+  removeSlotAssignmentAt,
   renameProject,
+  setCoverStyleAt,
+  setCoverTitleAt,
+  setProjectLayoutDefault,
+  setTrimmedPageLabelAt,
+  toggleCoverAt,
   updateElementAt,
+  updateSlotAssignmentAt,
 } from '../domain/projectOperations';
 import { createSaveCoordinator } from '../services/saveCoordinator';
 import { createCenteredImageElement } from '../services/imageElementFactory';
@@ -440,259 +450,162 @@ const useProjectStore = create<ProjectState>((baseSet, get) => {
 
   removeImageFromSlot: (slotIndex) =>
     set((state) => {
-      const pages = [...state.project.pages];
-      const page = { ...pages[state.currentPageIndex] };
-      if (!page.slotAssignments) return state;
-      const assignments = { ...page.slotAssignments };
-      delete assignments[slotIndex];
-      page.slotAssignments = assignments;
-      pages[state.currentPageIndex] = page;
+      const project = removeSlotAssignmentAt(
+        state.project,
+        state.currentPageIndex,
+        slotIndex,
+      );
+      if (project === state.project) return state;
       return {
-        project: { ...state.project, pages },
+        project,
         selectedSlotIndex: null,
       };
     }),
 
   updateSlotOffset: (slotIndex, offsetX, offsetY) =>
-    set((state) => {
-      const pages = [...state.project.pages];
-      const page = { ...pages[state.currentPageIndex] };
-      if (!page.slotAssignments?.[slotIndex]) return state;
-      page.slotAssignments = {
-        ...page.slotAssignments,
-        [slotIndex]: { ...page.slotAssignments[slotIndex], offsetX, offsetY },
-      };
-      pages[state.currentPageIndex] = page;
-      return { project: { ...state.project, pages } };
-    }),
+    set((state) => ({
+      project: updateSlotAssignmentAt(
+        state.project,
+        state.currentPageIndex,
+        slotIndex,
+        { offsetX, offsetY },
+      ),
+    })),
 
   updateSlotScale: (slotIndex, scale) =>
-    set((state) => {
-      const pages = [...state.project.pages];
-      const page = { ...pages[state.currentPageIndex] };
-      if (!page.slotAssignments?.[slotIndex]) return state;
-      page.slotAssignments = {
-        ...page.slotAssignments,
-        [slotIndex]: { ...page.slotAssignments[slotIndex], scale },
-      };
-      pages[state.currentPageIndex] = page;
-      return { project: { ...state.project, pages } };
-    }),
+    set((state) => ({
+      project: updateSlotAssignmentAt(
+        state.project,
+        state.currentPageIndex,
+        slotIndex,
+        { scale },
+      ),
+    })),
 
   updateSlotCrop: (slotIndex, cropX, cropY, cropW, cropH) =>
-    set((state) => {
-      const pages = [...state.project.pages];
-      const page = { ...pages[state.currentPageIndex] };
-      if (!page.slotAssignments?.[slotIndex]) return state;
-      page.slotAssignments = {
-        ...page.slotAssignments,
-        [slotIndex]: { ...page.slotAssignments[slotIndex], cropX, cropY, cropW, cropH },
-      };
-      pages[state.currentPageIndex] = page;
-      return { project: { ...state.project, pages } };
-    }),
+    set((state) => ({
+      project: updateSlotAssignmentAt(
+        state.project,
+        state.currentPageIndex,
+        slotIndex,
+        { cropX, cropY, cropW, cropH },
+      ),
+    })),
 
   clearSlotCrop: (slotIndex) =>
-    set((state) => {
-      const pages = [...state.project.pages];
-      const page = { ...pages[state.currentPageIndex] };
-      if (!page.slotAssignments?.[slotIndex]) return state;
-      const assignment = { ...page.slotAssignments[slotIndex] };
-      delete assignment.cropX;
-      delete assignment.cropY;
-      delete assignment.cropW;
-      delete assignment.cropH;
-      page.slotAssignments = {
-        ...page.slotAssignments,
-        [slotIndex]: assignment,
-      };
-      pages[state.currentPageIndex] = page;
-      return { project: { ...state.project, pages } };
-    }),
+    set((state) => ({
+      project: clearSlotCropAt(state.project, state.currentPageIndex, slotIndex),
+    })),
 
   setLayoutPadding: (padding) =>
-    set((state) => {
-      const pages = [...state.project.pages];
-      const page = { ...pages[state.currentPageIndex] };
-      page.layoutPadding = padding;
-      pages[state.currentPageIndex] = page;
-      return { project: { ...state.project, pages } };
-    }),
+    set((state) => ({
+      project: patchPageAt(state.project, state.currentPageIndex, {
+        layoutPadding: padding,
+      }),
+    })),
 
   setLayoutGap: (gap) =>
-    set((state) => {
-      const pages = [...state.project.pages];
-      const page = { ...pages[state.currentPageIndex] };
-      page.layoutGap = gap;
-      pages[state.currentPageIndex] = page;
-      return { project: { ...state.project, pages } };
-    }),
+    set((state) => ({
+      project: patchPageAt(state.project, state.currentPageIndex, { layoutGap: gap }),
+    })),
 
   setPageBackground: (color) =>
     set((state) => {
-      const pages = [...state.project.pages];
-      const page = pages[state.currentPageIndex];
+      const page = state.project.pages[state.currentPageIndex];
       if (!page || page.background === color) return state;
-      pages[state.currentPageIndex] = { ...page, background: color };
-      return { project: { ...state.project, pages } };
+      return {
+        project: patchPageAt(state.project, state.currentPageIndex, { background: color }),
+      };
     }),
 
   setDefaultLayoutPadding: (padding) =>
     set((state) => ({
-      project: {
-        ...state.project,
-        meta: {
-          ...state.project.meta,
-          defaultLayoutPadding: padding,
-        },
-      },
+      project: setProjectLayoutDefault(state.project, 'defaultLayoutPadding', padding),
     })),
 
   setDefaultLayoutGap: (gap) =>
     set((state) => ({
-      project: {
-        ...state.project,
-        meta: {
-          ...state.project.meta,
-          defaultLayoutGap: gap,
-        },
-      },
+      project: setProjectLayoutDefault(state.project, 'defaultLayoutGap', gap),
     })),
 
   applyLayoutDefaultsToAllPages: () =>
     set((state) => {
       const defaultPadding = state.project.meta.defaultLayoutPadding ?? DEFAULT_LAYOUT_PADDING;
       const defaultGap = state.project.meta.defaultLayoutGap ?? DEFAULT_LAYOUT_GAP;
-      const pages = state.project.pages.map((page) => ({
-        ...page,
-        layoutPadding: defaultPadding,
-        layoutGap: defaultGap,
-      }));
       return {
-        project: {
-          ...state.project,
-          pages,
-        },
+        project: applyLayoutDefaults(state.project, defaultPadding, defaultGap),
       };
     }),
 
   setCoverTitle: (title) =>
-    set((state) => {
-      const pages = [...state.project.pages];
-      const page = { ...pages[state.currentPageIndex] };
-      page.coverTitle = title;
-      if (page.isCover) {
-        const trimmed = title.trim();
-        if (trimmed) page.chapterTitle = trimmed;
-        else delete page.chapterTitle;
-      }
-      pages[state.currentPageIndex] = page;
-      return { project: { ...state.project, pages } };
-    }),
+    set((state) => ({
+      project: setCoverTitleAt(state.project, state.currentPageIndex, title),
+    })),
 
   setCoverSubtitle: (subtitle) =>
-    set((state) => {
-      const pages = [...state.project.pages];
-      const page = { ...pages[state.currentPageIndex] };
-      page.coverSubtitle = subtitle;
-      pages[state.currentPageIndex] = page;
-      return { project: { ...state.project, pages } };
-    }),
+    set((state) => ({
+      project: patchPageAt(state.project, state.currentPageIndex, {
+        coverSubtitle: subtitle,
+      }),
+    })),
 
   setCoverSubtitleVisible: (visible) =>
-    set((state) => {
-      const pages = [...state.project.pages];
-      const page = { ...pages[state.currentPageIndex] };
-      page.showCoverSubtitle = visible;
-      pages[state.currentPageIndex] = page;
-      return { project: { ...state.project, pages } };
-    }),
+    set((state) => ({
+      project: patchPageAt(state.project, state.currentPageIndex, {
+        showCoverSubtitle: visible,
+      }),
+    })),
 
   setCoverTitleStyle: (changes) =>
-    set((state) => {
-      const pages = [...state.project.pages];
-      const page = { ...pages[state.currentPageIndex] };
-      if (changes.fontSize !== undefined) {
-        page.coverTitleFontSize = Math.max(1, changes.fontSize);
-      }
-      if (changes.fontFamily !== undefined) {
-        page.coverTitleFontFamily = changes.fontFamily;
-      }
-      if (changes.color !== undefined) {
-        page.coverTitleColor = changes.color;
-      }
-      pages[state.currentPageIndex] = page;
-      return { project: { ...state.project, pages } };
-    }),
+    set((state) => ({
+      project: setCoverStyleAt(state.project, state.currentPageIndex, 'title', changes),
+    })),
 
   setCoverSubtitleStyle: (changes) =>
-    set((state) => {
-      const pages = [...state.project.pages];
-      const page = { ...pages[state.currentPageIndex] };
-      if (changes.fontSize !== undefined) {
-        page.coverSubtitleFontSize = Math.max(1, changes.fontSize);
-      }
-      if (changes.fontFamily !== undefined) {
-        page.coverSubtitleFontFamily = changes.fontFamily;
-      }
-      if (changes.color !== undefined) {
-        page.coverSubtitleColor = changes.color;
-      }
-      pages[state.currentPageIndex] = page;
-      return { project: { ...state.project, pages } };
-    }),
+    set((state) => ({
+      project: setCoverStyleAt(state.project, state.currentPageIndex, 'subtitle', changes),
+    })),
 
   setCoverTitlePosition: (x, y) =>
-    set((state) => {
-      const pages = [...state.project.pages];
-      const page = { ...pages[state.currentPageIndex] };
-      page.coverTitleX = x;
-      page.coverTitleY = y;
-      pages[state.currentPageIndex] = page;
-      return { project: { ...state.project, pages } };
-    }),
+    set((state) => ({
+      project: patchPageAt(state.project, state.currentPageIndex, {
+        coverTitleX: x,
+        coverTitleY: y,
+      }),
+    })),
 
   setCoverSubtitlePosition: (x, y) =>
-    set((state) => {
-      const pages = [...state.project.pages];
-      const page = { ...pages[state.currentPageIndex] };
-      page.coverSubtitleX = x;
-      page.coverSubtitleY = y;
-      pages[state.currentPageIndex] = page;
-      return { project: { ...state.project, pages } };
-    }),
+    set((state) => ({
+      project: patchPageAt(state.project, state.currentPageIndex, {
+        coverSubtitleX: x,
+        coverSubtitleY: y,
+      }),
+    })),
 
   setCurrentPageChapterTitle: (title) =>
-    set((state) => {
-      const pages = [...state.project.pages];
-      const page = { ...pages[state.currentPageIndex] };
-      const trimmed = title.trim();
-      if (trimmed) page.chapterTitle = trimmed;
-      else delete page.chapterTitle;
-      pages[state.currentPageIndex] = page;
-      return { project: { ...state.project, pages } };
-    }),
+    set((state) => ({
+      project: setTrimmedPageLabelAt(
+        state.project,
+        state.currentPageIndex,
+        'chapterTitle',
+        title,
+      ),
+    })),
 
   setCurrentPageSubchapterTitle: (title) =>
-    set((state) => {
-      const pages = [...state.project.pages];
-      const page = { ...pages[state.currentPageIndex] };
-      const trimmed = title.trim();
-      if (trimmed) page.subchapterTitle = trimmed;
-      else delete page.subchapterTitle;
-      pages[state.currentPageIndex] = page;
-      return { project: { ...state.project, pages } };
-    }),
+    set((state) => ({
+      project: setTrimmedPageLabelAt(
+        state.project,
+        state.currentPageIndex,
+        'subchapterTitle',
+        title,
+      ),
+    })),
 
   toggleCover: (isCover) =>
-    set((state) => {
-      const pages = [...state.project.pages];
-      const page = { ...pages[state.currentPageIndex] };
-      page.isCover = isCover;
-      if (isCover && !page.coverTitle) page.coverTitle = state.project.meta.name;
-      pages[state.currentPageIndex] = page;
-      return { project: { ...state.project, pages } };
-    }),
+    set((state) => ({
+      project: toggleCoverAt(state.project, state.currentPageIndex, isCover),
+    })),
 
   addCoverPage: () =>
     set((state) => {
