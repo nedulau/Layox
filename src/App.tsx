@@ -33,6 +33,7 @@ import { useMediaQuery } from './hooks/useMediaQuery';
 import ConfirmDialog from './components/common/ConfirmDialog';
 import PwaUpdatePrompt from './components/PwaUpdatePrompt';
 import { useAutoSave } from './hooks/useAutoSave';
+import { useEditorKeyboardShortcuts } from './hooks/useEditorKeyboardShortcuts';
 
 const FONTS = ['Arial', 'Times New Roman', 'Georgia', 'Verdana', 'Courier New', 'Trebuchet MS', 'Impact', 'Comic Sans MS'];
 const PDF_LEVELS: PdfCompressionLevel[] = ['none', 'low', 'medium', 'high'];
@@ -446,104 +447,17 @@ function Editor({
     if (currentPageIndex < pages.length - 1) setCurrentPageIndex(currentPageIndex + 1);
   };
 
-  // ─── Keyboard shortcuts ─────────────────────────────────────────────────
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const tag = (e.target as HTMLElement).tagName;
-      const isInput = tag === 'INPUT' || tag === 'TEXTAREA';
-      const key = e.key.toLowerCase();
-
-      // Ctrl+Z – Undo
-      if ((e.ctrlKey || e.metaKey) && key === 'z' && !e.shiftKey) {
-        e.preventDefault();
-        useProjectStore.getState().undo();
-        return;
-      }
-      // Ctrl+Y or Ctrl+Shift+Z – Redo
-      if ((e.ctrlKey || e.metaKey) && (key === 'y' || (key === 'z' && e.shiftKey))) {
-        e.preventDefault();
-        useProjectStore.getState().redo();
-        return;
-      }
-      // Ctrl+S / Ctrl+Shift+S
-      if ((e.ctrlKey || e.metaKey) && key === 's') {
-        e.preventDefault();
-        const reportSaveFailure = (error: unknown) => {
-          setUiError(`${t('saveError')}: ${error instanceof Error ? error.message : String(error)}`);
-        };
-        if (e.shiftKey) {
-          void useProjectStore.getState().saveCurrentProjectAs().catch(reportSaveFailure);
-        } else {
-          void useProjectStore.getState().saveCurrentProject().catch(reportSaveFailure);
-        }
-        return;
-      }
-      // Ctrl+O – Open
-      if ((e.ctrlKey || e.metaKey) && key === 'o') {
-        e.preventDefault();
-        useProjectStore.getState().openProject();
-        return;
-      }
-      // Ctrl+N – New project
-      if ((e.ctrlKey || e.metaKey) && key === 'n') {
-        e.preventDefault();
-        setShowNewProjectModal(true);
-        return;
-      }
-      // Ctrl+T – Add text
-      if ((e.ctrlKey || e.metaKey) && key === 't') {
-        if (!isInput) {
-          e.preventDefault();
-          useProjectStore.getState().snapshot();
-          addTextElement();
-        }
-        return;
-      }
-      // Ctrl+I – Add image
-      if ((e.ctrlKey || e.metaKey) && key === 'i') {
-        e.preventDefault();
-        imageInputRef.current?.click();
-        return;
-      }
-      // Escape – Deselect / close menu
-      if (e.key === 'Escape') {
-        setOpenMenu(null);
-        useProjectStore.getState().setSelectedElementId(null);
-        useProjectStore.getState().setSelectedSlotIndex(null);
-        return;
-      }
-      // Delete / Backspace
-      if (e.key === 'Delete' || e.key === 'Backspace') {
-        if (isInput) return;
-        e.preventDefault();
-        const state = useProjectStore.getState();
-        state.snapshot();
-        if (
-          state.selectedSlotIndex !== null &&
-          state.project.pages[state.currentPageIndex]?.slotAssignments?.[state.selectedSlotIndex]
-        ) {
-          removeImageFromSlot(state.selectedSlotIndex);
-          if (deleteFromLibraryOnImageDelete) state.pruneUnusedAssets();
-        } else if (state.selectedElementId) {
-          const selectedEl = state.project.pages[state.currentPageIndex]?.elements.find((el) => el.id === state.selectedElementId);
-          removeElement(state.selectedElementId);
-          if (deleteFromLibraryOnImageDelete && selectedEl?.type === 'image') state.pruneUnusedAssets();
-        }
-        return;
-      }
-      // Arrow keys for page navigation
-      if (isInput) return;
-      if (e.key === 'ArrowLeft') {
-        const s = useProjectStore.getState();
-        if (s.currentPageIndex > 0) s.setCurrentPageIndex(s.currentPageIndex - 1);
-      } else if (e.key === 'ArrowRight') {
-        const s = useProjectStore.getState();
-        if (s.currentPageIndex < s.project.pages.length - 1) s.setCurrentPageIndex(s.currentPageIndex + 1);
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [addTextElement, deleteFromLibraryOnImageDelete, removeElement, removeImageFromSlot, resetProject, t]);
+  const reportShortcutSaveFailure = useCallback((error: unknown) => {
+    setUiError(`${t('saveError')}: ${error instanceof Error ? error.message : String(error)}`);
+  }, [t]);
+  const openNewProjectModal = useCallback(() => setShowNewProjectModal(true), []);
+  useEditorKeyboardShortcuts({
+    imageInputRef,
+    deleteUnusedAssetsAfterImageDelete: deleteFromLibraryOnImageDelete,
+    onNewProject: openNewProjectModal,
+    onCloseMenu: closeMenu,
+    onSaveError: reportShortcutSaveFailure,
+  });
 
   useEffect(() => {
     if (!isDirty) return;
