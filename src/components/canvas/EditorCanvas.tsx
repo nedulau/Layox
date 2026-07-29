@@ -149,6 +149,7 @@ function EditorCanvas({
   // ─── Responsive scaling ──────────────────────────────────────────────────
   const containerRef = useRef<HTMLDivElement>(null);
   const [displayScale, setDisplayScale] = useState(1);
+  const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
 
   useEffect(() => {
     const container = containerRef.current;
@@ -161,6 +162,11 @@ function EditorCanvas({
       const fitScale = Math.max(0.12, Math.min(3, Math.min(scaleX, scaleY)));
       const manualScale = Math.min(3, Math.max(0.2, manualZoom));
       const nextScale = zoomMode === 'fit' ? fitScale : manualScale;
+      setContainerSize((current) => (
+        current.width === rect.width && current.height === rect.height
+          ? current
+          : { width: rect.width, height: rect.height }
+      ));
       setDisplayScale(nextScale);
       onDisplayScaleChange?.(nextScale);
     };
@@ -279,50 +285,44 @@ function EditorCanvas({
   }, [snapshot]);
 
   // ─── Inline editing helpers ──────────────────────────────────────────────
-  const startInlineEdit = useCallback(
-    (elementId: string) => {
-      const el = freeElements.find((e) => e.id === elementId);
-      if (!el || el.type !== 'text') return;
-      snapshot();
-      const isDefaultText = el.content === editTextPlaceholder;
-      setInlineEdit({
-        type: 'element',
-        id: elementId,
-        text: isDefaultText ? '' : el.content,
-        x: el.x,
-        y: el.y,
-        width: el.width || 200,
-        fontSize: el.fontSize,
-        fontFamily: el.fontFamily,
-        color: el.color,
-        align: el.align,
-        fontStyle: el.fontStyle,
-      });
-    },
-    [editTextPlaceholder, freeElements, snapshot],
-  );
+  const startInlineEdit = (elementId: string) => {
+    const element = freeElements.find((candidate) => candidate.id === elementId);
+    if (!element || element.type !== 'text') return;
+    snapshot();
+    const isDefaultText = element.content === editTextPlaceholder;
+    setInlineEdit({
+      type: 'element',
+      id: elementId,
+      text: isDefaultText ? '' : element.content,
+      x: element.x,
+      y: element.y,
+      width: element.width || 200,
+      fontSize: element.fontSize,
+      fontFamily: element.fontFamily,
+      color: element.color,
+      align: element.align,
+      fontStyle: element.fontStyle,
+    });
+  };
 
-  const startCoverEdit = useCallback(
-    (field: 'coverTitle' | 'coverSubtitle') => {
-      snapshot();
-      const isTitle = field === 'coverTitle';
-      setInlineEdit({
-        type: field,
-        text: isTitle ? coverTitle : coverSubtitle,
-        x: isTitle ? coverTitleX : coverSubtitleX,
-        y: isTitle ? coverTitleY : coverSubtitleY,
-        width: CANVAS_W,
-        fontSize: isTitle ? coverTitleFontSize : coverSubtitleFontSize,
-        fontFamily: isTitle ? coverTitleFontFamily : coverSubtitleFontFamily,
-        color: isTitle ? coverTitleColor : coverSubtitleColor,
-        align: 'center',
-        fontStyle: isTitle ? 'bold' : undefined,
-      });
-    },
-    [coverTitle, coverSubtitle, coverTitleX, coverTitleY, coverSubtitleX, coverSubtitleY, coverTitleFontSize, coverSubtitleFontSize, coverTitleFontFamily, coverSubtitleFontFamily, coverTitleColor, coverSubtitleColor, snapshot],
-  );
+  const startCoverEdit = (field: 'coverTitle' | 'coverSubtitle') => {
+    snapshot();
+    const isTitle = field === 'coverTitle';
+    setInlineEdit({
+      type: field,
+      text: isTitle ? coverTitle : coverSubtitle,
+      x: isTitle ? coverTitleX : coverSubtitleX,
+      y: isTitle ? coverTitleY : coverSubtitleY,
+      width: CANVAS_W,
+      fontSize: isTitle ? coverTitleFontSize : coverSubtitleFontSize,
+      fontFamily: isTitle ? coverTitleFontFamily : coverSubtitleFontFamily,
+      color: isTitle ? coverTitleColor : coverSubtitleColor,
+      align: 'center',
+      fontStyle: isTitle ? 'bold' : undefined,
+    });
+  };
 
-  const commitInlineEdit = useCallback(() => {
+  const commitInlineEdit = () => {
     if (!inlineEdit) return;
     const finalText = inlineEdit.text.trim() || (inlineEdit.type === 'element' ? editTextPlaceholder : '');
     if (inlineEdit.type === 'element' && inlineEdit.id) {
@@ -333,11 +333,11 @@ function EditorCanvas({
       setCoverSubtitle(finalText);
     }
     setInlineEdit(null);
-  }, [editTextPlaceholder, inlineEdit, updateElement, setCoverTitle, setCoverSubtitle]);
+  };
 
-  const cancelInlineEdit = useCallback(() => {
+  const cancelInlineEdit = () => {
     setInlineEdit(null);
-  }, []);
+  };
 
   useEffect(() => {
     if (!inlineEdit || !inlineTextareaRef.current) return;
@@ -406,6 +406,15 @@ function EditorCanvas({
   const handleElementDragEnd = useCallback(() => {
     setSnapGuides([]);
   }, []);
+
+  const inlineEditorMetrics = inlineEdit && containerSize.width > 0 && containerSize.height > 0
+    ? {
+        left: (containerSize.width - CANVAS_W * displayScale) / 2 + inlineEdit.x * displayScale,
+        top: (containerSize.height - CANVAS_H * displayScale) / 2 + inlineEdit.y * displayScale,
+        width: inlineEdit.width * displayScale,
+        fontSize: inlineEdit.fontSize * displayScale,
+      }
+    : null;
 
   return (
     <div
@@ -544,57 +553,51 @@ function EditorCanvas({
       </div>
 
       {/* Inline text editing overlay */}
-      {inlineEdit && containerRef.current && (() => {
-        const rect = containerRef.current!.getBoundingClientRect();
-        const canvasScreenW = CANVAS_W * displayScale;
-        const canvasScreenH = CANVAS_H * displayScale;
-        const offsetX = (rect.width - canvasScreenW) / 2;
-        const offsetY = (rect.height - canvasScreenH) / 2;
-        const left = offsetX + inlineEdit.x * displayScale;
-        const top = offsetY + inlineEdit.y * displayScale;
-        const width = inlineEdit.width * displayScale;
-        const fontSize = inlineEdit.fontSize * displayScale;
-
-        return (
-          <textarea
-            ref={inlineTextareaRef}
-            autoFocus
-            value={inlineEdit.text}
-            onChange={(e) => {
-              const target = e.target;
-              target.style.height = 'auto';
-              target.style.height = `${target.scrollHeight}px`;
-              setInlineEdit((prev) => prev ? { ...prev, text: target.value } : null);
-            }}
-            onBlur={commitInlineEdit}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') { e.preventDefault(); cancelInlineEdit(); }
-              if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); commitInlineEdit(); }
-            }}
-            style={{
-              position: 'absolute',
-              left,
-              top,
-              width,
-              minHeight: fontSize * 1.5,
-              fontSize,
-              fontFamily: inlineEdit.fontFamily,
-              color: inlineEdit.color,
-              textAlign: (inlineEdit.align || 'left') as React.CSSProperties['textAlign'],
-              fontWeight: inlineEdit.fontStyle?.includes('bold') ? 'bold' : 'normal',
-              fontStyle: inlineEdit.fontStyle?.includes('italic') ? 'italic' : 'normal',
-              lineHeight: 1.2,
-              background: 'rgba(0,0,0,0.4)',
-              border: '2px solid #3b82f6',
-              outline: 'none',
-              resize: 'vertical',
-              overflow: 'hidden',
-              padding: 4,
-              zIndex: 50,
-            }}
-          />
-        );
-      })()}
+      {inlineEdit && inlineEditorMetrics && (
+        <textarea
+          ref={inlineTextareaRef}
+          autoFocus
+          value={inlineEdit.text}
+          onChange={(event) => {
+            const target = event.target;
+            target.style.height = 'auto';
+            target.style.height = `${target.scrollHeight}px`;
+            setInlineEdit((previous) => previous ? { ...previous, text: target.value } : null);
+          }}
+          onBlur={commitInlineEdit}
+          onKeyDown={(event) => {
+            if (event.key === 'Escape') {
+              event.preventDefault();
+              cancelInlineEdit();
+            }
+            if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+              event.preventDefault();
+              commitInlineEdit();
+            }
+          }}
+          style={{
+            position: 'absolute',
+            left: inlineEditorMetrics.left,
+            top: inlineEditorMetrics.top,
+            width: inlineEditorMetrics.width,
+            minHeight: inlineEditorMetrics.fontSize * 1.5,
+            fontSize: inlineEditorMetrics.fontSize,
+            fontFamily: inlineEdit.fontFamily,
+            color: inlineEdit.color,
+            textAlign: (inlineEdit.align || 'left') as React.CSSProperties['textAlign'],
+            fontWeight: inlineEdit.fontStyle?.includes('bold') ? 'bold' : 'normal',
+            fontStyle: inlineEdit.fontStyle?.includes('italic') ? 'italic' : 'normal',
+            lineHeight: 1.2,
+            background: 'rgba(0,0,0,0.4)',
+            border: '2px solid #3b82f6',
+            outline: 'none',
+            resize: 'vertical',
+            overflow: 'hidden',
+            padding: 4,
+            zIndex: 50,
+          }}
+        />
+      )}
     </div>
   );
 }

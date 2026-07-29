@@ -367,8 +367,21 @@ function Editor({
 
   useEffect(() => {
     removeStoredValue('layox_autoSaveTimeline');
-    void refreshRecoveryPoints();
-  }, [refreshRecoveryPoints]);
+    let active = true;
+    void recoveryRepository.list(projectId)
+      .then((points) => {
+        if (!active) return;
+        setRecoveryPoints(points);
+        setRecoveryError(null);
+      })
+      .catch((error) => {
+        if (!active) return;
+        setRecoveryError(error instanceof Error ? error.message : String(error));
+      });
+    return () => {
+      active = false;
+    };
+  }, [projectId]);
 
   const createRecoveryPoint = useCallback(async () => {
     const state = useProjectStore.getState();
