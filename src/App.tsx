@@ -1,6 +1,5 @@
 import { useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import './index.css';
-import LayoutPicker from './components/LayoutPicker';
 import StartScreen from './components/StartScreen';
 import CropModal from './components/CropModal';
 import NewProjectModal from './components/NewProjectModal';
@@ -35,6 +34,8 @@ import EditorContextControls from './components/editor/EditorContextControls';
 import QuickImageBar from './components/editor/QuickImageBar';
 import EditorPageNavigation from './components/editor/EditorPageNavigation';
 import EditorCanvasWorkspace from './components/editor/EditorCanvasWorkspace';
+import LayoutMenu from './components/editor/LayoutMenu';
+import StructureMenu from './components/editor/StructureMenu';
 
 const PDF_LEVELS: PdfCompressionLevel[] = ['none', 'low', 'medium', 'high'];
 type UiTheme = 'dark' | 'light';
@@ -94,23 +95,6 @@ function App() {
   );
 }
 
-const LAYOUT_NAME_KEYS: Partial<Record<string, TranslationKey>> = {
-  'cover-full': 'layoutCoverFull',
-  'cover-center': 'layoutCoverCentered',
-  single: 'layoutSingle',
-  'two-side': 'layoutTwoSide',
-  'two-stack': 'layoutTwoStack',
-  'three-cols': 'layoutThreeColumns',
-  'grid-4': 'layoutGrid4',
-  'one-big-two-small': 'layoutLargeTwoSmall',
-  'three-rows': 'layoutThreeRows',
-  'grid-6': 'layoutGrid6',
-  'one-top-two-bottom': 'layoutTopTwoBottom',
-  'two-top-one-bottom': 'layoutTwoTopBottom',
-  'sidebar-left': 'layoutSidebarLeft',
-  'mosaic-5': 'layoutMosaic5',
-};
-
 // ─── Editor ──────────────────────────────────────────────────────────────────
 
 function Editor({
@@ -157,15 +141,6 @@ function Editor({
   const selectedSlotIndex = useProjectStore((s) => s.selectedSlotIndex);
   const setSelectedElementId = useProjectStore((s) => s.setSelectedElementId);
   const setSelectedSlotIndex = useProjectStore((s) => s.setSelectedSlotIndex);
-  const applyLayout = useProjectStore((s) => s.applyLayout);
-  const clearLayout = useProjectStore((s) => s.clearLayout);
-  const setLayoutPadding = useProjectStore((s) => s.setLayoutPadding);
-  const setLayoutGap = useProjectStore((s) => s.setLayoutGap);
-  const setDefaultLayoutPadding = useProjectStore((s) => s.setDefaultLayoutPadding);
-  const setDefaultLayoutGap = useProjectStore((s) => s.setDefaultLayoutGap);
-  const applyLayoutDefaultsToAllPages = useProjectStore((s) => s.applyLayoutDefaultsToAllPages);
-  const setCurrentPageChapterTitle = useProjectStore((s) => s.setCurrentPageChapterTitle);
-  const setCurrentPageSubchapterTitle = useProjectStore((s) => s.setCurrentPageSubchapterTitle);
   const toggleCover = useProjectStore((s) => s.toggleCover);
   const assetBlobs = useProjectStore((s) => s.assetBlobs);
   const setShowEditor = useProjectStore((s) => s.setShowEditor);
@@ -184,12 +159,6 @@ function Editor({
   const defaultLayoutGap = useProjectStore(
     (s) => s.project.meta.defaultLayoutGap ?? DEFAULT_LAYOUT_GAP,
   );
-  const currentLayoutPadding = useProjectStore(
-    (s) => s.project.pages[s.currentPageIndex]?.layoutPadding ?? (s.project.meta.defaultLayoutPadding ?? DEFAULT_LAYOUT_PADDING),
-  );
-  const currentLayoutGap = useProjectStore(
-    (s) => s.project.pages[s.currentPageIndex]?.layoutGap ?? (s.project.meta.defaultLayoutGap ?? DEFAULT_LAYOUT_GAP),
-  );
   const setCurrentPageIndex = useProjectStore((s) => s.setCurrentPageIndex);
   const addPage = useProjectStore((s) => s.addPage);
   const removePage = useProjectStore((s) => s.removePage);
@@ -198,16 +167,6 @@ function Editor({
 
   const currentIsCover = useProjectStore(
     (s) => s.project.pages[s.currentPageIndex]?.isCover ?? false,
-  );
-  const currentChapterTitle = useProjectStore(
-    (s) => {
-      const page = s.project.pages[s.currentPageIndex];
-      if (!page) return '';
-      return page.chapterTitle ?? (page.isCover ? (page.coverTitle ?? '') : '');
-    },
-  );
-  const currentSubchapterTitle = useProjectStore(
-    (s) => s.project.pages[s.currentPageIndex]?.subchapterTitle ?? '',
   );
   const autoSaveEnabled = useProjectStore((s) => s.autoSaveEnabled);
   const autoSaveInterval = useProjectStore((s) => s.autoSaveInterval);
@@ -227,8 +186,6 @@ function Editor({
     selectedSlotIndex !== null &&
     currentSlotAssignments?.[selectedSlotIndex]?.cropX !== undefined;
   const canDelete = !!selectedElementId || canDeleteSlot;
-  const isSingleLayout = currentLayoutId === 'single';
-  const showGap = !!currentLayoutId && !isSingleLayout;
 
   // ─── Dropdown menu state ────────────────────────────────────────────────
   const [openMenu, setOpenMenu] = useState<string | null>(null);
@@ -461,12 +418,6 @@ function Editor({
     setNoticeCanUndo(true);
   }, [pages.length, removePage, snapshot, t]);
 
-  const handleLayoutSelect = (layoutId: string | null) => {
-    snapshot();
-    setQuickInsertAssetPath(null);
-    if (layoutId) applyLayout(layoutId); else clearLayout();
-  };
-
   const handleDelete = () => {
     closeMenu();
     snapshot();
@@ -613,29 +564,6 @@ function Editor({
   const btnIcon =
     'w-11 h-11 flex items-center justify-center rounded-lg border text-sm transition-all cursor-pointer select-none disabled:opacity-35 disabled:cursor-not-allowed';
 
-  const chapterJumpTargets = useMemo(() => {
-    const seen = new Set<string>();
-    return pages
-      .map((page, index) => {
-        if (page.isCover) {
-          const coverLabel = (page.coverTitle ?? '').trim();
-          return {
-            pageIndex: index,
-            label: coverLabel ? `${t('deckblatt')} • ${coverLabel}` : t('deckblatt'),
-          };
-        }
-
-        const chapter = (page.chapterTitle ?? '').trim();
-        if (!chapter) return null;
-        const key = chapter;
-        if (seen.has(key)) return null;
-        seen.add(key);
-        const label = chapter;
-        return { pageIndex: index, label };
-      })
-      .filter((item): item is { pageIndex: number; label: string } => item !== null);
-  }, [pages, t]);
-
   const getPageOverviewMetaLabel = useCallback((page: Page) => {
     if (page.isCover) {
       const coverLabel = (page.coverTitle ?? '').trim();
@@ -748,162 +676,21 @@ function Editor({
           )}
         </div>
 
-        {/* ── Layout menu ── */}
-        <div className="relative" data-menu>
-          <MenuButton label={t('layout')} isOpen={openMenu === 'layout'} onClick={() => toggleMenu('layout')} />
-          {openMenu === 'layout' && (
-            <div className="editor-dropdown absolute top-full left-0 mt-2 bg-neutral-900 border border-neutral-700 rounded-xl shadow-2xl z-[90] py-3 px-3 min-w-[280px]">
-              <div className="mb-2">
-                <LayoutPicker
-                  currentLayoutId={currentLayoutId}
-                  uiTheme={uiTheme}
-                  layoutPlaceholder={`${t('layout')}...`}
-                  freeLabel={t('freeArrangement')}
-                  freeThumbLabel={t('freeShort')}
-                  slotSingularLabel={t('slotSingular')}
-                  slotPluralLabel={t('slotPlural')}
-                  getLayoutName={(layout) => {
-                    const key = LAYOUT_NAME_KEYS[layout.id];
-                    return key ? t(key) : layout.name;
-                  }}
-                  onSelect={(id) => { handleLayoutSelect(id); closeMenu(); }}
-                />
-              </div>
-              {currentLayoutId && (
-                <div className="flex items-center gap-2 mt-2 pt-2 border-t border-neutral-700">
-                  <label className="text-xs text-neutral-500">{t('margin')}</label>
-                  <input
-                    type="number" min={0} max={100} value={currentLayoutPadding}
-                    onFocus={() => snapshot()}
-                    onChange={(e) => setLayoutPadding(Math.max(0, parseInt(e.target.value) || 0))}
-                    className="editor-input w-16 px-2 py-1 text-sm rounded-md bg-neutral-800 text-white border border-neutral-600"
-                  />
-                  {showGap && (
-                    <>
-                      <label className="text-xs text-neutral-500">{t('gap')}</label>
-                      <input
-                        type="number" min={0} max={100} value={currentLayoutGap}
-                        onFocus={() => snapshot()}
-                        onChange={(e) => setLayoutGap(Math.max(0, parseInt(e.target.value) || 0))}
-                        className="editor-input w-16 px-2 py-1 text-sm rounded-md bg-neutral-800 text-white border border-neutral-600"
-                      />
-                    </>
-                  )}
-                </div>
-              )}
+        <LayoutMenu
+          t={t}
+          open={openMenu === 'layout'}
+          uiTheme={uiTheme}
+          onToggle={() => toggleMenu('layout')}
+          onClose={closeMenu}
+          onLayoutChange={() => setQuickInsertAssetPath(null)}
+        />
 
-              <div className="mt-3 pt-3 border-t border-neutral-700 space-y-2">
-                <div className="text-xs text-neutral-400">{t('projectDefault')}</div>
-                <div className="flex items-center gap-2">
-                  <label className="text-xs text-neutral-500">{t('margin')}</label>
-                  <input
-                    type="number"
-                    min={0}
-                    max={100}
-                    value={defaultLayoutPadding}
-                    onFocus={() => snapshot()}
-                    onChange={(e) => setDefaultLayoutPadding(Math.max(0, parseInt(e.target.value) || 0))}
-                    className="editor-input w-16 px-2 py-1 text-sm rounded-md bg-neutral-800 text-white border border-neutral-600"
-                  />
-                  <label className="text-xs text-neutral-500">{t('gap')}</label>
-                  <input
-                    type="number"
-                    min={0}
-                    max={100}
-                    value={defaultLayoutGap}
-                    onFocus={() => snapshot()}
-                    onChange={(e) => setDefaultLayoutGap(Math.max(0, parseInt(e.target.value) || 0))}
-                    className="editor-input w-16 px-2 py-1 text-sm rounded-md bg-neutral-800 text-white border border-neutral-600"
-                  />
-                </div>
-                <button
-                  onClick={() => { snapshot(); applyLayoutDefaultsToAllPages(); }}
-                  className="editor-surface-control w-full mt-1 px-2.5 py-1.5 text-xs rounded-md border border-neutral-600 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 transition-colors cursor-pointer select-none"
-                  title={t('applyToAllPages')}
-                >
-                  {t('applyToAllPages')}
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* ── Structure menu ── */}
-        <div className="relative" data-menu>
-          <MenuButton label={t('structure')} isOpen={openMenu === 'structure'} onClick={() => toggleMenu('structure')} />
-          {openMenu === 'structure' && (
-            <div className="editor-dropdown absolute top-full left-0 mt-2 min-w-[290px] bg-neutral-900 border border-neutral-700 rounded-xl shadow-2xl z-[90] p-1">
-              <div className="px-3 py-2 space-y-2">
-                <div className="text-xs text-neutral-400">{t('currentPage')}</div>
-                <input
-                  type="text"
-                  placeholder={t('chapter')}
-                  value={currentChapterTitle}
-                  onFocus={() => snapshot()}
-                  onChange={(e) => setCurrentPageChapterTitle(e.target.value)}
-                  className="editor-input w-full px-2 py-1 text-xs rounded-md bg-neutral-800 text-white border border-neutral-600"
-                  title={t('chapter')}
-                />
-                <input
-                  type="text"
-                  placeholder={t('subchapter')}
-                  value={currentSubchapterTitle}
-                  onFocus={() => snapshot()}
-                  onChange={(e) => setCurrentPageSubchapterTitle(e.target.value)}
-                  className="editor-input w-full px-2 py-1 text-xs rounded-md bg-neutral-800 text-white border border-neutral-600"
-                  title={t('subchapter')}
-                />
-                {currentChapterTitle && (
-                  <button
-                    onClick={() => {
-                      snapshot();
-                      setCurrentPageChapterTitle('');
-                    }}
-                    className="editor-surface-control w-full px-2 py-1 text-xs rounded-md border border-neutral-600 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 transition-colors cursor-pointer select-none"
-                  >
-                    {t('removeChapter')}
-                  </button>
-                )}
-                {currentSubchapterTitle && (
-                  <button
-                    onClick={() => {
-                      snapshot();
-                      setCurrentPageSubchapterTitle('');
-                    }}
-                    className="editor-surface-control w-full px-2 py-1 text-xs rounded-md border border-neutral-600 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 transition-colors cursor-pointer select-none"
-                  >
-                    {t('removeSubchapter')}
-                  </button>
-                )}
-              </div>
-
-              {chapterJumpTargets.length > 0 && (
-                <>
-                  <MenuDivider />
-                  <div className="px-3 py-2 space-y-1">
-                    <div className="text-xs text-neutral-400">{t('jumpChapter')}</div>
-                    <select
-                      value=""
-                      onChange={(e) => {
-                        if (!e.target.value) return;
-                        setCurrentPageIndex(parseInt(e.target.value, 10));
-                        closeMenu();
-                      }}
-                      className="editor-input w-full px-2 py-1 text-xs rounded-md bg-neutral-800 text-white border border-neutral-600"
-                    >
-                      <option value="">{t('chooseChapter')}</option>
-                      {chapterJumpTargets.map((target) => (
-                        <option key={`${target.pageIndex}-${target.label}`} value={target.pageIndex}>
-                          {target.label} (p. {target.pageIndex + 1})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </>
-              )}
-            </div>
-          )}
-        </div>
+        <StructureMenu
+          t={t}
+          open={openMenu === 'structure'}
+          onToggle={() => toggleMenu('structure')}
+          onClose={closeMenu}
+        />
 
         <div className="editor-zoom-controls flex items-center gap-1" role="group" aria-label={t('zoomLevel')}>
           <button type="button" onClick={() => changeCanvasZoom(-0.1)} className={`${btnIcon} editor-surface-control`} title={t('zoomOut')} aria-label={t('zoomOut')}>−</button>
