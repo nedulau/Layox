@@ -81,6 +81,7 @@ interface ProjectState {
   setAutoSaveInterval: (seconds: number) => void;
   setShowEditor: (show: boolean) => void;
   addRecentProject: (name: string, fileName: string, filePath?: string) => void;
+  removeRecentProject: (fileName: string, filePath?: string) => void;
   openRecentProjectByPath: (filePath: string) => Promise<boolean>;
 
   setCurrentPageIndex: (index: number) => void;
@@ -202,22 +203,26 @@ const useProjectStore = create<ProjectState>((baseSet, get) => {
     set({ project: normalizeProject(project), currentPageIndex: 0, selectedElementId: null, selectedSlotIndex: null }),
 
   restoreRecoveredProject: (project, assetBlobs, pageIndex) =>
-    set((state) => ({
-      project: normalizeProject(project),
-      assetBlobs,
-      currentPageIndex: Math.max(0, Math.min(pageIndex, project.pages.length - 1)),
-      selectedElementId: null,
-      selectedSlotIndex: null,
-      projectLocation: null,
-      revision: state.revision + 1,
-      savedRevision: state.savedRevision,
-      isDirty: true,
-      isSaving: false,
-      saveError: null,
-      showEditor: true,
-      historyPast: [],
-      historyFuture: [],
-    })),
+    set((state) => {
+      const recoveredCopy = normalizeProject(structuredClone(project));
+      recoveredCopy.meta.id = uuidv4();
+      return {
+        project: recoveredCopy,
+        assetBlobs,
+        currentPageIndex: Math.max(0, Math.min(pageIndex, project.pages.length - 1)),
+        selectedElementId: null,
+        selectedSlotIndex: null,
+        projectLocation: null,
+        revision: state.revision + 1,
+        savedRevision: state.savedRevision,
+        isDirty: true,
+        isSaving: false,
+        saveError: null,
+        showEditor: true,
+        historyPast: [],
+        historyFuture: [],
+      };
+    }),
 
   setProjectName: (name) =>
     set((state) => ({ project: renameProject(state.project, name) })),
@@ -268,6 +273,16 @@ const useProjectStore = create<ProjectState>((baseSet, get) => {
     const trimmed = recents.slice(0, 10);
     writeStoredString('layox_recentProjects', JSON.stringify(trimmed));
     set({ recentProjects: trimmed });
+  },
+
+  removeRecentProject: (fileName, filePath) => {
+    const recentProjects = get().recentProjects.filter((recent) => (
+      filePath && recent.filePath
+        ? recent.filePath !== filePath
+        : recent.fileName !== fileName
+    ));
+    writeStoredString('layox_recentProjects', JSON.stringify(recentProjects));
+    set({ recentProjects });
   },
 
   openRecentProjectByPath: async (filePath) => {

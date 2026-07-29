@@ -577,6 +577,19 @@ describe('useProjectStore', () => {
       expect(getState().recentProjects[0].filePath).toBe('/tmp/project.layox');
     });
 
+    it('removes a recent project and persists the shortened list', () => {
+      getState().addRecentProject('First', 'first.layox', '/tmp/first.layox');
+      getState().addRecentProject('Second', 'second.layox', '/tmp/second.layox');
+
+      getState().removeRecentProject('first.layox', '/tmp/first.layox');
+
+      expect(getState().recentProjects).toHaveLength(1);
+      expect(getState().recentProjects[0].name).toBe('Second');
+      expect(JSON.parse(localStorageMock.getItem('layox_recentProjects') ?? '[]')).toEqual(
+        getState().recentProjects,
+      );
+    });
+
     it('openRecentProjectByPath loads and activates project', async () => {
       const file = new File(['dummy'], 'opened.layox', { type: 'application/zip' });
       vi.mocked(mockedFileSystemPort.openProjectFromPath).mockResolvedValueOnce({
@@ -797,7 +810,11 @@ describe('useProjectStore', () => {
 
       getState().restoreRecoveredProject(recoveredProject, { 'assets/photo.jpg': photo }, 1);
 
-      expect(getState().project.meta).toMatchObject(recoveredProject.meta);
+      expect(getState().project.meta).toMatchObject({
+        name: recoveredProject.meta.name,
+        version: recoveredProject.meta.version,
+      });
+      expect(getState().project.meta.id).not.toBe(recoveredProject.meta.id);
       expect(getState().project.pages).toEqual(recoveredProject.pages);
       expect(getState().assetBlobs['assets/photo.jpg']).toBe(photo);
       expect(getState().currentPageIndex).toBe(1);
