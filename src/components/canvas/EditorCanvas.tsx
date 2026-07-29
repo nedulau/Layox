@@ -21,7 +21,8 @@ import {
   loadCachedBlobImage,
 } from './useAssetImage';
 
-import { ElementRenderer, SlotComponent } from './EditorCanvasElements';
+import { ElementRenderer } from './EditorCanvasElements';
+import SlotComponent from './SlotComponent';
 
 // ─── Main canvas ─────────────────────────────────────────────────────────────
 
