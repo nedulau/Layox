@@ -23,6 +23,9 @@ import {
 
 import { ElementRenderer } from './EditorCanvasElements';
 import SlotComponent from './SlotComponent';
+import { useCanvasDrop } from './useCanvasDrop';
+import { useCanvasSnapGuides } from './useCanvasSnapGuides';
+import { useCanvasViewport } from './useCanvasViewport';
 
 // ─── Main canvas ─────────────────────────────────────────────────────────────
 
@@ -64,8 +67,6 @@ function EditorCanvas({
   const updateElement = useProjectStore((s) => s.updateElement);
   const updateSlotOffset = useProjectStore((s) => s.updateSlotOffset);
   const updateSlotScale = useProjectStore((s) => s.updateSlotScale);
-  const addImageFromFile = useProjectStore((s) => s.addImageFromFile);
-  const addImageFromAsset = useProjectStore((s) => s.addImageFromAsset);
   const setCoverTitle = useProjectStore((s) => s.setCoverTitle);
   const setCoverSubtitle = useProjectStore((s) => s.setCoverSubtitle);
   const setCoverTitlePosition = useProjectStore((s) => s.setCoverTitlePosition);
@@ -144,131 +145,25 @@ function EditorCanvas({
   } | null>(null);
   const inlineTextareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // ─── Snap guide state ────────────────────────────────────────────────────
-  const [snapGuides, setSnapGuides] = useState<{ x?: number; y?: number }[]>([]);
-
-  // ─── Responsive scaling ──────────────────────────────────────────────────
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [displayScale, setDisplayScale] = useState(1);
-  const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
-
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-
-    const updateScale = () => {
-      const rect = container.getBoundingClientRect();
-      const scaleX = rect.width / CANVAS_W;
-      const scaleY = rect.height / CANVAS_H;
-      const fitScale = Math.max(0.12, Math.min(3, Math.min(scaleX, scaleY)));
-      const manualScale = Math.min(3, Math.max(0.2, manualZoom));
-      const nextScale = zoomMode === 'fit' ? fitScale : manualScale;
-      setContainerSize((current) => (
-        current.width === rect.width && current.height === rect.height
-          ? current
-          : { width: rect.width, height: rect.height }
-      ));
-      setDisplayScale(nextScale);
-      onDisplayScaleChange?.(nextScale);
-    };
-
-    updateScale();
-    const observer = new ResizeObserver(updateScale);
-    observer.observe(container);
-    return () => observer.disconnect();
-  }, [manualZoom, onDisplayScaleChange, zoomMode]);
-
-  // ─── Drag & drop ─────────────────────────────────────────────────────────
-  const [dragOver, setDragOver] = useState(false);
-
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (
-      e.dataTransfer.types.includes('Files') ||
-      e.dataTransfer.types.includes('application/x-layox-asset')
-    ) {
-      setDragOver(true);
-    }
-  }, []);
-
-  const handleDragLeave = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setDragOver(false);
-  }, []);
-
-  const handleDrop = useCallback(
-    async (e: React.DragEvent) => {
-      e.preventDefault();
-      setDragOver(false);
-      const existingAssetPath = e.dataTransfer.getData('application/x-layox-asset');
-      if (existingAssetPath) {
-        snapshot();
-        if (isLayoutMode) {
-          const rect = containerRef.current?.getBoundingClientRect();
-          if (rect) {
-            const canvasWidth = CANVAS_W * displayScale;
-            const canvasHeight = CANVAS_H * displayScale;
-            const canvasLeft = rect.left + (rect.width - canvasWidth) / 2;
-            const canvasTop = rect.top + (rect.height - canvasHeight) / 2;
-            const canvasX = (e.clientX - canvasLeft) / displayScale;
-            const canvasY = (e.clientY - canvasTop) / displayScale;
-            const slotIndex = computedSlots.findIndex((slot) =>
-              canvasX >= slot.x &&
-              canvasX <= slot.x + slot.width &&
-              canvasY >= slot.y &&
-              canvasY <= slot.y + slot.height,
-            );
-            if (slotIndex >= 0) setSelectedSlotIndex(slotIndex);
-          }
-        }
-        await addImageFromAsset(existingAssetPath);
-        return;
-      }
-
-      const files = Array.from(e.dataTransfer.files).filter((f) =>
-        f.type.startsWith('image/'),
-      );
-      if (files.length > 0) snapshot();
-      for (const file of files) {
-        await addImageFromFile(file);
-      }
-    },
-    [
-      addImageFromAsset,
-      addImageFromFile,
-      computedSlots,
-      displayScale,
-      isLayoutMode,
-      setSelectedSlotIndex,
-      snapshot,
-    ],
-  );
-
-  const handleEmptySlotDblClick = useCallback(
-    (slotIndex: number) => {
-      if (!isLayoutMode) return;
-      if (selectedSlotIndex !== slotIndex) return;
-      if (currentPage?.slotAssignments?.[slotIndex]) return;
-
-      const input = document.createElement('input');
-      input.type = 'file';
-      input.accept = 'image/*';
-      input.multiple = false;
-      input.onchange = async () => {
-        const file = input.files?.[0];
-        if (!file) return;
-        snapshot();
-        try {
-          await addImageFromFile(file);
-        } catch {
-          // Keep UI responsive; selection remains and user can retry.
-        }
-      };
-      input.click();
-    },
-    [addImageFromFile, currentPage?.slotAssignments, isLayoutMode, selectedSlotIndex, snapshot],
-  );
+  const {
+    containerRef,
+    containerSize,
+    displayScale,
+  } = useCanvasViewport({ zoomMode, manualZoom, onDisplayScaleChange });
+  const {
+    dragOver,
+    handleDragLeave,
+    handleDragOver,
+    handleDrop,
+    handleEmptySlotDblClick,
+  } = useCanvasDrop({
+    containerRef,
+    displayScale,
+    computedSlots,
+    isLayoutMode,
+    selectedSlotIndex,
+    slotAssignments: currentPage?.slotAssignments,
+  });
 
   const handleStageClick = useCallback(
     (e: Konva.KonvaEventObject<MouseEvent | TouchEvent>) => {
@@ -347,66 +242,11 @@ function EditorCanvas({
     textarea.style.height = `${textarea.scrollHeight}px`;
   }, [inlineEdit]);
 
-  // ─── Snap logic for element dragging ─────────────────────────────────────
-  const handleElementDragMove = useCallback(
-    (e: Konva.KonvaEventObject<DragEvent>, elementId: string) => {
-      const node = e.target;
-      const SNAP = 8;
-      const x = node.x();
-      const y = node.y();
-      const w = node.width() * (node.scaleX() || 1);
-      const h = (node.height() || 30) * (node.scaleY() || 1);
-
-      // Compute snap targets (excluding this element)
-      const xTargets = [0, CANVAS_W, CANVAS_W / 2];
-      const yTargets = [0, CANVAS_H, CANVAS_H / 2];
-
-      if (isLayoutMode) {
-        for (const slot of computedSlots) {
-          xTargets.push(slot.x, slot.x + slot.width);
-          yTargets.push(slot.y, slot.y + slot.height);
-        }
-      }
-
-      for (const el of elements) {
-        if (el.id === elementId) continue;
-        xTargets.push(el.x);
-        yTargets.push(el.y);
-        if (el.type === 'image') {
-          xTargets.push(el.x + el.width);
-          yTargets.push(el.y + el.height);
-        }
-        if (el.type === 'text' && el.width) {
-          xTargets.push(el.x + el.width);
-        }
-      }
-
-      let snappedX = x;
-      let snappedY = y;
-      const newGuides: { x?: number; y?: number }[] = [];
-
-      for (const target of xTargets) {
-        if (Math.abs(x - target) < SNAP) { snappedX = target; newGuides.push({ x: target }); break; }
-        if (Math.abs(x + w - target) < SNAP) { snappedX = target - w; newGuides.push({ x: target }); break; }
-        if (Math.abs(x + w / 2 - target) < SNAP) { snappedX = target - w / 2; newGuides.push({ x: target }); break; }
-      }
-
-      for (const target of yTargets) {
-        if (Math.abs(y - target) < SNAP) { snappedY = target; newGuides.push({ y: target }); break; }
-        if (Math.abs(y + h - target) < SNAP) { snappedY = target - h; newGuides.push({ y: target }); break; }
-        if (Math.abs(y + h / 2 - target) < SNAP) { snappedY = target - h / 2; newGuides.push({ y: target }); break; }
-      }
-
-      node.x(snappedX);
-      node.y(snappedY);
-      setSnapGuides(newGuides);
-    },
-    [isLayoutMode, computedSlots, elements],
-  );
-
-  const handleElementDragEnd = useCallback(() => {
-    setSnapGuides([]);
-  }, []);
+  const {
+    clearSnapGuides,
+    handleElementDragMove,
+    snapGuides,
+  } = useCanvasSnapGuides({ elements, computedSlots, isLayoutMode });
 
   const inlineEditorMetrics = inlineEdit && containerSize.width > 0 && containerSize.height > 0
     ? {
@@ -533,7 +373,7 @@ function EditorCanvas({
                 }}
                 onChange={(changes) => {
                   updateElement(el.id, changes);
-                  handleElementDragEnd();
+                  clearSnapGuides();
                 }}
                 onStartEdit={el.type === 'text' ? () => startInlineEdit(el.id) : undefined}
                 onDragMove={(e) => handleElementDragMove(e, el.id)}
