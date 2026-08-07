@@ -124,6 +124,22 @@ describe('project archive', () => {
     await expect(loadProjectArchive(archive)).rejects.toThrow('5 MiB');
   });
 
+  it('rejects highly compressed assets before extracting them', async () => {
+    const compressedProject = structuredClone(project);
+    const image = compressedProject.pages[0].elements[0];
+    if (image.type !== 'image') throw new Error('Expected image fixture.');
+    compressedProject.pages[0].elements[0] = {
+      ...image,
+      src: 'assets/bomb.bin',
+    };
+    const zip = new JSZip();
+    zip.file('project.json', JSON.stringify(compressedProject));
+    zip.file('assets/bomb.bin', new Uint8Array(1024 * 1024));
+    const archive = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
+
+    await expect(loadProjectArchive(archive)).rejects.toThrow('suspicious compression ratio');
+  });
+
   it('rejects archives without project.json', async () => {
     const zip = new JSZip();
     zip.file('assets/photo.jpg', 'photo');

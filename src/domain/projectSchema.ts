@@ -4,6 +4,10 @@ import type { Page, PageElement, Project, SlotAssignment } from '../types';
 export const CURRENT_PROJECT_VERSION = '1.1' as const;
 export const MAX_PROJECT_JSON_BYTES = 5 * 1024 * 1024;
 export const MAX_PROJECT_ARCHIVE_BYTES = 2 * 1024 * 1024 * 1024;
+export const MAX_PROJECT_ASSET_BYTES = 128 * 1024 * 1024;
+export const MAX_PROJECT_UNCOMPRESSED_BYTES = 512 * 1024 * 1024;
+export const MAX_PROJECT_ARCHIVE_ENTRIES = 20_000;
+export const MAX_PROJECT_COMPRESSION_RATIO = 200;
 
 type UnknownRecord = Record<string, unknown>;
 

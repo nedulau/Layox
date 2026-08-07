@@ -2,10 +2,68 @@ import type JSZip from 'jszip';
 import type { Project } from '../types';
 import {
   collectReferencedAssetPaths,
+  MAX_PROJECT_ARCHIVE_ENTRIES,
   MAX_PROJECT_ARCHIVE_BYTES,
+  MAX_PROJECT_ASSET_BYTES,
+  MAX_PROJECT_COMPRESSION_RATIO,
   MAX_PROJECT_JSON_BYTES,
+  MAX_PROJECT_UNCOMPRESSED_BYTES,
   migrateAndValidateProject,
 } from '../domain/projectSchema';
+
+type LoadedZipEntry = JSZip.JSZipObject & {
+  _data?: {
+    compressedSize?: number;
+    uncompressedSize?: number;
+  };
+  unsafeOriginalName?: string;
+};
+
+function entrySizes(entry: JSZip.JSZipObject): { compressed: number; uncompressed: number } {
+  const metadata = (entry as LoadedZipEntry)._data;
+  const compressed = metadata?.compressedSize;
+  const uncompressed = metadata?.uncompressedSize;
+  if (
+    typeof compressed !== 'number' || !Number.isSafeInteger(compressed) || compressed < 0 ||
+    typeof uncompressed !== 'number' || !Number.isSafeInteger(uncompressed) || uncompressed < 0
+  ) {
+    throw new Error(`Invalid .layox file: invalid ZIP metadata for ${entry.name}.`);
+  }
+  return { compressed, uncompressed };
+}
+
+function validateArchiveMetadata(zip: JSZip): void {
+  const entries = Object.values(zip.files);
+  if (entries.length > MAX_PROJECT_ARCHIVE_ENTRIES) {
+    throw new Error('Invalid .layox file: the archive contains too many entries.');
+  }
+
+  let totalUncompressed = 0;
+  for (const entry of entries) {
+    if (entry.dir) continue;
+    const { compressed, uncompressed } = entrySizes(entry);
+
+    if (entry.name === 'project.json' && uncompressed > MAX_PROJECT_JSON_BYTES) {
+      throw new Error('Invalid .layox file: project.json exceeds 5 MiB.');
+    }
+
+    if (!entry.name.startsWith('assets/')) continue;
+    const originalName = (entry as LoadedZipEntry).unsafeOriginalName ?? entry.name;
+    if (originalName.includes('..') || entry.name.endsWith('/')) {
+      throw new Error(`Invalid .layox file: invalid asset path ${originalName}.`);
+    }
+    if (uncompressed > MAX_PROJECT_ASSET_BYTES) {
+      throw new Error(`Invalid .layox file: asset ${entry.name} exceeds 128 MiB.`);
+    }
+    if (uncompressed > 0 && uncompressed / Math.max(1, compressed) > MAX_PROJECT_COMPRESSION_RATIO) {
+      throw new Error(`Invalid .layox file: suspicious compression ratio for ${entry.name}.`);
+    }
+    totalUncompressed += uncompressed;
+    if (totalUncompressed > MAX_PROJECT_UNCOMPRESSED_BYTES) {
+      throw new Error('Invalid .layox file: uncompressed assets exceed 512 MiB.');
+    }
+  }
+}
 
 export async function createProjectArchiveBlob(
   project: Project,
@@ -37,6 +95,7 @@ export async function loadProjectArchive(
   } catch {
     throw new Error('Invalid .layox file: the ZIP archive is damaged.');
   }
+  validateArchiveMetadata(zip);
 
   const projectFile = zip.file('project.json');
   if (!projectFile) throw new Error('Invalid .layox file: missing project.json.');
