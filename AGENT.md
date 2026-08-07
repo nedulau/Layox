@@ -74,6 +74,7 @@ Inline-Editor in `EditorCanvas.tsx`:
   - `npm test`
   - `npm run test:run`
   - `npm run test:coverage`
+  - `npm run test:ui:coverage`
   - `npm run test:e2e`
   - `npm run test:e2e:electron`
   - `npm run check`

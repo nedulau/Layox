@@ -32,7 +32,24 @@ import {
 } from '../domain/projectOperations';
 import { createSaveCoordinator } from '../services/saveCoordinator';
 import { createCenteredImageElement } from '../services/imageElementFactory';
+import {
+  appendImageToFreePage,
+  assignAssetToLayoutPage,
+  prepareImportedAsset,
+} from '../services/projectImagePlacement';
+import { MAX_LAYOUT_SPACING } from '../constants/layouts';
+import {
+  appendHistoryEntry,
+  createHistoryEntry,
+  discardMatchingHistoryTail,
+  prependFutureEntry,
+  type HistoryEntry,
+} from './projectHistory';
 const fileSystemPort = getFileSystemPort();
+
+function clampLayoutSpacing(value: number): number {
+  return Math.min(MAX_LAYOUT_SPACING, Math.max(0, value));
+}
 
 interface RecentProject {
   name: string;
@@ -46,11 +63,6 @@ export type { RecentProject };
 export interface AddImageResult {
   assetPath: string;
   placement: 'placed' | 'library-only';
-}
-
-interface HistoryEntry {
-  project: Project;
-  assetBlobs: Record<string, Blob>;
 }
 
 interface ProjectState {
@@ -312,27 +324,25 @@ const useProjectStore = create<ProjectState>((baseSet, get) => {
 
   snapshot: () => {
     const { project, assetBlobs, historyPast } = get();
-    const entry: HistoryEntry = {
-      project: JSON.parse(JSON.stringify(project)) as Project,
-      assetBlobs: { ...assetBlobs },
-    };
+    const entry = createHistoryEntry(project, assetBlobs);
     set({
-      historyPast: [...historyPast, entry].slice(-50),
+      historyPast: appendHistoryEntry(historyPast, entry, assetBlobs),
       historyFuture: [],
     });
   },
 
   undo: () => {
     const { historyPast, historyFuture, project, assetBlobs } = get();
-    if (historyPast.length === 0) return;
-    const prev = historyPast[historyPast.length - 1];
-    const currentEntry: HistoryEntry = {
-      project: JSON.parse(JSON.stringify(project)) as Project,
-      assetBlobs: { ...assetBlobs },
-    };
+    const actionableHistory = discardMatchingHistoryTail(historyPast, project, assetBlobs);
+    if (actionableHistory.length === 0) {
+      if (actionableHistory.length !== historyPast.length) set({ historyPast: actionableHistory });
+      return;
+    }
+    const prev = actionableHistory[actionableHistory.length - 1];
+    const currentEntry = createHistoryEntry(project, assetBlobs);
     set({
-      historyPast: historyPast.slice(0, -1),
-      historyFuture: [currentEntry, ...historyFuture].slice(0, 50),
+      historyPast: actionableHistory.slice(0, -1),
+      historyFuture: prependFutureEntry(historyFuture, currentEntry),
       project: prev.project,
       assetBlobs: prev.assetBlobs,
       selectedElementId: null,
@@ -344,12 +354,9 @@ const useProjectStore = create<ProjectState>((baseSet, get) => {
     const { historyPast, historyFuture, project, assetBlobs } = get();
     if (historyFuture.length === 0) return;
     const next = historyFuture[0];
-    const currentEntry: HistoryEntry = {
-      project: JSON.parse(JSON.stringify(project)) as Project,
-      assetBlobs: { ...assetBlobs },
-    };
+    const currentEntry = createHistoryEntry(project, assetBlobs);
     set({
-      historyPast: [...historyPast, currentEntry],
+      historyPast: appendHistoryEntry(historyPast, currentEntry, assetBlobs),
       historyFuture: historyFuture.slice(1),
       project: next.project,
       assetBlobs: next.assetBlobs,
@@ -514,7 +521,7 @@ const useProjectStore = create<ProjectState>((baseSet, get) => {
     set((state) => {
       const pages = [...state.project.pages];
       const page = { ...pages[state.currentPageIndex] };
-      page.layoutPadding = padding;
+      page.layoutPadding = clampLayoutSpacing(padding);
       pages[state.currentPageIndex] = page;
       return { project: { ...state.project, pages } };
     }),
@@ -523,7 +530,7 @@ const useProjectStore = create<ProjectState>((baseSet, get) => {
     set((state) => {
       const pages = [...state.project.pages];
       const page = { ...pages[state.currentPageIndex] };
-      page.layoutGap = gap;
+      page.layoutGap = clampLayoutSpacing(gap);
       pages[state.currentPageIndex] = page;
       return { project: { ...state.project, pages } };
     }),
@@ -543,7 +550,7 @@ const useProjectStore = create<ProjectState>((baseSet, get) => {
         ...state.project,
         meta: {
           ...state.project.meta,
-          defaultLayoutPadding: padding,
+          defaultLayoutPadding: clampLayoutSpacing(padding),
         },
       },
     })),
@@ -554,7 +561,7 @@ const useProjectStore = create<ProjectState>((baseSet, get) => {
         ...state.project,
         meta: {
           ...state.project.meta,
-          defaultLayoutGap: gap,
+          defaultLayoutGap: clampLayoutSpacing(gap),
         },
       },
     })),
@@ -796,106 +803,69 @@ const useProjectStore = create<ProjectState>((baseSet, get) => {
   addImageFromFile: async (file) => {
     const page = get().currentPage();
     if (!page) throw new Error('No active page.');
+    const targetPageId = page.id;
+    const targetLayoutId = page.layoutId;
 
-    const id = uuidv4();
-    const safeFileName = file.name
-      .replace(/\.\.+/g, '.')
-      .replace(/[^\p{L}\p{N}._ -]/gu, '_')
-      .slice(0, 240) || 'image';
-    const assetPath = `assets/${id}_${safeFileName}`;
-    const blob = file.slice();
+    const { id, assetPath, blob } = prepareImportedAsset(file);
 
     if (page.layoutId) {
       // Layout mode: assign to slot
-      const layout = getLayoutById(page.layoutId);
-      if (!layout) {
-        set((state) => ({ assetBlobs: { ...state.assetBlobs, [assetPath]: blob } }));
-        return { assetPath, placement: 'library-only' };
-      }
-
-      let targetSlot = get().selectedSlotIndex;
-      if (targetSlot === null) {
-        // Find next empty slot
-        const assignments = page.slotAssignments ?? {};
-        const emptyIdx = layout.slots.findIndex((_, i) => !assignments[i]);
-        if (emptyIdx === -1) {
-          set((state) => ({ assetBlobs: { ...state.assetBlobs, [assetPath]: blob } }));
-          return { assetPath, placement: 'library-only' };
-        }
-        targetSlot = emptyIdx;
-      }
-
-      const finalSlot = targetSlot;
+      let placement: AddImageResult['placement'] = 'library-only';
+      const requestedSlot = get().selectedSlotIndex;
       set((state) => {
-        const pages = [...state.project.pages];
-        const p = { ...pages[state.currentPageIndex] };
-        p.slotAssignments = { ...(p.slotAssignments ?? {}), [finalSlot]: { assetPath, offsetX: 0, offsetY: 0, scale: 1 } };
-        pages[state.currentPageIndex] = p;
+        const project = assignAssetToLayoutPage(state.project, targetPageId, requestedSlot, assetPath);
+        if (!project) return { assetBlobs: { ...state.assetBlobs, [assetPath]: blob } };
+        placement = 'placed';
         return {
-          project: { ...state.project, pages },
+          project,
           assetBlobs: { ...state.assetBlobs, [assetPath]: blob },
           selectedSlotIndex: null,
         };
       });
-      return { assetPath, placement: 'placed' };
+      return { assetPath, placement };
     } else {
       // Free mode: create ImageElement
       const element = await createCenteredImageElement({
         id,
         assetPath,
         blob,
-        zIndex: get().currentPage()?.elements.length ?? 0,
+        zIndex: page.elements.length,
       });
 
+      let placement: AddImageResult['placement'] = 'library-only';
       set((state) => {
-        const pages = [...state.project.pages];
-        const current = pages[state.currentPageIndex];
-        if (!current) return state;
-        pages[state.currentPageIndex] = {
-          ...current,
-          elements: [...current.elements, element],
-        };
+        const project = appendImageToFreePage(state.project, targetPageId, targetLayoutId, element);
+        if (!project) {
+          return { assetBlobs: { ...state.assetBlobs, [assetPath]: blob } };
+        }
+        placement = 'placed';
         return {
-          project: { ...state.project, pages },
+          project,
           assetBlobs: { ...state.assetBlobs, [assetPath]: blob },
           selectedElementId: element.id,
           selectedSlotIndex: null,
         };
       });
-      return { assetPath, placement: 'placed' };
+      return { assetPath, placement };
     }
   },
 
   addImageFromAsset: async (assetPath) => {
     const page = get().currentPage();
     if (!page) return;
+    const targetPageId = page.id;
+    const targetLayoutId = page.layoutId;
 
     const blob = get().assetBlobs[assetPath];
     if (!blob) return;
 
     if (page.layoutId) {
-      const layout = getLayoutById(page.layoutId);
-      if (!layout) return;
-
-      let targetSlot = get().selectedSlotIndex;
-      if (targetSlot === null) {
-        const assignments = page.slotAssignments ?? {};
-        const emptyIdx = layout.slots.findIndex((_, i) => !assignments[i]);
-        if (emptyIdx === -1) return;
-        targetSlot = emptyIdx;
-      }
-
-      const finalSlot = targetSlot;
+      const requestedSlot = get().selectedSlotIndex;
       set((state) => {
-        const pages = [...state.project.pages];
-        const p = { ...pages[state.currentPageIndex] };
-        p.slotAssignments = {
-          ...(p.slotAssignments ?? {}),
-          [finalSlot]: { assetPath, offsetX: 0, offsetY: 0, scale: 1 },
-        };
-        pages[state.currentPageIndex] = p;
+        const project = assignAssetToLayoutPage(state.project, targetPageId, requestedSlot, assetPath);
+        if (!project) return state;
         return {
-          project: { ...state.project, pages },
+          project,
           selectedSlotIndex: null,
           selectedElementId: null,
         };
@@ -907,10 +877,18 @@ const useProjectStore = create<ProjectState>((baseSet, get) => {
       id: uuidv4(),
       assetPath,
       blob,
-      zIndex: get().currentPage()?.elements.length ?? 0,
+      zIndex: page.elements.length,
     });
 
-    get().addElement(element);
+    set((state) => {
+      const project = appendImageToFreePage(state.project, targetPageId, targetLayoutId, element);
+      if (!project) return state;
+      return {
+        project,
+        selectedElementId: element.id,
+        selectedSlotIndex: null,
+      };
+    });
   },
 
   removeAsset: (assetPath) => {

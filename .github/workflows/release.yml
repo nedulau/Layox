@@ -107,7 +107,7 @@ jobs:
           test -n "$VERCEL_PROJECT_ID" || (echo "Missing secret VERCEL_PROJECT_ID" && exit 1)
 
       - name: Install Vercel CLI
-        run: npm i -g vercel@latest
+        run: npm i -g vercel@58.7.1
 
       - name: Pull Vercel Environment Information
         env:

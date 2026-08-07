@@ -4,6 +4,9 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+/** @typedef {{ name: string, data: ArrayBuffer, targetPath?: string | null }} SaveProjectPayload */
+/** @typedef {{ failNextAtomicSave: boolean }} E2EState */
+
 const IPC_CHANNELS = {
   openProject: 'layox:open-project',
   openProjectFromPath: 'layox:open-project-from-path',
@@ -20,30 +23,46 @@ const __dirname = path.dirname(__filename);
 const WINDOW_WIDTH = 1500;
 const WINDOW_HEIGHT = 980;
 
+/** @type {BrowserWindow | null} */
 let mainWindow = null;
+/** @type {string | null} */
 let storeFilePath = null;
+/** @type {Record<string, string>} */
 let storageCache = {};
 
-if (process.env.LAYOX_E2E) {
-  globalThis.__layoxE2E = { failNextAtomicSave: false };
+function getE2EState() {
+  return /** @type {typeof globalThis & { __layoxE2E?: E2EState }} */ (globalThis).__layoxE2E;
 }
 
+if (process.env.LAYOX_E2E) {
+  /** @type {typeof globalThis & { __layoxE2E?: E2EState }} */ (globalThis).__layoxE2E = {
+    failNextAtomicSave: false,
+  };
+}
+
+/** @param {unknown} filePath */
 function isValidProjectPath(filePath) {
   return typeof filePath === 'string' && path.isAbsolute(filePath) && filePath.toLowerCase().endsWith('.layox');
 }
 
+/**
+ * @param {unknown} payload
+ * @returns {payload is SaveProjectPayload}
+ */
 function isValidSavePayload(payload) {
+  if (!payload || typeof payload !== 'object') return false;
+  const candidate = /** @type {Partial<SaveProjectPayload>} */ (payload);
   return Boolean(
-    payload &&
-      typeof payload.name === 'string' &&
-      payload.name.length > 0 &&
-      payload.name.length <= 255 &&
-      payload.name.toLowerCase().endsWith('.layox') &&
-      payload.data instanceof ArrayBuffer &&
-      (payload.targetPath === undefined || payload.targetPath === null || isValidProjectPath(payload.targetPath)),
+    typeof candidate.name === 'string' &&
+      candidate.name.length > 0 &&
+      candidate.name.length <= 255 &&
+      candidate.name.toLowerCase().endsWith('.layox') &&
+      candidate.data instanceof ArrayBuffer &&
+      (candidate.targetPath === undefined || candidate.targetPath === null || isValidProjectPath(candidate.targetPath)),
   );
 }
 
+/** @param {string} targetPath @param {ArrayBuffer} data */
 async function writeFileAtomically(targetPath, data) {
   const directory = path.dirname(targetPath);
   const temporaryPath = path.join(
@@ -53,8 +72,9 @@ async function writeFileAtomically(targetPath, data) {
 
   try {
     await fs.writeFile(temporaryPath, toBuffer(data), { flag: 'wx' });
-    if (process.env.LAYOX_E2E && globalThis.__layoxE2E?.failNextAtomicSave) {
-      globalThis.__layoxE2E.failNextAtomicSave = false;
+    const e2eState = getE2EState();
+    if (process.env.LAYOX_E2E && e2eState?.failNextAtomicSave) {
+      e2eState.failNextAtomicSave = false;
       throw new Error('simulated atomic failure');
     }
     await fs.rename(temporaryPath, targetPath);
@@ -64,10 +84,12 @@ async function writeFileAtomically(targetPath, data) {
   }
 }
 
+/** @param {Buffer} buffer */
 function toArrayBuffer(buffer) {
   return buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
 }
 
+/** @param {ArrayBuffer} arrayBuffer */
 function toBuffer(arrayBuffer) {
   return Buffer.from(arrayBuffer);
 }
@@ -80,6 +102,14 @@ function ensureStorePath() {
   return storeFilePath;
 }
 
+/** @param {unknown} value @returns {value is Record<string, string>} */
+function isStringRecord(value) {
+  return Boolean(
+    value && typeof value === 'object' && !Array.isArray(value)
+      && Object.values(value).every((entry) => typeof entry === 'string'),
+  );
+}
+
 function loadStorageCache() {
   try {
     const resolvedPath = ensureStorePath();
@@ -89,7 +119,7 @@ function loadStorageCache() {
     }
     const raw = readFileSync(resolvedPath, 'utf-8');
     const parsed = JSON.parse(raw);
-    if (parsed && typeof parsed === 'object') {
+    if (isStringRecord(parsed)) {
       storageCache = parsed;
       return;
     }

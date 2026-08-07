@@ -43,8 +43,11 @@ test('Electron saves in place, saves as and blocks external windows', async () =
     await window.getByRole('button', { name: 'Speichern Ctrl+S', exact: true }).click();
     await expect.poll(() => fileSize(firstPath)).toBeGreaterThan(0);
     await window.getByTitle('Projektname bearbeiten').fill('Electron Album changed');
+    const saveStatus = window.getByRole('status');
+    await expect(saveStatus).toHaveText('Ungespeichert');
     await window.keyboard.press('Control+s');
-    await expect.poll(() => electronApp.evaluate(() => (
+    await expect(saveStatus).toHaveText('Gespeichert');
+    expect(await electronApp.evaluate(() => (
       globalThis as typeof globalThis & { layoxSaveDialogs?: number }
     ).layoxSaveDialogs)).toBe(1);
 

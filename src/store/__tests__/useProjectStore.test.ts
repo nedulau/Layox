@@ -251,6 +251,16 @@ describe('useProjectStore', () => {
       expect(getState().historyPast).toHaveLength(1);
     });
 
+    it('deduplicates identical snapshots and discards no-op undo entries', () => {
+      getState().snapshot();
+      getState().snapshot();
+      expect(getState().historyPast).toHaveLength(1);
+
+      getState().undo();
+      expect(getState().historyPast).toHaveLength(0);
+      expect(getState().historyFuture).toHaveLength(0);
+    });
+
     it('undo restores previous state', () => {
       const originalName = getState().project.meta.name;
       getState().snapshot();
@@ -466,6 +476,19 @@ describe('useProjectStore', () => {
       expect(getState().project.meta.defaultLayoutPadding).toBe(32);
       expect(getState().project.meta.defaultLayoutGap).toBe(14);
       expect(getState().project.pages.every((page) => page.layoutPadding === 32 && page.layoutGap === 14)).toBe(true);
+    });
+
+    it('clamps layout spacing to the supported project range', () => {
+      getState().setCurrentPageIndex(1);
+      getState().setLayoutPadding(101);
+      getState().setLayoutGap(-1);
+      getState().setDefaultLayoutPadding(500);
+      getState().setDefaultLayoutGap(-20);
+
+      expect(getState().project.pages[1].layoutPadding).toBe(100);
+      expect(getState().project.pages[1].layoutGap).toBe(0);
+      expect(getState().project.meta.defaultLayoutPadding).toBe(100);
+      expect(getState().project.meta.defaultLayoutGap).toBe(0);
     });
   });
 
@@ -694,6 +717,29 @@ describe('useProjectStore', () => {
         width: 900,
         height: 675,
       });
+    });
+
+    it('keeps an asynchronous free-image import on its original page', async () => {
+      let finishLoading: (() => void) | undefined;
+      class DeferredImage {
+        naturalWidth = 1200;
+        naturalHeight = 900;
+        onload: (() => void) | null = null;
+        set src(_value: string) { finishLoading = () => this.onload?.(); }
+      }
+      vi.stubGlobal('Image', DeferredImage);
+      vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:deferred');
+      vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
+      getState().setCurrentPageIndex(1);
+      getState().addAsset('assets/deferred.jpg', new Blob(['photo']));
+
+      const importing = getState().addImageFromAsset('assets/deferred.jpg');
+      getState().setCurrentPageIndex(0);
+      finishLoading?.();
+      await importing;
+
+      expect(getState().project.pages[1].elements.at(-1)).toMatchObject({ src: 'assets/deferred.jpg' });
+      expect(getState().project.pages[0].elements).toHaveLength(0);
     });
   });
 

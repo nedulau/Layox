@@ -1,12 +1,13 @@
 import type { LayoutTemplate, LayoutSlot } from '../types';
 import { CANVAS_H as H, CANVAS_W as W } from '../constants/canvas';
+import type { LayoutId } from '../constants/layouts';
 
 const P = 20;  // padding from page edge
 const G = 10;  // gap between slots
 const IW = W - 2 * P; // inner width
 const IH = H - 2 * P; // inner height
 
-export const LAYOUT_TEMPLATES: LayoutTemplate[] = [
+export const LAYOUT_TEMPLATES: Array<LayoutTemplate & { id: LayoutId }> = [
   {
     id: 'cover-full',
     name: 'Cover (Full)',
