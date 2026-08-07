@@ -126,6 +126,7 @@ Vite prints a network URL (for example `http://192.168.1.X:5173`) that devices i
 | `npm test` | Run tests (watch mode) |
 | `npm run test:run` | Run tests once |
 | `npm run test:coverage` | Run tests with enforced core coverage gates |
+| `npm run test:ui:coverage` | Run component/hook tests with a ratcheted UI coverage baseline |
 | `npm run test:e2e` | Build and run Chromium end-to-end tests |
 | `npm run test:e2e:electron` | Build and run Electron end-to-end tests |
 | `npm run check` | Lint, coverage tests, web build, and Electron renderer build |
