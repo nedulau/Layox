@@ -467,6 +467,19 @@ describe('useProjectStore', () => {
       expect(getState().project.meta.defaultLayoutGap).toBe(14);
       expect(getState().project.pages.every((page) => page.layoutPadding === 32 && page.layoutGap === 14)).toBe(true);
     });
+
+    it('clamps layout spacing to the supported project range', () => {
+      getState().setCurrentPageIndex(1);
+      getState().setLayoutPadding(101);
+      getState().setLayoutGap(-1);
+      getState().setDefaultLayoutPadding(500);
+      getState().setDefaultLayoutGap(-20);
+
+      expect(getState().project.pages[1].layoutPadding).toBe(100);
+      expect(getState().project.pages[1].layoutGap).toBe(0);
+      expect(getState().project.meta.defaultLayoutPadding).toBe(100);
+      expect(getState().project.meta.defaultLayoutGap).toBe(0);
+    });
   });
 
   describe('slot management', () => {

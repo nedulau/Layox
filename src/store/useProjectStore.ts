@@ -32,7 +32,12 @@ import {
 } from '../domain/projectOperations';
 import { createSaveCoordinator } from '../services/saveCoordinator';
 import { createCenteredImageElement } from '../services/imageElementFactory';
+import { MAX_LAYOUT_SPACING } from '../constants/layouts';
 const fileSystemPort = getFileSystemPort();
+
+function clampLayoutSpacing(value: number): number {
+  return Math.min(MAX_LAYOUT_SPACING, Math.max(0, value));
+}
 
 interface RecentProject {
   name: string;
@@ -514,7 +519,7 @@ const useProjectStore = create<ProjectState>((baseSet, get) => {
     set((state) => {
       const pages = [...state.project.pages];
       const page = { ...pages[state.currentPageIndex] };
-      page.layoutPadding = padding;
+      page.layoutPadding = clampLayoutSpacing(padding);
       pages[state.currentPageIndex] = page;
       return { project: { ...state.project, pages } };
     }),
@@ -523,7 +528,7 @@ const useProjectStore = create<ProjectState>((baseSet, get) => {
     set((state) => {
       const pages = [...state.project.pages];
       const page = { ...pages[state.currentPageIndex] };
-      page.layoutGap = gap;
+      page.layoutGap = clampLayoutSpacing(gap);
       pages[state.currentPageIndex] = page;
       return { project: { ...state.project, pages } };
     }),
@@ -543,7 +548,7 @@ const useProjectStore = create<ProjectState>((baseSet, get) => {
         ...state.project,
         meta: {
           ...state.project.meta,
-          defaultLayoutPadding: padding,
+          defaultLayoutPadding: clampLayoutSpacing(padding),
         },
       },
     })),
@@ -554,7 +559,7 @@ const useProjectStore = create<ProjectState>((baseSet, get) => {
         ...state.project,
         meta: {
           ...state.project.meta,
-          defaultLayoutGap: gap,
+          defaultLayoutGap: clampLayoutSpacing(gap),
         },
       },
     })),

@@ -1,5 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
 import type { Page, PageElement, Project, SlotAssignment } from '../types';
+import { LAYOUT_IDS, LAYOUT_SLOT_COUNTS, MAX_LAYOUT_SPACING } from '../constants/layouts';
 
 export const CURRENT_PROJECT_VERSION = '1.1' as const;
 export const MAX_PROJECT_JSON_BYTES = 5 * 1024 * 1024;
@@ -160,13 +161,15 @@ function validatePage(value: unknown, index: number): Page {
     throw new Error(`${path}.elements must be an array with at most 10000 entries.`);
   }
 
+  const layoutId = optionalEnum(page.layoutId, LAYOUT_IDS, `${path}.layoutId`);
   let slotAssignments: Record<number, SlotAssignment> | undefined;
   if (page.slotAssignments !== undefined) {
+    if (!layoutId) throw new Error(`${path}.slotAssignments requires a supported layoutId.`);
     const source = requireRecord(page.slotAssignments, `${path}.slotAssignments`);
     slotAssignments = {};
     for (const [key, assignment] of Object.entries(source)) {
       const slotIndex = Number(key);
-      if (!Number.isInteger(slotIndex) || slotIndex < 0) {
+      if (!Number.isInteger(slotIndex) || slotIndex < 0 || slotIndex >= LAYOUT_SLOT_COUNTS[layoutId]) {
         throw new Error(`${path}.slotAssignments contains an invalid slot index.`);
       }
       slotAssignments[slotIndex] = validateSlotAssignment(assignment, `${path}.slotAssignments.${key}`);
@@ -175,14 +178,18 @@ function validatePage(value: unknown, index: number): Page {
 
   const layoutPadding = optionalFiniteNumber(page.layoutPadding, `${path}.layoutPadding`);
   const layoutGap = optionalFiniteNumber(page.layoutGap, `${path}.layoutGap`);
-  if (layoutPadding !== undefined && layoutPadding < 0) throw new Error(`${path}.layoutPadding cannot be negative.`);
-  if (layoutGap !== undefined && layoutGap < 0) throw new Error(`${path}.layoutGap cannot be negative.`);
+  if (layoutPadding !== undefined && (layoutPadding < 0 || layoutPadding > MAX_LAYOUT_SPACING)) {
+    throw new Error(`${path}.layoutPadding must be between 0 and ${MAX_LAYOUT_SPACING}.`);
+  }
+  if (layoutGap !== undefined && (layoutGap < 0 || layoutGap > MAX_LAYOUT_SPACING)) {
+    throw new Error(`${path}.layoutGap must be between 0 and ${MAX_LAYOUT_SPACING}.`);
+  }
 
   return {
     id: requireString(page.id, `${path}.id`, 200),
     elements: page.elements.map((element, elementIndex) => validateElement(element, `${path}.elements[${elementIndex}]`)),
     background: requireString(page.background, `${path}.background`, 100),
-    layoutId: optionalString(page.layoutId, `${path}.layoutId`, 200),
+    layoutId,
     layoutPadding,
     layoutGap,
     slotAssignments,
@@ -218,11 +225,11 @@ export function migrateAndValidateProject(value: unknown): Project {
 
   const defaultLayoutPadding = optionalFiniteNumber(meta.defaultLayoutPadding, 'project.meta.defaultLayoutPadding');
   const defaultLayoutGap = optionalFiniteNumber(meta.defaultLayoutGap, 'project.meta.defaultLayoutGap');
-  if (defaultLayoutPadding !== undefined && defaultLayoutPadding < 0) {
-    throw new Error('project.meta.defaultLayoutPadding cannot be negative.');
+  if (defaultLayoutPadding !== undefined && (defaultLayoutPadding < 0 || defaultLayoutPadding > MAX_LAYOUT_SPACING)) {
+    throw new Error(`project.meta.defaultLayoutPadding must be between 0 and ${MAX_LAYOUT_SPACING}.`);
   }
-  if (defaultLayoutGap !== undefined && defaultLayoutGap < 0) {
-    throw new Error('project.meta.defaultLayoutGap cannot be negative.');
+  if (defaultLayoutGap !== undefined && (defaultLayoutGap < 0 || defaultLayoutGap > MAX_LAYOUT_SPACING)) {
+    throw new Error(`project.meta.defaultLayoutGap must be between 0 and ${MAX_LAYOUT_SPACING}.`);
   }
 
   return {
