@@ -10,11 +10,13 @@ export default defineConfig(({ mode }) => {
   return {
     base: isElectronBuild ? './' : '/',
     build: {
-      rollupOptions: {
+      rolldownOptions: {
         output: {
-          manualChunks: {
-            konva: ['konva', 'react-konva'],
-            react: ['react', 'react-dom'],
+          codeSplitting: {
+            groups: [
+              { name: 'konva', test: /node_modules[\\/](?:konva|react-konva)[\\/]/ },
+              { name: 'react', test: /node_modules[\\/](?:react|react-dom)[\\/]/ },
+            ],
           },
         },
       },

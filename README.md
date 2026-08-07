@@ -36,7 +36,7 @@ npm install
 npm run dev
 ```
 
-Development and release builds use Node.js 22 (see `.nvmrc` and `package.json#engines`).
+Development and release builds use Node.js 24 LTS (see `.nvmrc` and `package.json#engines`).
 
 Open [http://localhost:5173](http://localhost:5173) in your browser.
 
