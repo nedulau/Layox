@@ -24,13 +24,13 @@ import {
 import { MenuButton, MenuDivider, MenuItem } from './components/editor/MenuComponents';
 import BlobImage from './components/common/BlobImage';
 import AssetLibraryModal from './components/editor/AssetLibraryModal';
-import { useDialogFocus } from './components/common/useDialogFocus';
 import { useMediaQuery } from './hooks/useMediaQuery';
 import ConfirmDialog from './components/common/ConfirmDialog';
 import PwaUpdatePrompt from './components/PwaUpdatePrompt';
 import { useEditorKeyboardShortcuts } from './hooks/useEditorKeyboardShortcuts';
 import { useEditorRecovery } from './hooks/useEditorRecovery';
 import { useEditorExport } from './hooks/useEditorExport';
+import EditorFeedback from './components/editor/EditorFeedback';
 
 const FONTS = ['Arial', 'Times New Roman', 'Georgia', 'Verdana', 'Courier New', 'Trebuchet MS', 'Impact', 'Comic Sans MS'];
 type UiTheme = 'dark' | 'light';
@@ -304,7 +304,6 @@ function Editor({
     defaultLayoutPadding,
     defaultLayoutGap,
   });
-  const exportDialogRef = useDialogFocus<HTMLDivElement>(editorExport.job !== null, editorExport.cancel);
 
   useEffect(() => {
     writeStoredString('layox_showQuickImageBar', String(showQuickImageBar));
@@ -1255,81 +1254,27 @@ function Editor({
         )}
       </div>
 
-      {editorExport.job && (
-        <div
-          ref={exportDialogRef}
-          className="fixed inset-0 z-[150] flex items-center justify-center bg-black/70"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="layox-export-progress-title"
-          tabIndex={-1}
-        >
-          <div className="editor-dropdown w-80 rounded-2xl border border-neutral-700 bg-neutral-900 p-5 shadow-2xl">
-            <h3 id="layox-export-progress-title" className="text-base font-semibold text-white">
-              {t('exportProgress').replace('{format}', editorExport.job.label)}
-            </h3>
-            <div className="mt-3 h-2 overflow-hidden rounded-full bg-neutral-700">
-              <div
-                className="h-full bg-blue-500 transition-[width]"
-                style={{ width: `${editorExport.job.total > 0 ? (editorExport.job.completed / editorExport.job.total) * 100 : 0}%` }}
-              />
-            </div>
-            <div className="mt-2 text-xs text-neutral-400" aria-live="polite">
-              {editorExport.job.completed} / {editorExport.job.total}
-            </div>
-            <button
-              type="button"
-              onClick={editorExport.cancel}
-              className="mt-4 w-full rounded-lg border border-neutral-600 bg-neutral-800 py-2 text-sm text-neutral-200 hover:bg-neutral-700"
-            >
-              {t('cancel')}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {editorExport.error && (
-        <div className="fixed bottom-5 left-1/2 z-[140] flex max-w-lg -translate-x-1/2 items-center gap-3 rounded-xl border border-red-700 bg-red-950 px-4 py-3 text-sm text-red-100 shadow-2xl" role="alert">
-          <span>{t('exportFailed')}: {editorExport.error}</span>
-          <button type="button" onClick={editorExport.clearError} className="rounded px-2 py-1 hover:bg-red-900" aria-label={t('close')}>×</button>
-        </div>
-      )}
-
-      {uiError && (
-        <div className="fixed bottom-5 left-1/2 z-[140] flex max-w-lg -translate-x-1/2 items-center gap-3 rounded-xl border border-red-700 bg-red-950 px-4 py-3 text-sm text-red-100 shadow-2xl" role="alert">
-          <span>{uiError}</span>
-          <button type="button" onClick={() => setUiError(null)} className="rounded px-2 py-1 hover:bg-red-900" aria-label={t('close')}>×</button>
-        </div>
-      )}
-
-      {(uiNotice || importJob) && (
-        <div className="fixed bottom-5 left-1/2 z-[140] flex max-w-lg -translate-x-1/2 items-center gap-3 rounded-xl border border-blue-700 bg-blue-950 px-4 py-3 text-sm text-blue-100 shadow-2xl" role="status" aria-live="polite">
-          <span>
-            {importJob
-              ? `${t('importingImages')} ${importJob.completed} / ${importJob.total}`
-              : uiNotice}
-          </span>
-          {!importJob && noticeCanUndo && (
-            <button
-              type="button"
-              onClick={() => {
-                undo();
-                setUiNotice(null);
-                setNoticeCanUndo(false);
-              }}
-              className="min-h-9 rounded-lg bg-blue-800 px-3 font-medium hover:bg-blue-700"
-            >
-              {t('undo')}
-            </button>
-          )}
-          {!importJob && (
-            <button type="button" onClick={() => {
-              setUiNotice(null);
-              setNoticeCanUndo(false);
-            }} className="rounded px-2 py-1 hover:bg-blue-900" aria-label={t('close')}>×</button>
-          )}
-        </div>
-      )}
+      <EditorFeedback
+        t={t}
+        exportJob={editorExport.job}
+        exportError={editorExport.error}
+        uiError={uiError}
+        uiNotice={uiNotice}
+        importJob={importJob}
+        noticeCanUndo={noticeCanUndo}
+        onCancelExport={editorExport.cancel}
+        onClearExportError={editorExport.clearError}
+        onClearUiError={() => setUiError(null)}
+        onUndoNotice={() => {
+          undo();
+          setUiNotice(null);
+          setNoticeCanUndo(false);
+        }}
+        onClearNotice={() => {
+          setUiNotice(null);
+          setNoticeCanUndo(false);
+        }}
+      />
 
       <ConfirmDialog
         open={showHomeConfirm}
