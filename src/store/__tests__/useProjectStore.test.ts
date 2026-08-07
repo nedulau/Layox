@@ -695,6 +695,29 @@ describe('useProjectStore', () => {
         height: 675,
       });
     });
+
+    it('keeps an asynchronous free-image import on its original page', async () => {
+      let finishLoading: (() => void) | undefined;
+      class DeferredImage {
+        naturalWidth = 1200;
+        naturalHeight = 900;
+        onload: (() => void) | null = null;
+        set src(_value: string) { finishLoading = () => this.onload?.(); }
+      }
+      vi.stubGlobal('Image', DeferredImage);
+      vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:deferred');
+      vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
+      getState().setCurrentPageIndex(1);
+      getState().addAsset('assets/deferred.jpg', new Blob(['photo']));
+
+      const importing = getState().addImageFromAsset('assets/deferred.jpg');
+      getState().setCurrentPageIndex(0);
+      finishLoading?.();
+      await importing;
+
+      expect(getState().project.pages[1].elements.at(-1)).toMatchObject({ src: 'assets/deferred.jpg' });
+      expect(getState().project.pages[0].elements).toHaveLength(0);
+    });
   });
 
   describe('dirty state and saving', () => {

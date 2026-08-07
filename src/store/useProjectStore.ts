@@ -796,6 +796,8 @@ const useProjectStore = create<ProjectState>((baseSet, get) => {
   addImageFromFile: async (file) => {
     const page = get().currentPage();
     if (!page) throw new Error('No active page.');
+    const targetPageId = page.id;
+    const targetLayoutId = page.layoutId;
 
     const id = uuidv4();
     const safeFileName = file.name
@@ -844,17 +846,22 @@ const useProjectStore = create<ProjectState>((baseSet, get) => {
         id,
         assetPath,
         blob,
-        zIndex: get().currentPage()?.elements.length ?? 0,
+        zIndex: page.elements.length,
       });
 
+      let placement: AddImageResult['placement'] = 'library-only';
       set((state) => {
         const pages = [...state.project.pages];
-        const current = pages[state.currentPageIndex];
-        if (!current) return state;
-        pages[state.currentPageIndex] = {
+        const targetPageIndex = pages.findIndex((candidate) => candidate.id === targetPageId);
+        const current = pages[targetPageIndex];
+        if (!current || current.layoutId !== targetLayoutId) {
+          return { assetBlobs: { ...state.assetBlobs, [assetPath]: blob } };
+        }
+        pages[targetPageIndex] = {
           ...current,
           elements: [...current.elements, element],
         };
+        placement = 'placed';
         return {
           project: { ...state.project, pages },
           assetBlobs: { ...state.assetBlobs, [assetPath]: blob },
@@ -862,13 +869,15 @@ const useProjectStore = create<ProjectState>((baseSet, get) => {
           selectedSlotIndex: null,
         };
       });
-      return { assetPath, placement: 'placed' };
+      return { assetPath, placement };
     }
   },
 
   addImageFromAsset: async (assetPath) => {
     const page = get().currentPage();
     if (!page) return;
+    const targetPageId = page.id;
+    const targetLayoutId = page.layoutId;
 
     const blob = get().assetBlobs[assetPath];
     if (!blob) return;
@@ -907,10 +916,24 @@ const useProjectStore = create<ProjectState>((baseSet, get) => {
       id: uuidv4(),
       assetPath,
       blob,
-      zIndex: get().currentPage()?.elements.length ?? 0,
+      zIndex: page.elements.length,
     });
 
-    get().addElement(element);
+    set((state) => {
+      const pages = [...state.project.pages];
+      const targetPageIndex = pages.findIndex((candidate) => candidate.id === targetPageId);
+      const current = pages[targetPageIndex];
+      if (!current || current.layoutId !== targetLayoutId) return state;
+      pages[targetPageIndex] = {
+        ...current,
+        elements: [...current.elements, element],
+      };
+      return {
+        project: { ...state.project, pages },
+        selectedElementId: element.id,
+        selectedSlotIndex: null,
+      };
+    });
   },
 
   removeAsset: (assetPath) => {
