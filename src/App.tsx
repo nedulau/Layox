@@ -6,14 +6,11 @@ import StartScreen from './components/StartScreen';
 import CropModal from './components/CropModal';
 import NewProjectModal from './components/NewProjectModal';
 import useProjectStore from './store/useProjectStore';
-import { exportAsPdf, exportCurrentPageAsPng, exportCurrentPageAsJpeg, exportAllPagesAsZip } from './utils/exportProject';
-import type { ExportJobOptions, PdfCompressionLevel, ProjectExportContext } from './utils/exportProject';
 import { tr, type Language, type TranslationKey } from './i18n';
 import type { Page } from './types';
 import { readStoredBoolean, readStoredString, writeStoredString } from './infra/storage';
 import { getFileSystemPort } from './infra/fileSystem';
 import type { RecoverySummary } from './utils/recoveryRepository';
-import { konvaPageRenderer } from './utils/konvaPageRenderer';
 import {
   DEFAULT_COVER_SUBTITLE_COLOR,
   DEFAULT_COVER_SUBTITLE_FONT_FAMILY,
@@ -33,9 +30,9 @@ import ConfirmDialog from './components/common/ConfirmDialog';
 import PwaUpdatePrompt from './components/PwaUpdatePrompt';
 import { useEditorKeyboardShortcuts } from './hooks/useEditorKeyboardShortcuts';
 import { useEditorRecovery } from './hooks/useEditorRecovery';
+import { useEditorExport } from './hooks/useEditorExport';
 
 const FONTS = ['Arial', 'Times New Roman', 'Georgia', 'Verdana', 'Courier New', 'Trebuchet MS', 'Impact', 'Comic Sans MS'];
-const PDF_LEVELS: PdfCompressionLevel[] = ['none', 'low', 'medium', 'high'];
 type UiTheme = 'dark' | 'light';
 const fileSystemPort = getFileSystemPort();
 
@@ -98,7 +95,7 @@ import FileMenu from './components/editor/FileMenu';
 import SaveStatus from './components/editor/SaveStatus';
 import QuickSettingsMenu from './components/editor/QuickSettingsMenu';
 import KeyboardShortcutsDialog from './components/editor/KeyboardShortcutsDialog';
-import ExportDialog, { type ExportRequest } from './components/editor/ExportDialog';
+import ExportDialog from './components/editor/ExportDialog';
 
 const LAYOUT_NAME_KEYS: Partial<Record<string, TranslationKey>> = {
   'cover-full': 'layoutCoverFull',
@@ -289,33 +286,25 @@ function Editor({
   const [canvasZoomMode, setCanvasZoomMode] = useState<'fit' | 'manual'>('fit');
   const [canvasManualZoom, setCanvasManualZoom] = useState(1);
   const [canvasDisplayScale, setCanvasDisplayScale] = useState(1);
-  const exportAbortRef = useRef<AbortController | null>(null);
-  const [exportJob, setExportJob] = useState<{ label: string; completed: number; total: number } | null>(null);
-  const [exportError, setExportError] = useState<string | null>(null);
   const [uiError, setUiError] = useState<string | null>(null);
   const [uiNotice, setUiNotice] = useState<string | null>(null);
   const [noticeCanUndo, setNoticeCanUndo] = useState(false);
   const [importJob, setImportJob] = useState<{ completed: number; total: number } | null>(null);
   const [showHomeConfirm, setShowHomeConfirm] = useState(false);
-  const [showExportDialog, setShowExportDialog] = useState(false);
   const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false);
   const toggleMenu = useCallback(
     (name: string) => setOpenMenu((prev) => (prev === name ? null : name)),
     [],
   );
   const closeMenu = useCallback(() => setOpenMenu(null), []);
-  const exportDialogRef = useDialogFocus<HTMLDivElement>(exportJob !== null, () => exportAbortRef.current?.abort());
-  const [pdfDefaultLevel, setPdfDefaultLevel] = useState<PdfCompressionLevel>(() => {
-    const saved = readStoredString('layox_pdfDefaultLevel', 'medium');
-    if (saved && PDF_LEVELS.includes(saved as PdfCompressionLevel)) {
-      return saved as PdfCompressionLevel;
-    }
-    return 'medium';
+  const editorExport = useEditorExport({
+    pages,
+    assets: assetBlobs,
+    projectName,
+    defaultLayoutPadding,
+    defaultLayoutGap,
   });
-
-  useEffect(() => {
-    writeStoredString('layox_pdfDefaultLevel', pdfDefaultLevel);
-  }, [pdfDefaultLevel]);
+  const exportDialogRef = useDialogFocus<HTMLDivElement>(editorExport.job !== null, editorExport.cancel);
 
   useEffect(() => {
     writeStoredString('layox_showQuickImageBar', String(showQuickImageBar));
@@ -578,80 +567,9 @@ function Editor({
     else setShowEditor(false);
   };
 
-  // ─── Export handlers ──────────────────────────────────────────────────
-  const exportContext = useMemo<ProjectExportContext>(() => ({
-    pages,
-    assets: assetBlobs,
-    projectName,
-    renderer: konvaPageRenderer,
-    defaultLayoutPadding,
-    defaultLayoutGap,
-  }), [assetBlobs, defaultLayoutGap, defaultLayoutPadding, pages, projectName]);
-
-  const runExport = useCallback(async (
-    label: string,
-    total: number,
-    operation: (job: ExportJobOptions) => Promise<void>,
-  ) => {
-    if (exportAbortRef.current) return;
-    const controller = new AbortController();
-    exportAbortRef.current = controller;
-    setExportError(null);
-    setExportJob({ label, completed: 0, total });
-    try {
-      await operation({
-        signal: controller.signal,
-        onProgress: (completed, progressTotal) => {
-          setExportJob({ label, completed, total: progressTotal });
-        },
-      });
-    } catch (error) {
-      if (!(error instanceof DOMException && error.name === 'AbortError')) {
-        setExportError(error instanceof Error ? error.message : String(error));
-      }
-    } finally {
-      exportAbortRef.current = null;
-      setExportJob(null);
-    }
-  }, []);
-
   const handleOpenExport = () => {
     closeMenu();
-    setShowExportDialog(true);
-  };
-
-  const handleExportRequest = async (request: ExportRequest) => {
-    setShowExportDialog(false);
-    setPdfDefaultLevel(request.compression);
-    const total = request.pageIndices.length;
-    if (request.format === 'pdf') {
-      await runExport('PDF', total, (job) => exportAsPdf(
-        exportContext,
-        request.compression,
-        job,
-        request.pageIndices,
-        request.fileName,
-      ));
-      return;
-    }
-    if (request.scope === 'current') {
-      const pageIndex = request.pageIndices[0];
-      await runExport(request.format.toUpperCase(), 1, (job) => (
-        request.format === 'png'
-          ? exportCurrentPageAsPng(exportContext, pageIndex, job, request.fileName)
-          : exportCurrentPageAsJpeg(exportContext, pageIndex, job, request.fileName, request.compression)
-      ));
-      return;
-    }
-    const zipFormat = request.format === 'png' ? 'png' : 'jpeg';
-    await runExport(`${request.format.toUpperCase()} ZIP`, total, (job) => exportAllPagesAsZip(
-      exportContext,
-      zipFormat,
-      job,
-      request.pageIndices,
-      request.fileName,
-      request.compression,
-    ));
+    editorExport.openDialog();
   };
 
   const setManualCanvasZoom = (scale: number) => {
@@ -1337,7 +1255,7 @@ function Editor({
         )}
       </div>
 
-      {exportJob && (
+      {editorExport.job && (
         <div
           ref={exportDialogRef}
           className="fixed inset-0 z-[150] flex items-center justify-center bg-black/70"
@@ -1348,20 +1266,20 @@ function Editor({
         >
           <div className="editor-dropdown w-80 rounded-2xl border border-neutral-700 bg-neutral-900 p-5 shadow-2xl">
             <h3 id="layox-export-progress-title" className="text-base font-semibold text-white">
-              {t('exportProgress').replace('{format}', exportJob.label)}
+              {t('exportProgress').replace('{format}', editorExport.job.label)}
             </h3>
             <div className="mt-3 h-2 overflow-hidden rounded-full bg-neutral-700">
               <div
                 className="h-full bg-blue-500 transition-[width]"
-                style={{ width: `${exportJob.total > 0 ? (exportJob.completed / exportJob.total) * 100 : 0}%` }}
+                style={{ width: `${editorExport.job.total > 0 ? (editorExport.job.completed / editorExport.job.total) * 100 : 0}%` }}
               />
             </div>
             <div className="mt-2 text-xs text-neutral-400" aria-live="polite">
-              {exportJob.completed} / {exportJob.total}
+              {editorExport.job.completed} / {editorExport.job.total}
             </div>
             <button
               type="button"
-              onClick={() => exportAbortRef.current?.abort()}
+              onClick={editorExport.cancel}
               className="mt-4 w-full rounded-lg border border-neutral-600 bg-neutral-800 py-2 text-sm text-neutral-200 hover:bg-neutral-700"
             >
               {t('cancel')}
@@ -1370,10 +1288,10 @@ function Editor({
         </div>
       )}
 
-      {exportError && (
+      {editorExport.error && (
         <div className="fixed bottom-5 left-1/2 z-[140] flex max-w-lg -translate-x-1/2 items-center gap-3 rounded-xl border border-red-700 bg-red-950 px-4 py-3 text-sm text-red-100 shadow-2xl" role="alert">
-          <span>{t('exportFailed')}: {exportError}</span>
-          <button type="button" onClick={() => setExportError(null)} className="rounded px-2 py-1 hover:bg-red-900" aria-label={t('close')}>×</button>
+          <span>{t('exportFailed')}: {editorExport.error}</span>
+          <button type="button" onClick={editorExport.clearError} className="rounded px-2 py-1 hover:bg-red-900" aria-label={t('close')}>×</button>
         </div>
       )}
 
@@ -1440,14 +1358,14 @@ function Editor({
         />
       )}
 
-      {showExportDialog && (
+      {editorExport.dialogOpen && (
         <ExportDialog
           t={t}
-          context={exportContext}
+          context={editorExport.context}
           currentPageIndex={currentPageIndex}
-          defaultCompression={pdfDefaultLevel}
-          onClose={() => setShowExportDialog(false)}
-          onExport={(request) => void handleExportRequest(request)}
+          defaultCompression={editorExport.defaultCompression}
+          onClose={editorExport.closeDialog}
+          onExport={(request) => void editorExport.requestExport(request)}
         />
       )}
 
