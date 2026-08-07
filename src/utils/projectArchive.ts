@@ -32,7 +32,7 @@ function entrySizes(entry: JSZip.JSZipObject): { compressed: number; uncompresse
   return { compressed, uncompressed };
 }
 
-function validateArchiveMetadata(zip: JSZip): void {
+export function validateArchiveMetadata(zip: JSZip): void {
   const entries = Object.values(zip.files);
   if (entries.length > MAX_PROJECT_ARCHIVE_ENTRIES) {
     throw new Error('Invalid .layox file: the archive contains too many entries.');
@@ -100,6 +100,7 @@ export async function loadProjectArchive(
   const projectFile = zip.file('project.json');
   if (!projectFile) throw new Error('Invalid .layox file: missing project.json.');
   const projectBlob = await projectFile.async('blob');
+  /* v8 ignore next 3 -- defense in depth if ZIP metadata and extracted size disagree */
   if (projectBlob.size > MAX_PROJECT_JSON_BYTES) {
     throw new Error('Invalid .layox file: project.json exceeds 5 MiB.');
   }
@@ -114,7 +115,7 @@ export async function loadProjectArchive(
 
   const assetBlobs: Record<string, Blob> = {};
   for (const entry of zip.file(/^assets\//)) {
-    if (entry.dir || entry.name.includes('..')) continue;
+    if (entry.dir) continue;
     assetBlobs[entry.name] = await entry.async('blob');
   }
 
