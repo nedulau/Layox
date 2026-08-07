@@ -33,6 +33,13 @@ import {
 import { createSaveCoordinator } from '../services/saveCoordinator';
 import { createCenteredImageElement } from '../services/imageElementFactory';
 import { MAX_LAYOUT_SPACING } from '../constants/layouts';
+import {
+  appendHistoryEntry,
+  createHistoryEntry,
+  discardMatchingHistoryTail,
+  prependFutureEntry,
+  type HistoryEntry,
+} from './projectHistory';
 const fileSystemPort = getFileSystemPort();
 
 function clampLayoutSpacing(value: number): number {
@@ -51,11 +58,6 @@ export type { RecentProject };
 export interface AddImageResult {
   assetPath: string;
   placement: 'placed' | 'library-only';
-}
-
-interface HistoryEntry {
-  project: Project;
-  assetBlobs: Record<string, Blob>;
 }
 
 interface ProjectState {
@@ -317,27 +319,25 @@ const useProjectStore = create<ProjectState>((baseSet, get) => {
 
   snapshot: () => {
     const { project, assetBlobs, historyPast } = get();
-    const entry: HistoryEntry = {
-      project: JSON.parse(JSON.stringify(project)) as Project,
-      assetBlobs: { ...assetBlobs },
-    };
+    const entry = createHistoryEntry(project, assetBlobs);
     set({
-      historyPast: [...historyPast, entry].slice(-50),
+      historyPast: appendHistoryEntry(historyPast, entry, assetBlobs),
       historyFuture: [],
     });
   },
 
   undo: () => {
     const { historyPast, historyFuture, project, assetBlobs } = get();
-    if (historyPast.length === 0) return;
-    const prev = historyPast[historyPast.length - 1];
-    const currentEntry: HistoryEntry = {
-      project: JSON.parse(JSON.stringify(project)) as Project,
-      assetBlobs: { ...assetBlobs },
-    };
+    const actionableHistory = discardMatchingHistoryTail(historyPast, project, assetBlobs);
+    if (actionableHistory.length === 0) {
+      if (actionableHistory.length !== historyPast.length) set({ historyPast: actionableHistory });
+      return;
+    }
+    const prev = actionableHistory[actionableHistory.length - 1];
+    const currentEntry = createHistoryEntry(project, assetBlobs);
     set({
-      historyPast: historyPast.slice(0, -1),
-      historyFuture: [currentEntry, ...historyFuture].slice(0, 50),
+      historyPast: actionableHistory.slice(0, -1),
+      historyFuture: prependFutureEntry(historyFuture, currentEntry),
       project: prev.project,
       assetBlobs: prev.assetBlobs,
       selectedElementId: null,
@@ -349,12 +349,9 @@ const useProjectStore = create<ProjectState>((baseSet, get) => {
     const { historyPast, historyFuture, project, assetBlobs } = get();
     if (historyFuture.length === 0) return;
     const next = historyFuture[0];
-    const currentEntry: HistoryEntry = {
-      project: JSON.parse(JSON.stringify(project)) as Project,
-      assetBlobs: { ...assetBlobs },
-    };
+    const currentEntry = createHistoryEntry(project, assetBlobs);
     set({
-      historyPast: [...historyPast, currentEntry],
+      historyPast: appendHistoryEntry(historyPast, currentEntry, assetBlobs),
       historyFuture: historyFuture.slice(1),
       project: next.project,
       assetBlobs: next.assetBlobs,

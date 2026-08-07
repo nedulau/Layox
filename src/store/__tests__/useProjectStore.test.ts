@@ -251,6 +251,16 @@ describe('useProjectStore', () => {
       expect(getState().historyPast).toHaveLength(1);
     });
 
+    it('deduplicates identical snapshots and discards no-op undo entries', () => {
+      getState().snapshot();
+      getState().snapshot();
+      expect(getState().historyPast).toHaveLength(1);
+
+      getState().undo();
+      expect(getState().historyPast).toHaveLength(0);
+      expect(getState().historyFuture).toHaveLength(0);
+    });
+
     it('undo restores previous state', () => {
       const originalName = getState().project.meta.name;
       getState().snapshot();
