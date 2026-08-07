@@ -32,6 +32,11 @@ import {
 } from '../domain/projectOperations';
 import { createSaveCoordinator } from '../services/saveCoordinator';
 import { createCenteredImageElement } from '../services/imageElementFactory';
+import {
+  appendImageToFreePage,
+  assignAssetToLayoutPage,
+  prepareImportedAsset,
+} from '../services/projectImagePlacement';
 import { MAX_LAYOUT_SPACING } from '../constants/layouts';
 import {
   appendHistoryEntry,
@@ -801,47 +806,23 @@ const useProjectStore = create<ProjectState>((baseSet, get) => {
     const targetPageId = page.id;
     const targetLayoutId = page.layoutId;
 
-    const id = uuidv4();
-    const safeFileName = file.name
-      .replace(/\.\.+/g, '.')
-      .replace(/[^\p{L}\p{N}._ -]/gu, '_')
-      .slice(0, 240) || 'image';
-    const assetPath = `assets/${id}_${safeFileName}`;
-    const blob = file.slice();
+    const { id, assetPath, blob } = prepareImportedAsset(file);
 
     if (page.layoutId) {
       // Layout mode: assign to slot
-      const layout = getLayoutById(page.layoutId);
-      if (!layout) {
-        set((state) => ({ assetBlobs: { ...state.assetBlobs, [assetPath]: blob } }));
-        return { assetPath, placement: 'library-only' };
-      }
-
-      let targetSlot = get().selectedSlotIndex;
-      if (targetSlot === null) {
-        // Find next empty slot
-        const assignments = page.slotAssignments ?? {};
-        const emptyIdx = layout.slots.findIndex((_, i) => !assignments[i]);
-        if (emptyIdx === -1) {
-          set((state) => ({ assetBlobs: { ...state.assetBlobs, [assetPath]: blob } }));
-          return { assetPath, placement: 'library-only' };
-        }
-        targetSlot = emptyIdx;
-      }
-
-      const finalSlot = targetSlot;
+      let placement: AddImageResult['placement'] = 'library-only';
+      const requestedSlot = get().selectedSlotIndex;
       set((state) => {
-        const pages = [...state.project.pages];
-        const p = { ...pages[state.currentPageIndex] };
-        p.slotAssignments = { ...(p.slotAssignments ?? {}), [finalSlot]: { assetPath, offsetX: 0, offsetY: 0, scale: 1 } };
-        pages[state.currentPageIndex] = p;
+        const project = assignAssetToLayoutPage(state.project, targetPageId, requestedSlot, assetPath);
+        if (!project) return { assetBlobs: { ...state.assetBlobs, [assetPath]: blob } };
+        placement = 'placed';
         return {
-          project: { ...state.project, pages },
+          project,
           assetBlobs: { ...state.assetBlobs, [assetPath]: blob },
           selectedSlotIndex: null,
         };
       });
-      return { assetPath, placement: 'placed' };
+      return { assetPath, placement };
     } else {
       // Free mode: create ImageElement
       const element = await createCenteredImageElement({
@@ -853,19 +834,13 @@ const useProjectStore = create<ProjectState>((baseSet, get) => {
 
       let placement: AddImageResult['placement'] = 'library-only';
       set((state) => {
-        const pages = [...state.project.pages];
-        const targetPageIndex = pages.findIndex((candidate) => candidate.id === targetPageId);
-        const current = pages[targetPageIndex];
-        if (!current || current.layoutId !== targetLayoutId) {
+        const project = appendImageToFreePage(state.project, targetPageId, targetLayoutId, element);
+        if (!project) {
           return { assetBlobs: { ...state.assetBlobs, [assetPath]: blob } };
         }
-        pages[targetPageIndex] = {
-          ...current,
-          elements: [...current.elements, element],
-        };
         placement = 'placed';
         return {
-          project: { ...state.project, pages },
+          project,
           assetBlobs: { ...state.assetBlobs, [assetPath]: blob },
           selectedElementId: element.id,
           selectedSlotIndex: null,
@@ -885,28 +860,12 @@ const useProjectStore = create<ProjectState>((baseSet, get) => {
     if (!blob) return;
 
     if (page.layoutId) {
-      const layout = getLayoutById(page.layoutId);
-      if (!layout) return;
-
-      let targetSlot = get().selectedSlotIndex;
-      if (targetSlot === null) {
-        const assignments = page.slotAssignments ?? {};
-        const emptyIdx = layout.slots.findIndex((_, i) => !assignments[i]);
-        if (emptyIdx === -1) return;
-        targetSlot = emptyIdx;
-      }
-
-      const finalSlot = targetSlot;
+      const requestedSlot = get().selectedSlotIndex;
       set((state) => {
-        const pages = [...state.project.pages];
-        const p = { ...pages[state.currentPageIndex] };
-        p.slotAssignments = {
-          ...(p.slotAssignments ?? {}),
-          [finalSlot]: { assetPath, offsetX: 0, offsetY: 0, scale: 1 },
-        };
-        pages[state.currentPageIndex] = p;
+        const project = assignAssetToLayoutPage(state.project, targetPageId, requestedSlot, assetPath);
+        if (!project) return state;
         return {
-          project: { ...state.project, pages },
+          project,
           selectedSlotIndex: null,
           selectedElementId: null,
         };
@@ -922,16 +881,10 @@ const useProjectStore = create<ProjectState>((baseSet, get) => {
     });
 
     set((state) => {
-      const pages = [...state.project.pages];
-      const targetPageIndex = pages.findIndex((candidate) => candidate.id === targetPageId);
-      const current = pages[targetPageIndex];
-      if (!current || current.layoutId !== targetLayoutId) return state;
-      pages[targetPageIndex] = {
-        ...current,
-        elements: [...current.elements, element],
-      };
+      const project = appendImageToFreePage(state.project, targetPageId, targetLayoutId, element);
+      if (!project) return state;
       return {
-        project: { ...state.project, pages },
+        project,
         selectedElementId: element.id,
         selectedSlotIndex: null,
       };
