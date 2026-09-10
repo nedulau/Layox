@@ -42,6 +42,15 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
+test('production policy excludes development-only network destinations', async ({ page }) => {
+  await page.goto('/');
+  const policy = await page.locator('meta[http-equiv="Content-Security-Policy"]').getAttribute('content');
+  expect(policy).toContain("connect-src 'self'");
+  expect(policy).toContain("form-action 'none'");
+  expect(policy).not.toContain('localhost');
+  expect(policy).not.toContain('127.0.0.1');
+});
+
 test('creates, edits, crops, undoes and redoes an album', async ({ page }) => {
   await createProject(page);
   await selectLayout(page, /Raster \(4\)/);

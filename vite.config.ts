@@ -4,8 +4,11 @@ import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
 // https://vite.dev/config/
-export default defineConfig(({ mode }) => {
+export default defineConfig(({ command, mode }) => {
   const isElectronBuild = mode === 'electron'
+  const developmentConnectSources = command === 'serve'
+    ? ' ws://localhost:* ws://127.0.0.1:* http://localhost:* http://127.0.0.1:*'
+    : ''
 
   return {
     base: isElectronBuild ? './' : '/',
@@ -22,6 +25,13 @@ export default defineConfig(({ mode }) => {
       },
     },
     plugins: [
+      {
+        name: 'layox-content-security-policy',
+        transformIndexHtml: (html: string) => html.replace(
+          '__LAYOX_DEVELOPMENT_CONNECT_SOURCES__',
+          developmentConnectSources,
+        ),
+      },
       react(),
       tailwindcss(),
       VitePWA({
