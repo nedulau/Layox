@@ -2,7 +2,7 @@ import { app, BrowserWindow, dialog, ipcMain } from 'electron';
 import { promises as fs } from 'node:fs';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 /** @typedef {{ name: string, data: ArrayBuffer, targetPath?: string | null }} SaveProjectPayload */
 /** @typedef {{ failNextAtomicSave: boolean }} E2EState */
@@ -22,6 +22,9 @@ const __dirname = path.dirname(__filename);
 
 const WINDOW_WIDTH = 1500;
 const WINDOW_HEIGHT = 980;
+const MAX_PROJECT_ARCHIVE_BYTES = 2 * 1024 * 1024 * 1024;
+const MAX_STORAGE_KEY_LENGTH = 128;
+const MAX_STORAGE_VALUE_BYTES = 1024 * 1024;
 
 /** @type {BrowserWindow | null} */
 let mainWindow = null;
@@ -58,8 +61,58 @@ function isValidSavePayload(payload) {
       candidate.name.length <= 255 &&
       candidate.name.toLowerCase().endsWith('.layox') &&
       candidate.data instanceof ArrayBuffer &&
+      candidate.data.byteLength > 0 &&
+      candidate.data.byteLength <= MAX_PROJECT_ARCHIVE_BYTES &&
       (candidate.targetPath === undefined || candidate.targetPath === null || isValidProjectPath(candidate.targetPath)),
   );
+}
+
+/** @param {unknown} key */
+function isValidStorageKey(key) {
+  return typeof key === 'string' && key.length > 0 && key.length <= MAX_STORAGE_KEY_LENGTH;
+}
+
+/** @param {unknown} value */
+function isValidStorageValue(value) {
+  return typeof value === 'string' && Buffer.byteLength(value, 'utf8') <= MAX_STORAGE_VALUE_BYTES;
+}
+
+/** @param {Electron.IpcMainEvent | Electron.IpcMainInvokeEvent} event */
+function isTrustedIpcSender(event) {
+  return Boolean(
+    mainWindow &&
+      !mainWindow.isDestroyed() &&
+      event.sender === mainWindow.webContents &&
+      event.senderFrame === mainWindow.webContents.mainFrame,
+  );
+}
+
+function resolveDevServerUrl() {
+  const configuredUrl = process.env.LAYOX_DEV_SERVER_URL;
+  if (!configuredUrl) return null;
+  if (app.isPackaged) throw new Error('LAYOX_DEV_SERVER_URL is disabled in packaged builds.');
+
+  const parsedUrl = new URL(configuredUrl);
+  const allowedHosts = new Set(['localhost', '127.0.0.1', '[::1]']);
+  if (parsedUrl.protocol !== 'http:' || !allowedHosts.has(parsedUrl.hostname) || parsedUrl.username || parsedUrl.password) {
+    throw new Error('LAYOX_DEV_SERVER_URL must use HTTP on a loopback host.');
+  }
+  return parsedUrl;
+}
+
+/** @param {string} targetUrl @param {URL} entryUrl */
+function isAllowedRendererUrl(targetUrl, entryUrl) {
+  try {
+    const candidate = new URL(targetUrl);
+    if (entryUrl.protocol === 'file:') {
+      return candidate.protocol === 'file:' &&
+        candidate.pathname === entryUrl.pathname &&
+        candidate.search === entryUrl.search;
+    }
+    return candidate.origin === entryUrl.origin;
+  } catch {
+    return false;
+  }
 }
 
 /** @param {string} targetPath @param {ArrayBuffer} data */
@@ -84,6 +137,15 @@ async function writeFileAtomically(targetPath, data) {
   }
 }
 
+/** @param {string} filePath */
+async function readProjectFile(filePath) {
+  const fileStats = await fs.stat(filePath);
+  if (!fileStats.isFile() || fileStats.size <= 0 || fileStats.size > MAX_PROJECT_ARCHIVE_BYTES) {
+    throw new Error('The selected Layox project has an invalid file size.');
+  }
+  return fs.readFile(filePath);
+}
+
 /** @param {Buffer} buffer */
 function toArrayBuffer(buffer) {
   return buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
@@ -97,7 +159,7 @@ function toBuffer(arrayBuffer) {
 function ensureStorePath() {
   if (storeFilePath) return storeFilePath;
   const userDataDir = app.getPath('userData');
-  mkdirSync(userDataDir, { recursive: true });
+  mkdirSync(userDataDir, { recursive: true, mode: 0o700 });
   storeFilePath = path.join(userDataDir, 'layox-settings.json');
   return storeFilePath;
 }
@@ -131,10 +193,16 @@ function loadStorageCache() {
 
 function persistStorageCache() {
   const resolvedPath = ensureStorePath();
-  writeFileSync(resolvedPath, JSON.stringify(storageCache, null, 2), 'utf-8');
+  writeFileSync(resolvedPath, JSON.stringify(storageCache, null, 2), {
+    encoding: 'utf-8',
+    mode: 0o600,
+  });
 }
 
 function createWindow() {
+  const devServerUrl = resolveDevServerUrl();
+  const rendererEntryUrl = devServerUrl ?? pathToFileURL(path.join(__dirname, '../../dist/index.html'));
+
   mainWindow = new BrowserWindow({
     width: WINDOW_WIDTH,
     height: WINDOW_HEIGHT,
@@ -147,31 +215,34 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      webSecurity: true,
+      allowRunningInsecureContent: false,
     },
   });
 
   mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  mainWindow.webContents.on('will-attach-webview', (event) => event.preventDefault());
   mainWindow.webContents.on('will-navigate', (event, targetUrl) => {
-    const currentUrl = mainWindow?.webContents.getURL();
-    if (currentUrl && new URL(targetUrl).origin === new URL(currentUrl).origin) return;
+    if (isAllowedRendererUrl(targetUrl, rendererEntryUrl)) return;
     event.preventDefault();
   });
+  mainWindow.webContents.session.setPermissionCheckHandler(() => false);
   mainWindow.webContents.session.setPermissionRequestHandler((_webContents, _permission, callback) => {
     callback(false);
   });
 
-  const devServerUrl = process.env.LAYOX_DEV_SERVER_URL;
   if (devServerUrl) {
-    mainWindow.loadURL(devServerUrl);
+    mainWindow.loadURL(devServerUrl.href);
   } else {
-    mainWindow.loadFile(path.join(__dirname, '../../dist/index.html'));
+    mainWindow.loadURL(rendererEntryUrl.href);
   }
 }
 
 function registerIpcHandlers() {
   loadStorageCache();
 
-  ipcMain.handle(IPC_CHANNELS.openProject, async () => {
+  ipcMain.handle(IPC_CHANNELS.openProject, async (event) => {
+    if (!isTrustedIpcSender(event)) return null;
     const result = await dialog.showOpenDialog({
       title: 'Open Layox Project',
       filters: [{ name: 'Layox Project', extensions: ['layox'] }],
@@ -183,7 +254,7 @@ function registerIpcHandlers() {
     }
 
     const filePath = result.filePaths[0];
-    const fileData = await fs.readFile(filePath);
+    const fileData = await readProjectFile(filePath);
     return {
       name: path.basename(filePath),
       data: toArrayBuffer(fileData),
@@ -192,9 +263,10 @@ function registerIpcHandlers() {
   });
 
   ipcMain.handle(IPC_CHANNELS.openProjectFromPath, async (_event, filePath) => {
+    if (!isTrustedIpcSender(_event)) return null;
     if (!isValidProjectPath(filePath)) return null;
     try {
-      const fileData = await fs.readFile(filePath);
+      const fileData = await readProjectFile(filePath);
       return {
         name: path.basename(filePath),
         data: toArrayBuffer(fileData),
@@ -206,6 +278,7 @@ function registerIpcHandlers() {
   });
 
   ipcMain.handle(IPC_CHANNELS.saveProject, async (_event, payload) => {
+    if (!isTrustedIpcSender(_event)) return null;
     if (!isValidSavePayload(payload)) return null;
 
     let targetPath = isValidProjectPath(payload.targetPath) ? payload.targetPath : null;
@@ -224,6 +297,7 @@ function registerIpcHandlers() {
   });
 
   ipcMain.handle(IPC_CHANNELS.saveProjectAs, async (_event, payload) => {
+    if (!isTrustedIpcSender(_event)) return null;
     if (!isValidSavePayload(payload)) return null;
 
     const result = await dialog.showSaveDialog({
@@ -239,12 +313,15 @@ function registerIpcHandlers() {
   });
 
   ipcMain.on(IPC_CHANNELS.storageGet, (event, key) => {
-    if (typeof key !== 'string') return null;
+    if (!isTrustedIpcSender(event) || !isValidStorageKey(key)) {
+      event.returnValue = null;
+      return;
+    }
     event.returnValue = storageCache[key] ?? null;
   });
 
   ipcMain.on(IPC_CHANNELS.storageSet, (event, key, value) => {
-    if (typeof key !== 'string' || typeof value !== 'string') {
+    if (!isTrustedIpcSender(event) || !isValidStorageKey(key) || !isValidStorageValue(value)) {
       event.returnValue = false;
       return;
     }
@@ -259,7 +336,7 @@ function registerIpcHandlers() {
   });
 
   ipcMain.on(IPC_CHANNELS.storageRemove, (event, key) => {
-    if (typeof key !== 'string') {
+    if (!isTrustedIpcSender(event) || !isValidStorageKey(key)) {
       event.returnValue = false;
       return;
     }

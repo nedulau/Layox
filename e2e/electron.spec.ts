@@ -76,6 +76,15 @@ test('Electron saves in place, saves as and blocks external windows', async () =
       return prevented;
     });
     expect(externalNavigationWasBlocked).toBe(true);
+    const otherLocalFileWasBlocked = await electronApp.evaluate(({ BrowserWindow }) => {
+      const mainWindow = BrowserWindow.getAllWindows()[0];
+      let prevented = false;
+      mainWindow.webContents.emit('will-navigate', {
+        preventDefault: () => { prevented = true; },
+      } as Electron.Event, 'file:///tmp/untrusted.html');
+      return prevented;
+    });
+    expect(otherLocalFileWasBlocked).toBe(true);
     expect(window.url()).toBe(originalUrl);
     expect((await readFile(firstPath)).subarray(0, 2).toString()).toBe('PK');
 
