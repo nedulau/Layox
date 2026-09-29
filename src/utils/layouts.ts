@@ -174,7 +174,8 @@ export function getLayoutById(id: string): LayoutTemplate | undefined {
   return LAYOUT_TEMPLATES.find((l) => l.id === id);
 }
 
-export function computeLayoutSlots(layoutId: string, padding: number, gap: number): LayoutSlot[] {
+export function computeLayoutSlots(layoutId: string, padding: number, gap: number, size = { width: W, height: H }): LayoutSlot[] {
+  const { width: W, height: H } = size;
   const IW = W - 2 * padding;
   const IH = H - 2 * padding;
 

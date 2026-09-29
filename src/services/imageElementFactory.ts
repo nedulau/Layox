@@ -1,9 +1,4 @@
-import {
-  CANVAS_H,
-  CANVAS_IMAGE_MAX_H,
-  CANVAS_IMAGE_MAX_W,
-  CANVAS_W,
-} from '../constants/canvas';
+import { getPageSize, type PageSize } from '../domain/pageFormat';
 import type { ImageElement } from '../types';
 
 interface ImageElementFactoryOptions {
@@ -11,6 +6,7 @@ interface ImageElementFactoryOptions {
   assetPath: string;
   blob: Blob;
   zIndex: number;
+  size?: PageSize;
 }
 
 function readImageDimensions(blob: Blob): Promise<{ width: number; height: number }> {
@@ -27,11 +23,11 @@ function readImageDimensions(blob: Blob): Promise<{ width: number; height: numbe
   });
 }
 
-function fitWithinCanvas(width: number, height: number): { width: number; height: number } {
-  if (width <= CANVAS_IMAGE_MAX_W && height <= CANVAS_IMAGE_MAX_H) {
+function fitWithinCanvas(width: number, height: number, size: PageSize): { width: number; height: number } {
+  if (width <= size.width * 0.75 && height <= size.height * 0.75) {
     return { width, height };
   }
-  const scale = Math.min(CANVAS_IMAGE_MAX_W / width, CANVAS_IMAGE_MAX_H / height);
+  const scale = Math.min(size.width * 0.75 / width, size.height * 0.75 / height);
   return {
     width: Math.round(width * scale),
     height: Math.round(height * scale),
@@ -44,14 +40,15 @@ export async function createCenteredImageElement({
   assetPath,
   blob,
   zIndex,
+  size: pageSize = getPageSize(),
 }: ImageElementFactoryOptions): Promise<ImageElement> {
   const naturalSize = await readImageDimensions(blob);
-  const size = fitWithinCanvas(naturalSize.width, naturalSize.height);
+  const size = fitWithinCanvas(naturalSize.width, naturalSize.height, pageSize);
   return {
     id,
     type: 'image',
-    x: Math.round((CANVAS_W - size.width) / 2),
-    y: Math.round((CANVAS_H - size.height) / 2),
+    x: Math.round((pageSize.width - size.width) / 2),
+    y: Math.round((pageSize.height - size.height) / 2),
     width: size.width,
     height: size.height,
     rotation: 0,

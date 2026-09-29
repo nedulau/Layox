@@ -1,3 +1,4 @@
+import type { PageFormat } from '../domain/pageFormat';
 import type { Page } from '../types';
 
 export interface PageRenderOptions {
@@ -7,6 +8,7 @@ export interface PageRenderOptions {
   defaultLayoutPadding: number;
   defaultLayoutGap: number;
   signal?: AbortSignal;
+  pageFormat?: PageFormat;
 }
 
 export interface PageRenderer {

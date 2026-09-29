@@ -22,4 +22,4 @@ Layox has no backend requirement, analytics SDK, telemetry, or production tracki
 
 ## Stable scope
 
-The supported beta keeps the 1200 x 900 internal canvas, A4 landscape PDF output, existing layout templates, and compression presets. Capacitor remains experimental; Web/PWA and Linux AppImage are the release-supported targets.
+The supported beta supports classic 1200 × 900 projects plus A4 landscape/portrait and square page formats, selectable export DPI, existing layout templates, and compression presets. Capacitor remains experimental; Web/PWA and Linux AppImage are the release-supported targets.

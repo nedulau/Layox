@@ -47,7 +47,7 @@ export function createDefaultProject(name = 'Untitled Project'): Project {
     meta: {
       id: uuidv4(),
       name,
-      version: '1.1',
+      version: '1.2',
       defaultLayoutPadding: DEFAULT_LAYOUT_PADDING,
       defaultLayoutGap: DEFAULT_LAYOUT_GAP,
     },

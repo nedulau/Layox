@@ -153,3 +153,34 @@ test('auto-saves a complete recovery point and restores it after reload', async 
   await expect(page.getByTitle('Projektname bearbeiten')).toHaveValue('Recovery E2E');
   await expect(page.getByRole('button', { name: /icon-512\.png/ })).toBeVisible();
 });
+
+test('persists the page format and exports the selected pixel resolution', async ({ page }) => {
+  await createProject(page, 'Print format');
+  await page.getByRole('button', { name: 'Layout', exact: true }).click();
+  await page.getByLabel('Seitenformat', { exact: false }).selectOption('square');
+  await page.getByRole('button', { name: 'Layout', exact: true }).click();
+  const content = page.locator('.konvajs-content');
+  await expect(content).toHaveCSS('width', '1200px');
+  await expect(content).toHaveCSS('height', '1200px');
+
+  const saving = page.waitForEvent('download');
+  await openMenuItem(page, 'Datei', 'Speichern unter');
+  const projectPath = await (await saving).path();
+  const chooser = page.waitForEvent('filechooser');
+  await openMenuItem(page, 'Datei', 'Öffnen');
+  await (await chooser).setFiles(projectPath!);
+  await expect(content).toHaveCSS('height', '1200px');
+
+  const exporting = page.waitForEvent('download');
+  const dialog = await openExportDialog(page);
+  await dialog.getByRole('combobox', { name: 'Format', exact: true }).selectOption('png');
+  await dialog.getByLabel('Exportauflösung', { exact: false }).selectOption('150');
+  await dialog.getByRole('button', { name: 'Aktuelle Seite' }).click();
+  await dialog.getByRole('button', { name: 'Export starten' }).click();
+  const outputPath = await (await exporting).path();
+  const { readFile } = await import('node:fs/promises');
+  const bytes = await readFile(outputPath!);
+  // PNG IHDR records the actual raster size, independently of UI labels.
+  expect(bytes.readUInt32BE(16)).toBe(1240);
+  expect(bytes.readUInt32BE(20)).toBe(1240);
+});

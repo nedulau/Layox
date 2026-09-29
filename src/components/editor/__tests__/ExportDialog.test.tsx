@@ -33,7 +33,7 @@ describe('ExportDialog', () => {
     await user.click(screen.getByRole('button', { name: 'startExport' }));
 
     expect(onExport).toHaveBeenCalledWith({
-      format: 'png', scope: 'range', pageIndices: [1, 2], compression: 'medium', fileName: 'Selected pages',
+      format: 'png', dpi: 300, scope: 'range', pageIndices: [1, 2], compression: 'medium', fileName: 'Selected pages',
     });
   });
 

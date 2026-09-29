@@ -1,7 +1,7 @@
 import type KonvaType from 'konva';
 import type { Page, PageElement, SlotAssignment } from '../types';
 import type { PageRenderer, PageRenderOptions } from '../ports/pageRenderer';
-import { CANVAS_H, CANVAS_W } from '../constants/canvas';
+import { getPageSize, type PageSize } from '../domain/pageFormat';
 import { computeLayoutSlots } from './layouts';
 import {
   DEFAULT_COVER_SUBTITLE_COLOR,
@@ -163,13 +163,13 @@ function addPageElement(
   }));
 }
 
-function addCoverText(Konva: typeof KonvaType, layer: KonvaType.Layer, page: Page): void {
+function addCoverText(Konva: typeof KonvaType, layer: KonvaType.Layer, page: Page, size: PageSize): void {
   if (!page.isCover) return;
   if (page.coverTitle) {
     layer.add(new Konva.Text({
       x: page.coverTitleX ?? 0,
-      y: page.coverTitleY ?? CANVAS_H * 0.35,
-      width: CANVAS_W,
+      y: page.coverTitleY ?? size.height * 0.35,
+      width: size.width,
       text: page.coverTitle,
       fontSize: page.coverTitleFontSize ?? DEFAULT_COVER_TITLE_FONT_SIZE,
       fontFamily: page.coverTitleFontFamily ?? DEFAULT_COVER_TITLE_FONT_FAMILY,
@@ -185,8 +185,8 @@ function addCoverText(Konva: typeof KonvaType, layer: KonvaType.Layer, page: Pag
   if (page.showCoverSubtitle && page.coverSubtitle) {
     layer.add(new Konva.Text({
       x: page.coverSubtitleX ?? 0,
-      y: page.coverSubtitleY ?? CANVAS_H * 0.35 + 60,
-      width: CANVAS_W,
+      y: page.coverSubtitleY ?? size.height * 0.35 + 60,
+      width: size.width,
       text: page.coverSubtitle,
       fontSize: page.coverSubtitleFontSize ?? DEFAULT_COVER_SUBTITLE_FONT_SIZE,
       fontFamily: page.coverSubtitleFontFamily ?? DEFAULT_COVER_SUBTITLE_FONT_FAMILY,
@@ -219,11 +219,12 @@ export const konvaPageRenderer: PageRenderer = {
     ]);
     throwIfAborted(options.signal);
 
+    const size = getPageSize(options.pageFormat);
     const container = document.createElement('div');
     container.setAttribute('aria-hidden', 'true');
-    container.style.cssText = `position:fixed;left:-100000px;top:0;width:${CANVAS_W}px;height:${CANVAS_H}px;`;
+    container.style.cssText = `position:fixed;left:-100000px;top:0;width:${size.width}px;height:${size.height}px;`;
     document.body.appendChild(container);
-    const stage = new Konva.Stage({ container, width: CANVAS_W, height: CANVAS_H });
+    const stage = new Konva.Stage({ container, width: size.width, height: size.height });
     const layer = new Konva.Layer({ listening: false });
     stage.add(layer);
 
@@ -231,8 +232,8 @@ export const konvaPageRenderer: PageRenderer = {
       layer.add(new Konva.Rect({
         x: 0,
         y: 0,
-        width: CANVAS_W,
-        height: CANVAS_H,
+        width: size.width,
+        height: size.height,
         fill: page.background || DEFAULT_PAGE_BACKGROUND,
         listening: false,
       }));
@@ -242,6 +243,7 @@ export const konvaPageRenderer: PageRenderer = {
           page.layoutId,
           page.layoutPadding ?? options.defaultLayoutPadding,
           page.layoutGap ?? options.defaultLayoutGap,
+          size,
         );
         slots.forEach((slot, index) => {
           const assignment = page.slotAssignments?.[index];
@@ -252,7 +254,7 @@ export const konvaPageRenderer: PageRenderer = {
         });
       }
 
-      addCoverText(Konva, layer, page);
+      addCoverText(Konva, layer, page, size);
       page.elements
         .filter((element) => !page.layoutId || element.type === 'text')
         .sort((first, second) => first.zIndex - second.zIndex)

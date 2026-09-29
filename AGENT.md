@@ -26,7 +26,9 @@ Layox is a local-first photo album editor (no backend, no cloud), built with Rea
 - Current values:
   - `CANVAS_W = 1200`
   - `CANVAS_H = 900`
-- These values control:
+- These values define the classic format. `src/domain/pageFormat.ts` derives the active project dimensions and physical PDF size; pass that size through layout, placement and rendering.
+
+These values control:
   - Layout calculation
   - Konva stage size
   - Export scaling

@@ -3,6 +3,7 @@ import type { Translator } from '../../i18n';
 import type { PdfCompressionLevel, ProjectExportContext, ExportPreflight } from '../../utils/exportProject';
 import { analyzeExportPreflight, PDF_COMPRESSION_PRESETS } from '../../utils/exportProject';
 import { parsePageRange } from '../../utils/pageRange';
+import { getPageSize, getExportPixelRatio } from '../../domain/pageFormat';
 import { useDialogFocus } from '../common/useDialogFocus';
 
 export type ExportFormat = 'pdf' | 'png' | 'jpeg';
@@ -14,6 +15,7 @@ export interface ExportRequest {
   pageIndices: number[];
   compression: PdfCompressionLevel;
   fileName: string;
+  dpi?: number;
 }
 
 function estimateSize(format: ExportFormat, compression: PdfCompressionLevel, pageCount: number): string {
@@ -49,6 +51,7 @@ export default function ExportDialog({
   onClose: () => void;
   onExport: (request: ExportRequest) => void;
 }) {
+  const [dpi, setDpi] = useState(300);
   const [format, setFormat] = useState<ExportFormat>('pdf');
   const [scope, setScope] = useState<ExportScope>('all');
   const [range, setRange] = useState('');
@@ -71,13 +74,13 @@ export default function ExportDialog({
   useEffect(() => {
     if (pageSelection.error || pageSelection.indices.length === 0) return;
     let active = true;
-    void analyzeExportPreflight(context, pageSelection.indices).then((result) => {
+    void analyzeExportPreflight(context, pageSelection.indices, dpi).then((result) => {
       if (active) setPreflight(result);
     });
     return () => {
       active = false;
     };
-  }, [context, pageSelection.error, pageSelection.indices]);
+  }, [context, pageSelection.error, pageSelection.indices, dpi]);
 
   const issues = preflight
     ? preflight.emptySlotCount + preflight.missingAssetCount + preflight.lowResolutionCount
@@ -142,6 +145,13 @@ export default function ExportDialog({
             )}
 
             <label className="block text-xs text-neutral-400">
+              <span className="mb-1 block">{t('exportResolution')}</span>
+              <select value={dpi} onChange={(event) => setDpi(Number(event.target.value))} className="editor-input min-h-11 w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 text-sm text-neutral-100">
+                {[150, 300, 600].map((value) => <option key={value} value={value}>{value} DPI</option>)}
+              </select>
+              <span className="mt-1 block">{Math.round(getPageSize(context.pageFormat).width * getExportPixelRatio(context.pageFormat, dpi))} × {Math.round(getPageSize(context.pageFormat).height * getExportPixelRatio(context.pageFormat, dpi))} px</span>
+            </label>
+            <label className="block text-xs text-neutral-400">
               <span className="mb-1 block">{t('outputFilename')}</span>
               <input value={fileName} onChange={(event) => setFileName(event.target.value)} className="editor-input min-h-11 w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 text-sm text-neutral-100" />
             </label>
@@ -183,6 +193,7 @@ export default function ExportDialog({
           disabled={pageSelection.error || pageSelection.indices.length === 0 || !fileName.trim() || (preflight?.missingAssetCount ?? 0) > 0}
           onClick={() => onExport({
             format,
+            dpi,
             scope,
             pageIndices: pageSelection.indices,
             compression,

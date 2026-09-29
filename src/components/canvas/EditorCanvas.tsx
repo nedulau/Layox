@@ -3,7 +3,7 @@ import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import type Konva from 'konva';
 import useProjectStore from '../../store/useProjectStore';
 import { computeLayoutSlots } from '../../utils/layouts';
-import { CANVAS_H, CANVAS_W } from '../../constants/canvas';
+import { getPageSize } from '../../domain/pageFormat';
 import {
   DEFAULT_COVER_SUBTITLE_COLOR,
   DEFAULT_COVER_SUBTITLE_FONT_FAMILY,
@@ -74,13 +74,16 @@ function EditorCanvas({
   const defaultLayoutPadding = useProjectStore((s) => s.project.meta.defaultLayoutPadding ?? DEFAULT_LAYOUT_PADDING);
   const defaultLayoutGap = useProjectStore((s) => s.project.meta.defaultLayoutGap ?? DEFAULT_LAYOUT_GAP);
 
+  const pageFormat = useProjectStore((s) => s.project.meta.pageFormat);
+  const { width: canvasWidth, height: canvasHeight } = getPageSize(pageFormat);
+
   const layoutId = currentPage?.layoutId;
   const isLayoutMode = !!layoutId;
   const layoutPadding = currentPage?.layoutPadding ?? defaultLayoutPadding;
   const layoutGap = currentPage?.layoutGap ?? defaultLayoutGap;
   const computedSlots = useMemo(
-    () => (layoutId ? computeLayoutSlots(layoutId, layoutPadding, layoutGap) : []),
-    [layoutGap, layoutId, layoutPadding],
+    () => (layoutId ? computeLayoutSlots(layoutId, layoutPadding, layoutGap, { width: canvasWidth, height: canvasHeight }) : []),
+    [canvasWidth, canvasHeight, layoutGap, layoutId, layoutPadding],
   );
 
   useEffect(() => {
@@ -120,12 +123,12 @@ function EditorCanvas({
   const coverTitleFontFamily = currentPage?.coverTitleFontFamily ?? DEFAULT_COVER_TITLE_FONT_FAMILY;
   const coverTitleColor = currentPage?.coverTitleColor ?? DEFAULT_COVER_TITLE_COLOR;
   const coverTitleX = currentPage?.coverTitleX ?? 0;
-  const coverTitleY = currentPage?.coverTitleY ?? CANVAS_H * 0.35;
+  const coverTitleY = currentPage?.coverTitleY ?? canvasHeight * 0.35;
   const coverSubtitleFontSize = currentPage?.coverSubtitleFontSize ?? DEFAULT_COVER_SUBTITLE_FONT_SIZE;
   const coverSubtitleFontFamily = currentPage?.coverSubtitleFontFamily ?? DEFAULT_COVER_SUBTITLE_FONT_FAMILY;
   const coverSubtitleColor = currentPage?.coverSubtitleColor ?? DEFAULT_COVER_SUBTITLE_COLOR;
   const coverSubtitleX = currentPage?.coverSubtitleX ?? 0;
-  const coverSubtitleY = currentPage?.coverSubtitleY ?? CANVAS_H * 0.35 + 60;
+  const coverSubtitleY = currentPage?.coverSubtitleY ?? canvasHeight * 0.35 + 60;
 
   // ─── Inline editing state ────────────────────────────────────────────────
   const [inlineEdit, setInlineEdit] = useState<{
@@ -157,8 +160,8 @@ function EditorCanvas({
 
     const updateScale = () => {
       const rect = container.getBoundingClientRect();
-      const scaleX = rect.width / CANVAS_W;
-      const scaleY = rect.height / CANVAS_H;
+      const scaleX = rect.width / canvasWidth;
+      const scaleY = rect.height / canvasHeight;
       const fitScale = Math.max(0.12, Math.min(3, Math.min(scaleX, scaleY)));
       const manualScale = Math.min(3, Math.max(0.2, manualZoom));
       const nextScale = zoomMode === 'fit' ? fitScale : manualScale;
@@ -175,7 +178,7 @@ function EditorCanvas({
     const observer = new ResizeObserver(updateScale);
     observer.observe(container);
     return () => observer.disconnect();
-  }, [manualZoom, onDisplayScaleChange, zoomMode]);
+  }, [canvasWidth, canvasHeight, manualZoom, onDisplayScaleChange, zoomMode]);
 
   // ─── Drag & drop ─────────────────────────────────────────────────────────
   const [dragOver, setDragOver] = useState(false);
@@ -206,10 +209,10 @@ function EditorCanvas({
         if (isLayoutMode) {
           const rect = containerRef.current?.getBoundingClientRect();
           if (rect) {
-            const canvasWidth = CANVAS_W * displayScale;
-            const canvasHeight = CANVAS_H * displayScale;
-            const canvasLeft = rect.left + (rect.width - canvasWidth) / 2;
-            const canvasTop = rect.top + (rect.height - canvasHeight) / 2;
+            const displayWidth = canvasWidth * displayScale;
+            const displayHeight = canvasHeight * displayScale;
+            const canvasLeft = rect.left + (rect.width - displayWidth) / 2;
+            const canvasTop = rect.top + (rect.height - displayHeight) / 2;
             const canvasX = (e.clientX - canvasLeft) / displayScale;
             const canvasY = (e.clientY - canvasTop) / displayScale;
             const slotIndex = computedSlots.findIndex((slot) =>
@@ -236,6 +239,8 @@ function EditorCanvas({
     [
       addImageFromAsset,
       addImageFromFile,
+      canvasWidth,
+      canvasHeight,
       computedSlots,
       displayScale,
       isLayoutMode,
@@ -313,7 +318,7 @@ function EditorCanvas({
       text: isTitle ? coverTitle : coverSubtitle,
       x: isTitle ? coverTitleX : coverSubtitleX,
       y: isTitle ? coverTitleY : coverSubtitleY,
-      width: CANVAS_W,
+      width: canvasWidth,
       fontSize: isTitle ? coverTitleFontSize : coverSubtitleFontSize,
       fontFamily: isTitle ? coverTitleFontFamily : coverSubtitleFontFamily,
       color: isTitle ? coverTitleColor : coverSubtitleColor,
@@ -357,8 +362,8 @@ function EditorCanvas({
       const h = (node.height() || 30) * (node.scaleY() || 1);
 
       // Compute snap targets (excluding this element)
-      const xTargets = [0, CANVAS_W, CANVAS_W / 2];
-      const yTargets = [0, CANVAS_H, CANVAS_H / 2];
+      const xTargets = [0, canvasWidth, canvasWidth / 2];
+      const yTargets = [0, canvasHeight, canvasHeight / 2];
 
       if (isLayoutMode) {
         for (const slot of computedSlots) {
@@ -400,7 +405,7 @@ function EditorCanvas({
       node.y(snappedY);
       setSnapGuides(newGuides);
     },
-    [isLayoutMode, computedSlots, elements],
+    [canvasWidth, canvasHeight, isLayoutMode, computedSlots, elements],
   );
 
   const handleElementDragEnd = useCallback(() => {
@@ -409,8 +414,8 @@ function EditorCanvas({
 
   const inlineEditorMetrics = inlineEdit && containerSize.width > 0 && containerSize.height > 0
     ? {
-        left: (containerSize.width - CANVAS_W * displayScale) / 2 + inlineEdit.x * displayScale,
-        top: (containerSize.height - CANVAS_H * displayScale) / 2 + inlineEdit.y * displayScale,
+        left: (containerSize.width - canvasWidth * displayScale) / 2 + inlineEdit.x * displayScale,
+        top: (containerSize.height - canvasHeight * displayScale) / 2 + inlineEdit.y * displayScale,
         width: inlineEdit.width * displayScale,
         fontSize: inlineEdit.fontSize * displayScale,
       }
@@ -433,17 +438,17 @@ function EditorCanvas({
 
       <div
         style={{
-          width: CANVAS_W,
-          height: CANVAS_H,
+          width: canvasWidth,
+          height: canvasHeight,
           transform: `scale(${displayScale})`,
           transformOrigin: 'center center',
         }}
         className="shrink-0 overflow-hidden"
       >
-        <Stage width={CANVAS_W} height={CANVAS_H} onClick={handleStageClick} onTap={handleStageClick} onDragStart={handleDragStart}>
+        <Stage width={canvasWidth} height={canvasHeight} onClick={handleStageClick} onTap={handleStageClick} onDragStart={handleDragStart}>
           <Layer>
             {/* Page background */}
-            <Rect x={0} y={0} width={CANVAS_W} height={CANVAS_H} fill={currentPage?.background ?? DEFAULT_PAGE_BACKGROUND} />
+            <Rect x={0} y={0} width={canvasWidth} height={canvasHeight} fill={currentPage?.background ?? DEFAULT_PAGE_BACKGROUND} />
 
             {/* Layout slots (layout mode only) */}
             {isLayoutMode &&
@@ -477,7 +482,7 @@ function EditorCanvas({
                 <Text
                   x={coverTitleX}
                   y={coverTitleY}
-                  width={CANVAS_W}
+                  width={canvasWidth}
                   text={coverTitle || coverTitleFallback}
                   fontSize={coverTitleFontSize}
                   fontFamily={coverTitleFontFamily}
@@ -498,7 +503,7 @@ function EditorCanvas({
                   <Text
                     x={coverSubtitleX}
                     y={coverSubtitleY}
-                    width={CANVAS_W}
+                    width={canvasWidth}
                     text={coverSubtitle || coverSubtitleFallback}
                     fontSize={coverSubtitleFontSize}
                     fontFamily={coverSubtitleFontFamily}
@@ -543,9 +548,9 @@ function EditorCanvas({
             {/* Snap guide lines */}
             {snapGuides.map((guide, i) =>
               guide.x !== undefined ? (
-                <Line key={`sx${i}`} points={[guide.x, 0, guide.x, CANVAS_H]} stroke="#ff6b6b" strokeWidth={1} dash={[4, 4]} listening={false} />
+                <Line key={`sx${i}`} points={[guide.x, 0, guide.x, canvasHeight]} stroke="#ff6b6b" strokeWidth={1} dash={[4, 4]} listening={false} />
               ) : guide.y !== undefined ? (
-                <Line key={`sy${i}`} points={[0, guide.y, CANVAS_W, guide.y]} stroke="#ff6b6b" strokeWidth={1} dash={[4, 4]} listening={false} />
+                <Line key={`sy${i}`} points={[0, guide.y, canvasWidth, guide.y]} stroke="#ff6b6b" strokeWidth={1} dash={[4, 4]} listening={false} />
               ) : null,
             )}
           </Layer>

@@ -14,6 +14,7 @@ import {
 
 const exportMocks = vi.hoisted(() => ({
   saveAs: vi.fn(),
+  pdfOptions: vi.fn(),
   addPage: vi.fn(),
   addImage: vi.fn(),
   zipFile: vi.fn(),
@@ -23,6 +24,7 @@ const exportMocks = vi.hoisted(() => ({
 vi.mock('file-saver', () => ({ saveAs: exportMocks.saveAs }));
 vi.mock('jspdf', () => ({
   jsPDF: class {
+    constructor(options: unknown) { exportMocks.pdfOptions(options); }
     internal = { pageSize: { getWidth: () => 297, getHeight: () => 210 } };
     addPage = exportMocks.addPage;
     addImage = exportMocks.addImage;
@@ -136,6 +138,13 @@ describe('project export rendering', () => {
     expect(exportMocks.addImage).toHaveBeenCalledTimes(2);
     expect(exportMocks.addPage).toHaveBeenCalled();
     expect(exportMocks.saveAs).toHaveBeenCalledWith(expect.any(Blob), 'Export Test.pdf');
+  });
+
+  it('uses portrait PDF dimensions and the selected DPI independently of compression', async () => {
+    const renderer: PageRenderer = { renderPage: vi.fn().mockResolvedValue(new NodeBlob(['page']) as unknown as Blob) };
+    await exportAsPdf({ ...createContext(renderer), pageFormat: 'a4-portrait' }, 'high', { dpi: 300 }, [0]);
+    expect(exportMocks.pdfOptions).toHaveBeenLastCalledWith({ orientation: 'portrait', unit: 'mm', format: [210, 297] });
+    expect(renderer.renderPage).toHaveBeenLastCalledWith(pages[0], {}, expect.objectContaining({ pageFormat: 'a4-portrait', pixelRatio: expect.closeTo(297 / 1200 * 300 / 25.4), quality: 0.55 }));
   });
 
   it('exports the current page as PNG and JPEG with safe names', async () => {

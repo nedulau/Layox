@@ -37,6 +37,7 @@ import {
   assignAssetToLayoutPage,
   prepareImportedAsset,
 } from '../services/projectImagePlacement';
+import { changePageFormat, getPageSize, type PageFormat } from '../domain/pageFormat';
 import { MAX_LAYOUT_SPACING } from '../constants/layouts';
 import {
   appendHistoryEntry,
@@ -87,6 +88,7 @@ interface ProjectState {
   setProject: (project: Project) => void;
   restoreRecoveredProject: (project: Project, assetBlobs: Record<string, Blob>, pageIndex: number) => void;
   setProjectName: (name: string) => void;
+  setPageFormat: (format: PageFormat) => void;
   addAsset: (path: string, blob: Blob) => void;
   resetProject: (name?: string) => void;
   setAutoSaveEnabled: (enabled: boolean) => void;
@@ -752,6 +754,11 @@ const useProjectStore = create<ProjectState>((baseSet, get) => {
       };
     }),
 
+  setPageFormat: (format) => set((state) => {
+    const project = changePageFormat(state.project, format);
+    return project === state.project ? state : { project, selectedElementId: null, selectedSlotIndex: null };
+  }),
+
   clearLayout: () =>
     set((state) => {
       const pages = [...state.project.pages];
@@ -760,7 +767,7 @@ const useProjectStore = create<ProjectState>((baseSet, get) => {
 
       const padding = page.layoutPadding ?? DEFAULT_LAYOUT_PADDING;
       const gap = page.layoutGap ?? DEFAULT_LAYOUT_GAP;
-      const slots = computeLayoutSlots(page.layoutId, padding, gap);
+      const slots = computeLayoutSlots(page.layoutId, padding, gap, getPageSize(state.project.meta.pageFormat));
 
       // Convert slot assignments back to free ImageElements
       if (page.slotAssignments) {
@@ -830,6 +837,7 @@ const useProjectStore = create<ProjectState>((baseSet, get) => {
         assetPath,
         blob,
         zIndex: page.elements.length,
+      size: getPageSize(get().project.meta.pageFormat),
       });
 
       let placement: AddImageResult['placement'] = 'library-only';
@@ -878,6 +886,7 @@ const useProjectStore = create<ProjectState>((baseSet, get) => {
       assetPath,
       blob,
       zIndex: page.elements.length,
+      size: getPageSize(get().project.meta.pageFormat),
     });
 
     set((state) => {
@@ -911,8 +920,8 @@ const useProjectStore = create<ProjectState>((baseSet, get) => {
     const element: TextElement = {
       id: uuidv4(),
       type: 'text',
-      x: 300,
-      y: 260,
+      x: getPageSize(get().project.meta.pageFormat).width * 0.25,
+      y: getPageSize(get().project.meta.pageFormat).height * 0.29,
       rotation: 0,
       zIndex: get().currentPage()?.elements.length ?? 0,
       content: 'Edit text',

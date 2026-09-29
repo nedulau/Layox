@@ -1,159 +1,19 @@
 import { useMemo, useRef, useState } from 'react';
 import type { Page } from '../../types';
-import { computeLayoutSlots } from '../../utils/layouts';
-import { CANVAS_H, CANVAS_W } from '../../constants/canvas';
-import BlobImage from '../common/BlobImage';
+import { getPageSize, type PageFormat } from '../../domain/pageFormat';
 import { useDialogFocus } from '../common/useDialogFocus';
 import PageThumbnail from './PageThumbnail';
 
-function PagePreviewCard({
-  page,
-  assetBlobs,
-  pageIndex,
-  active,
-  onClick,
-  noPreviewLabel,
-  metaLabel,
-  defaultLayoutPadding,
-  defaultLayoutGap,
-}: {
-  page: Page;
-  assetBlobs: Record<string, Blob>;
-  pageIndex: number;
-  active: boolean;
-  onClick: () => void;
-  noPreviewLabel: string;
-  metaLabel: string;
-  defaultLayoutPadding: number;
-  defaultLayoutGap: number;
+function PagePreviewCard({ page, assetBlobs, pageIndex, active, onClick, metaLabel, defaultLayoutPadding, defaultLayoutGap, pageFormat }: {
+  page: Page; assetBlobs: Record<string, Blob>; pageIndex: number; active: boolean;
+  onClick: () => void; noPreviewLabel: string; metaLabel: string;
+  defaultLayoutPadding: number; defaultLayoutGap: number; pageFormat?: PageFormat;
 }) {
-  const slots = useMemo(() => {
-    if (!page.layoutId) return [];
-    const padding = page.layoutPadding ?? defaultLayoutPadding;
-    const gap = page.layoutGap ?? defaultLayoutGap;
-    return computeLayoutSlots(page.layoutId, padding, gap);
-  }, [defaultLayoutGap, defaultLayoutPadding, page.layoutGap, page.layoutId, page.layoutPadding]);
-
-  const hasPreview =
-    slots.some((_, slotIndex) => {
-      const assignment = page.slotAssignments?.[slotIndex];
-      return !!assignment && !!assetBlobs[assignment.assetPath];
-    }) ||
-    page.elements.some((element) => element.type === 'image' && !!assetBlobs[element.src]);
-
-  return (
-    <button
-      onClick={onClick}
-      className={`group text-left rounded-xl border overflow-hidden transition-colors cursor-pointer select-none ${
-        active
-          ? 'border-blue-500 bg-blue-500/10'
-          : 'border-neutral-700 bg-neutral-900/80 hover:bg-neutral-800/90'
-      }`}
-      style={{ width: 220 }}
-      title={`Page ${pageIndex + 1}`}
-    >
-      <div
-        className="relative bg-neutral-950"
-        style={{ width: 220, height: 165 }}
-      >
-        <div className="absolute inset-0 z-10">
-          <PageThumbnail
-            page={page}
-            assetBlobs={assetBlobs}
-            defaultLayoutPadding={defaultLayoutPadding}
-            defaultLayoutGap={defaultLayoutGap}
-            className="h-full w-full"
-          />
-        </div>
-        <div className="absolute inset-0" style={{ background: page.background || '#111111' }} />
-
-        {slots.map((slot, slotIndex) => {
-          const assignment = page.slotAssignments?.[slotIndex];
-          const blob = assignment ? assetBlobs[assignment.assetPath] : undefined;
-
-          return (
-            <div
-              key={`${page.id}-slot-${slotIndex}`}
-              className="absolute overflow-hidden rounded-[2px] border border-white/15"
-              style={{
-                left: `${(slot.x / CANVAS_W) * 100}%`,
-                top: `${(slot.y / CANVAS_H) * 100}%`,
-                width: `${(slot.width / CANVAS_W) * 100}%`,
-                height: `${(slot.height / CANVAS_H) * 100}%`,
-                background: blob ? '#0f172a' : 'rgba(255,255,255,0.08)',
-              }}
-            >
-              {blob && (
-                <BlobImage
-                  blob={blob}
-                  alt=""
-                  className="w-full h-full object-cover"
-                  draggable={false}
-                />
-              )}
-            </div>
-          );
-        })}
-
-        {page.elements
-          .slice()
-          .sort((firstElement, secondElement) => firstElement.zIndex - secondElement.zIndex)
-          .map((element) => {
-            if (element.type === 'image') {
-              const blob = assetBlobs[element.src];
-              if (!blob) return null;
-              return (
-                <BlobImage
-                  key={element.id}
-                  blob={blob}
-                  alt=""
-                  draggable={false}
-                  className="absolute object-cover rounded-[2px]"
-                  style={{
-                    left: `${(element.x / CANVAS_W) * 100}%`,
-                    top: `${(element.y / CANVAS_H) * 100}%`,
-                    width: `${(element.width / CANVAS_W) * 100}%`,
-                    height: `${(element.height / CANVAS_H) * 100}%`,
-                    transform: `rotate(${element.rotation}deg)`,
-                    transformOrigin: 'top left',
-                  }}
-                />
-              );
-            }
-
-            return (
-              <div
-                key={element.id}
-                className="absolute whitespace-nowrap truncate"
-                style={{
-                  left: `${(element.x / CANVAS_W) * 100}%`,
-                  top: `${(element.y / CANVAS_H) * 100}%`,
-                  width: `${(((element.width ?? 240) / CANVAS_W) * 100)}%`,
-                  color: element.color,
-                  fontFamily: element.fontFamily,
-                  fontSize: `${Math.max(7, element.fontSize * 0.15)}px`,
-                  transform: `rotate(${element.rotation}deg)`,
-                  transformOrigin: 'top left',
-                }}
-              >
-                {element.content}
-              </div>
-            );
-          })}
-
-        {!hasPreview && (
-          <div className="absolute inset-0 flex items-center justify-center text-[11px] text-neutral-400">
-            {noPreviewLabel}
-          </div>
-        )}
-      </div>
-
-      <div className="px-2 py-1.5 text-xs text-neutral-300 border-t border-neutral-700/80">
-        <div className="font-medium">{pageIndex + 1}</div>
-        <div className="text-[11px] text-neutral-500 truncate mt-0.5">{metaLabel}</div>
-      </div>
-    </button>
-  );
+  const size = getPageSize(pageFormat);
+  return <button onClick={onClick} className={`w-[220px] overflow-hidden rounded-xl border text-left ${active ? 'border-blue-500' : 'border-neutral-700'}`}>
+    <PageThumbnail page={page} assetBlobs={assetBlobs} defaultLayoutPadding={defaultLayoutPadding} defaultLayoutGap={defaultLayoutGap} pageFormat={pageFormat} className="w-full" style={{ aspectRatio: `${size.width} / ${size.height}` }} />
+    <div className="border-t border-neutral-700 px-2 py-1.5 text-xs text-neutral-300"><div>{pageIndex + 1}</div><div className="truncate text-neutral-500">{metaLabel}</div></div>
+  </button>;
 }
 
 export default function PageOverviewModal({
@@ -173,6 +33,7 @@ export default function PageOverviewModal({
   getMetaLabel,
   defaultLayoutPadding,
   defaultLayoutGap,
+  pageFormat,
 }: {
   open: boolean;
   pages: Page[];
@@ -190,6 +51,7 @@ export default function PageOverviewModal({
   getMetaLabel: (page: Page) => string;
   defaultLayoutPadding: number;
   defaultLayoutGap: number;
+  pageFormat?: PageFormat;
 }) {
   const [dragFromIndex, setDragFromIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
@@ -322,6 +184,7 @@ export default function PageOverviewModal({
                   className={dragOverIndex === index && dragFromIndex !== null && dragFromIndex !== index ? 'ring-2 ring-blue-500 rounded-xl' : ''}
                 >
                   <PagePreviewCard
+                    pageFormat={pageFormat}
                     page={page}
                     assetBlobs={assetBlobs}
                     pageIndex={index}

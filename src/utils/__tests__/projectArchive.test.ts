@@ -13,7 +13,7 @@ const project: Project = {
   meta: {
     id: 'project-1',
     name: 'Archive Test',
-    version: '1.1',
+    version: '1.2',
     defaultLayoutPadding: 20,
     defaultLayoutGap: 20,
   },
@@ -80,7 +80,7 @@ describe('project archive', () => {
 
     const loaded = await loadProjectArchive(archive);
 
-    expect(loaded.project.meta.version).toBe('1.1');
+    expect(loaded.project.meta.version).toBe('1.2');
     expect(loaded.project.meta.id).toEqual(expect.any(String));
   });
 
@@ -92,7 +92,7 @@ describe('project archive', () => {
 
     const loaded = await loadProjectArchive(archive);
 
-    expect(loaded.project.meta.version).toBe('1.1');
+    expect(loaded.project.meta.version).toBe('1.2');
   });
 
   it('rejects unsupported future versions', async () => {
