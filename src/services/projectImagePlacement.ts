@@ -53,11 +53,19 @@ export function appendImageToFreePage(
   pageId: string,
   expectedLayoutId: string | undefined,
   element: ImageElement,
+  placeholderId?: string | null,
 ): Project | null {
   const pageIndex = project.pages.findIndex((page) => page.id === pageId);
   const page = project.pages[pageIndex];
   if (!page || page.layoutId !== expectedLayoutId) return null;
   const pages = [...project.pages];
-  pages[pageIndex] = { ...page, elements: [...page.elements, element] };
+  const placeholder = page.elements.find((candidate) => candidate.id === placeholderId && candidate.type === 'image' && candidate.isPlaceholder);
+  if (placeholder?.type === 'image') {
+    const fit = Math.min(placeholder.width / element.width, placeholder.height / element.height);
+    const placed = { ...element, x: placeholder.x, y: placeholder.y, width: element.width * fit, height: element.height * fit, rotation: placeholder.rotation, zIndex: placeholder.zIndex };
+    pages[pageIndex] = { ...page, elements: page.elements.map((candidate) => candidate.id === placeholder.id ? placed : candidate) };
+  } else {
+    pages[pageIndex] = { ...page, elements: [...page.elements, element] };
+  }
   return { ...project, pages };
 }

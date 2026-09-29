@@ -15,6 +15,7 @@ export interface ImageElement extends BaseElement {
   width: number;
   height: number;
   src: string; // Relative path inside ZIP (e.g., "assets/img1.jpg")
+  isPlaceholder?: boolean;
   originalSrc?: string; // Optional: Path to original on disk
 }
 

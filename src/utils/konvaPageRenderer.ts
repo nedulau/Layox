@@ -27,7 +27,7 @@ function collectImagePaths(page: Page): string[] {
     if (assignment?.assetPath) paths.add(assignment.assetPath);
   });
   page.elements.forEach((element) => {
-    if (element.type === 'image') paths.add(element.src);
+    if (element.type === 'image' && !element.isPlaceholder) paths.add(element.src);
   });
   return [...paths];
 }
@@ -256,7 +256,7 @@ export const konvaPageRenderer: PageRenderer = {
 
       addCoverText(Konva, layer, page, size);
       page.elements
-        .filter((element) => !page.layoutId || element.type === 'text')
+        .filter((element) => (!page.layoutId || element.type === 'text') && !(element.type === 'image' && element.isPlaceholder))
         .sort((first, second) => first.zIndex - second.zIndex)
         .forEach((element) => addPageElement(Konva, layer, element, images));
 

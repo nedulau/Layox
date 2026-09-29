@@ -24,6 +24,7 @@ import {
 } from './domain/projectDefaults';
 import { MenuButton, MenuDivider, MenuItem } from './components/editor/MenuComponents';
 import BlobImage from './components/common/BlobImage';
+import PageTemplatesDialog from './components/editor/PageTemplatesDialog';
 import AssetLibraryModal from './components/editor/AssetLibraryModal';
 import { useMediaQuery } from './hooks/useMediaQuery';
 import ConfirmDialog from './components/common/ConfirmDialog';
@@ -203,6 +204,8 @@ function Editor({
     (s) => s.project.pages[s.currentPageIndex]?.layoutGap ?? (s.project.meta.defaultLayoutGap ?? DEFAULT_LAYOUT_GAP),
   );
   const setCurrentPageIndex = useProjectStore((s) => s.setCurrentPageIndex);
+  const addPageFromTemplate = useProjectStore((s) => s.addPageFromTemplate);
+  const currentPage = useProjectStore((s) => s.project.pages[s.currentPageIndex]);
   const addPage = useProjectStore((s) => s.addPage);
   const removePage = useProjectStore((s) => s.removePage);
   const movePage = useProjectStore((s) => s.movePage);
@@ -281,6 +284,7 @@ function Editor({
   // ─── Dropdown menu state ────────────────────────────────────────────────
   const [openMenu, setOpenMenu] = useState<string | null>(null);
   const [showNewProjectModal, setShowNewProjectModal] = useState(false);
+  const [showPageTemplates, setShowPageTemplates] = useState(false);
   const [showPageOverview, setShowPageOverview] = useState(false);
   const [showAssetLibrary, setShowAssetLibrary] = useState(false);
   const [showQuickImageBar, setShowQuickImageBar] = useState<boolean>(() => readStoredBoolean('layox_showQuickImageBar', true));
@@ -331,7 +335,7 @@ function Editor({
     const usage = new Map<string, number>();
     for (const page of pages) {
       for (const element of page.elements) {
-        if (element.type === 'image') usage.set(element.src, (usage.get(element.src) ?? 0) + 1);
+        if (element.type === 'image' && !element.isPlaceholder) usage.set(element.src, (usage.get(element.src) ?? 0) + 1);
       }
       for (const assignment of Object.values(page.slotAssignments ?? {})) {
         usage.set(assignment.assetPath, (usage.get(assignment.assetPath) ?? 0) + 1);
@@ -763,6 +767,7 @@ function Editor({
                 </select>
                 <span className="mt-1 block">{t('pageFormatHint')}</span>
               </label>
+              <button type="button" onClick={() => { closeMenu(); setShowPageTemplates(true); }} className="mb-3 min-h-11 w-full rounded-lg border border-neutral-700 px-3 text-left text-sm text-neutral-200">{t('pageTemplates')}</button>
               <div className="mb-2">
                 <LayoutPicker
                   currentLayoutId={currentLayoutId}
@@ -1324,6 +1329,8 @@ function Editor({
           onExport={(request) => void editorExport.requestExport(request)}
         />
       )}
+
+      {showPageTemplates && currentPage && <PageTemplatesDialog page={currentPage} pageFormat={pageFormat} t={t} onClose={() => setShowPageTemplates(false)} onApply={(template) => { snapshot(); addPageFromTemplate(template); setShowPageTemplates(false); }} />}
 
       <PageOverviewModal
         pageFormat={pageFormat}
