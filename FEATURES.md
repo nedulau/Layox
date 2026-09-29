@@ -29,6 +29,14 @@ Detailed feature set of the local photo album editor.
 - Dedicated cover page type with title/subtitle overlay
 - Double-click cover title/subtitle to edit directly on canvas
 
+## Album Preview
+
+- Facing-page reading view with a separate leading cover and blank final facing side
+- Shared export renderer without editor overlays; format-aware fit
+- Buttons, keyboard, spread selector and touch swipes
+- Closing preserves editor position/selection; explicit return to a page for editing
+- Render only visible pages with cancellation and error feedback
+
 ## Layouts
 
 - 14 built-in layout templates (cover, single image, grids, mixed mosaics)

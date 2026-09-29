@@ -43,11 +43,13 @@ vi.mock('../../store/useProjectStore', () => ({
 }));
 
 function ShortcutHarness({
+  enabled = true,
   deleteUnusedAssetsAfterImageDelete = false,
   onNewProject = vi.fn(),
   onCloseMenu = vi.fn(),
   onSaveError = vi.fn(),
 }: {
+  enabled?: boolean;
   deleteUnusedAssetsAfterImageDelete?: boolean;
   onNewProject?: () => void;
   onCloseMenu?: () => void;
@@ -55,6 +57,7 @@ function ShortcutHarness({
 }) {
   const imageInputRef = useRef<HTMLInputElement>(null);
   useEditorKeyboardShortcuts({
+    enabled,
     imageInputRef,
     deleteUnusedAssetsAfterImageDelete,
     onNewProject,
@@ -164,4 +167,15 @@ describe('useEditorKeyboardShortcuts', () => {
     expect(storeMock.state.setSelectedElementId).toHaveBeenCalledWith(null);
     expect(storeMock.state.setSelectedSlotIndex).toHaveBeenCalledWith(null);
   });
+});
+
+it('suspends editor changes while the album preview is active', () => {
+  vi.clearAllMocks();
+  render(<ShortcutHarness enabled={false} />);
+  fireEvent.keyDown(window, { key: 'z', ctrlKey: true });
+  fireEvent.keyDown(window, { key: 'Delete' });
+  fireEvent.keyDown(window, { key: 'ArrowRight' });
+  expect(storeMock.state.undo).not.toHaveBeenCalled();
+  expect(storeMock.state.snapshot).not.toHaveBeenCalled();
+  expect(storeMock.state.setCurrentPageIndex).not.toHaveBeenCalled();
 });

@@ -21,7 +21,7 @@ async function selectLayout(page: Page, layoutName: RegExp) {
 async function openMenuItem(page: Page, menu: string, item: string) {
   await page.getByRole('button', { name: menu, exact: true }).click();
   const escapedItem = item.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  await page.getByRole('button', { name: new RegExp(`^${escapedItem}(?:\\s|$)`) }).click();
+  await page.getByRole('button', { name: menu, exact: true }).locator('..').getByRole('button', { name: new RegExp(`^${escapedItem}(?:\\s|$)`) }).click();
 }
 
 async function insertFixtureImage(page: Page) {
@@ -232,4 +232,32 @@ test('filters image orientation, reads EXIF capture time and navigates to an ima
   await expect(dialog).not.toBeVisible();
   await openMenuItem(page, 'Bearbeiten', 'Beschneiden');
   await expect(page.getByRole('button', { name: 'Fertig' })).toBeVisible();
+});
+
+test('browses facing pages without changing the editor and returns explicitly to a page', async ({ page }) => {
+  await createProject(page, 'Spread preview');
+  await openMenuItem(page, 'Einfügen', 'Neue Seite');
+  await openMenuItem(page, 'Einfügen', 'Neue Seite');
+  await expect(page.locator('.editor-page-count')).toHaveText('4 / 4');
+  await openMenuItem(page, 'Einfügen', 'Text einfügen');
+  await page.getByRole('button', { name: 'Albumvorschau', exact: true }).click();
+  let dialog = page.getByRole('dialog', { name: 'Albumvorschau' });
+  await expect(dialog.getByRole('button', { name: 'Nächste Doppelseite' })).toBeDisabled();
+  await page.keyboard.press('Home');
+  await expect(dialog.getByText('1 / 3', { exact: true })).toBeVisible();
+  await expect(dialog.getByRole('img')).toHaveCount(1);
+  await page.keyboard.press('ArrowRight');
+  await expect(dialog.getByText('2 / 3', { exact: true })).toBeVisible();
+  await expect(dialog.getByRole('img')).toHaveCount(2);
+  await page.keyboard.press('Control+z');
+  await page.keyboard.press('Escape');
+  await expect(dialog).not.toBeVisible();
+  await expect(page.locator('.editor-page-count')).toHaveText('4 / 4');
+  await expect(page.getByText('Schriftart', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Albumvorschau', exact: true }).click();
+  dialog = page.getByRole('dialog', { name: 'Albumvorschau' });
+  await page.keyboard.press('Home');
+  await page.keyboard.press('ArrowRight');
+  await dialog.getByRole('button', { name: 'Im Editor öffnen: Seite 2' }).click();
+  await expect(page.locator('.editor-page-count')).toHaveText('2 / 4');
 });
