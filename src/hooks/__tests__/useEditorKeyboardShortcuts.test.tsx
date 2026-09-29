@@ -179,3 +179,13 @@ it('suspends editor changes while the album preview is active', () => {
   expect(storeMock.state.snapshot).not.toHaveBeenCalled();
   expect(storeMock.state.setCurrentPageIndex).not.toHaveBeenCalled();
 });
+
+it('respects Escape events already handled by a closing dialog', () => {
+  vi.clearAllMocks();
+  render(<ShortcutHarness />);
+  const event = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+  event.preventDefault();
+  window.dispatchEvent(event);
+  expect(storeMock.state.setSelectedElementId).not.toHaveBeenCalled();
+  expect(storeMock.state.setSelectedSlotIndex).not.toHaveBeenCalled();
+});

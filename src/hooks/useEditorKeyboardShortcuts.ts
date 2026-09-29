@@ -32,6 +32,7 @@ export function useEditorKeyboardShortcuts({
   useEffect(() => {
     if (!enabled) return;
     const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) return;
       const isTextEntry = isTextEntryTarget(event.target);
       const key = event.key.toLowerCase();
       const hasCommandModifier = event.ctrlKey || event.metaKey;
