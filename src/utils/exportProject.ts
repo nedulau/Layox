@@ -33,7 +33,19 @@ export interface ExportJobOptions {
   onProgress?: (completed: number, total: number) => void;
 }
 
+export type ExportIssueKind = 'empty-slot' | 'missing-asset' | 'low-resolution';
+export interface ExportIssue {
+  kind: ExportIssueKind;
+  pageIndex: number;
+  pageId: string;
+  imageNumber: number;
+  slotIndex?: number;
+  elementId?: string;
+  assetPath?: string;
+}
+
 export interface ExportPreflight {
+  issues: ExportIssue[];
   pageCount: number;
   emptySlotCount: number;
   missingAssetCount: number;
@@ -266,11 +278,11 @@ export async function analyzeExportPreflight(
   context: ProjectExportContext,
   pageIndices: number[],
   dpi?: number,
+  signal?: AbortSignal,
 ): Promise<ExportPreflight> {
+  throwIfAborted(signal);
   const pixelRatio = dpi === undefined ? 2 : getExportPixelRatio(context.pageFormat, dpi);
-  let emptySlotCount = 0;
-  let missingAssetCount = 0;
-  let lowResolutionCount = 0;
+  const issues: ExportIssue[] = [];
   const dimensions = new Map<string, Promise<{ width: number; height: number }>>();
   const dimensionFor = (assetPath: string) => {
     const existing = dimensions.get(assetPath);
@@ -282,60 +294,54 @@ export async function analyzeExportPreflight(
     return pending;
   };
 
+  const inspect = async (target: Omit<ExportIssue, 'kind'>, width: number, height: number, cropWidth?: number, cropHeight?: number, scale = 1) => {
+    throwIfAborted(signal);
+    const pending = target.assetPath ? dimensionFor(target.assetPath) : null;
+    if (!pending) { issues.push({ ...target, kind: 'missing-asset' }); return; }
+    try {
+      const natural = await pending;
+      throwIfAborted(signal);
+      const sourceWidth = cropWidth ?? natural.width;
+      const sourceHeight = cropHeight ?? natural.height;
+      const zoom = cropWidth === undefined ? Math.max(1, scale) : 1;
+      if (sourceWidth < width * pixelRatio * zoom || sourceHeight < height * pixelRatio * zoom) {
+        issues.push({ ...target, kind: 'low-resolution' });
+      }
+    } catch {
+      throwIfAborted(signal);
+      issues.push({ ...target, kind: 'missing-asset' });
+    }
+  };
+
   for (const pageIndex of pageIndices) {
+    throwIfAborted(signal);
     const page = context.pages[pageIndex];
     if (!page) continue;
     if (page.layoutId) {
-      const slots = computeLayoutSlots(
-        page.layoutId,
-        page.layoutPadding ?? context.defaultLayoutPadding,
-        page.layoutGap ?? context.defaultLayoutGap,
-        getPageSize(context.pageFormat),
-      );
+      const slots = computeLayoutSlots(page.layoutId, page.layoutPadding ?? context.defaultLayoutPadding, page.layoutGap ?? context.defaultLayoutGap, getPageSize(context.pageFormat));
       for (const [slotIndex, slot] of slots.entries()) {
+        const target = { pageIndex, pageId: page.id, slotIndex, imageNumber: slotIndex + 1 };
         const assignment = page.slotAssignments?.[slotIndex];
-        if (!assignment) {
-          emptySlotCount += 1;
-          continue;
-        }
-        const pendingDimensions = dimensionFor(assignment.assetPath);
-        if (!pendingDimensions) {
-          missingAssetCount += 1;
-          continue;
-        }
-        try {
-          const natural = await pendingDimensions;
-          const sourceWidth = assignment.cropW ?? natural.width;
-          const sourceHeight = assignment.cropH ?? natural.height;
-          if (sourceWidth < slot.width * pixelRatio * (assignment.cropW === undefined ? Math.max(1, assignment.scale) : 1) || sourceHeight < slot.height * pixelRatio * (assignment.cropH === undefined ? Math.max(1, assignment.scale) : 1)) lowResolutionCount += 1;
-        } catch {
-          missingAssetCount += 1;
-        }
+        if (!assignment) { issues.push({ ...target, kind: 'empty-slot' }); continue; }
+        await inspect({ ...target, assetPath: assignment.assetPath }, slot.width, slot.height, assignment.cropW, assignment.cropH, assignment.scale);
       }
-    }
-    for (const element of page.elements) {
-      if (element.type !== 'image') continue;
-      if (element.isPlaceholder) { emptySlotCount += 1; continue; }
-      const pendingDimensions = dimensionFor(element.src);
-      if (!pendingDimensions) {
-        missingAssetCount += 1;
-        continue;
-      }
-      try {
-        const natural = await pendingDimensions;
-        if (natural.width < element.width * pixelRatio || natural.height < element.height * pixelRatio) {
-          lowResolutionCount += 1;
-        }
-      } catch {
-        missingAssetCount += 1;
+    } else {
+      let imageNumber = 0;
+      for (const element of page.elements) {
+        if (element.type !== 'image') continue;
+        imageNumber += 1;
+        const target = { pageIndex, pageId: page.id, elementId: element.id, imageNumber };
+        if (element.isPlaceholder) { issues.push({ ...target, kind: 'empty-slot' }); continue; }
+        await inspect({ ...target, assetPath: element.src }, element.width, element.height);
       }
     }
   }
-
+  throwIfAborted(signal);
   return {
+    issues,
     pageCount: pageIndices.filter((index) => context.pages[index] !== undefined).length,
-    emptySlotCount,
-    missingAssetCount,
-    lowResolutionCount,
+    emptySlotCount: issues.filter((issue) => issue.kind === 'empty-slot').length,
+    missingAssetCount: issues.filter((issue) => issue.kind === 'missing-asset').length,
+    lowResolutionCount: issues.filter((issue) => issue.kind === 'low-resolution').length,
   };
 }

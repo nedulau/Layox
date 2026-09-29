@@ -1329,6 +1329,14 @@ function Editor({
           context={editorExport.context}
           currentPageIndex={currentPageIndex}
           defaultCompression={editorExport.defaultCompression}
+          onNavigateToIssue={(issue) => {
+            if (pages[issue.pageIndex]?.id !== issue.pageId) return;
+            editorExport.closeDialog();
+            setCurrentPageIndex(issue.pageIndex);
+            if (issue.slotIndex !== undefined) setSelectedSlotIndex(issue.slotIndex);
+            else setSelectedElementId(issue.elementId ?? null);
+            setCanvasZoomMode('fit');
+          }}
           onClose={editorExport.closeDialog}
           onExport={(request) => void editorExport.requestExport(request)}
         />

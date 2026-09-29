@@ -205,3 +205,9 @@ Each image lists buttons for its actual page/slot/element usages. Clicking one c
 Open **Album preview** next to the page controls to read the album as facing pages. A leading cover is shown alone on the right, followed by paired pages; an unmatched final page keeps a blank facing side. Albums without a leading cover pair from the first page. The preview starts at the current editor page and respects the chosen page format.
 
 Use arrow buttons, Left/Right, Page Up/Down, Home/End, the spread selector, or horizontal touch swipes. Closing with Escape or Close preserves the editor page and selection. **Open in editor: page …** deliberately returns to that page for editing. Editor editing shortcuts are suspended during preview. Only visible pages are rendered, using the same printable renderer as export; obsolete renders are cancelled and failures are shown. Preview resolution is intended for screen viewing; use export for print output.
+
+## Correcting export warnings
+
+Export preflight lists each issue by page and image number, including the filename when available. Click an empty place, missing/damaged image or low-resolution warning to close the dialog, open that page and select the exact slot or free element. The canvas fits automatically so you can insert, replace or adjust the image.
+
+Only the selected export pages and their visible images are checked. Low-resolution checks account for chosen DPI, slot zoom and crop. Missing or undecodable images block export; empty places and low resolution are warnings. The rough file-size estimate scales with output pixel dimensions. Export remains unavailable until the current check finishes, and changing pages, range or resolution invalidates previous results. Cancelled/obsolete checks cannot overwrite newer results.

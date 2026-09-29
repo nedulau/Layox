@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { Translator } from '../../i18n';
-import type { PdfCompressionLevel, ProjectExportContext, ExportPreflight } from '../../utils/exportProject';
-import { analyzeExportPreflight, PDF_COMPRESSION_PRESETS } from '../../utils/exportProject';
+import type { PdfCompressionLevel, ProjectExportContext, ExportIssue } from '../../utils/exportProject';
+import { PDF_COMPRESSION_PRESETS } from '../../utils/exportProject';
 import { parsePageRange } from '../../utils/pageRange';
 import { getPageSize, getExportPixelRatio } from '../../domain/pageFormat';
+import { useExportPreflight } from '../../hooks/useExportPreflight';
+import { getAssetFileName } from '../../domain/assetLibrary';
 import { useDialogFocus } from '../common/useDialogFocus';
 
 export type ExportFormat = 'pdf' | 'png' | 'jpeg';
@@ -18,7 +20,7 @@ export interface ExportRequest {
   dpi?: number;
 }
 
-function estimateSize(format: ExportFormat, compression: PdfCompressionLevel, pageCount: number): string {
+function estimateSize(format: ExportFormat, compression: PdfCompressionLevel, pageCount: number, pixels: number): string {
   const bytesPerPage = format === 'png'
     ? 2_200_000
     : format === 'jpeg'
@@ -30,7 +32,8 @@ function estimateSize(format: ExportFormat, compression: PdfCompressionLevel, pa
           : compression === 'medium'
             ? 720_000
             : 420_000;
-  const bytes = bytesPerPage * Math.max(1, pageCount);
+  const classic = getPageSize();
+  const bytes = bytesPerPage * Math.max(1, pageCount) * pixels / (classic.width * classic.height * 4);
   return bytes >= 1_000_000
     ? `~${(bytes / 1_000_000).toFixed(bytes >= 10_000_000 ? 0 : 1)} MB`
     : `~${Math.round(bytes / 1_000)} KB`;
@@ -43,6 +46,7 @@ export default function ExportDialog({
   defaultCompression,
   onClose,
   onExport,
+  onNavigateToIssue,
 }: {
   t: Translator;
   context: ProjectExportContext;
@@ -50,6 +54,7 @@ export default function ExportDialog({
   defaultCompression: PdfCompressionLevel;
   onClose: () => void;
   onExport: (request: ExportRequest) => void;
+  onNavigateToIssue?: (issue: ExportIssue) => void;
 }) {
   const [dpi, setDpi] = useState(300);
   const [format, setFormat] = useState<ExportFormat>('pdf');
@@ -57,7 +62,10 @@ export default function ExportDialog({
   const [range, setRange] = useState('');
   const [compression, setCompression] = useState(defaultCompression);
   const [fileName, setFileName] = useState(context.projectName);
-  const [preflight, setPreflight] = useState<ExportPreflight | null>(null);
+  const size = getPageSize(context.pageFormat);
+  const pixelRatio = getExportPixelRatio(context.pageFormat, dpi);
+  const outputWidth = Math.floor(size.width * pixelRatio);
+  const outputHeight = Math.floor(size.height * pixelRatio);
   const dialogRef = useDialogFocus<HTMLDivElement>(true, onClose);
 
   const pageSelection = useMemo(() => {
@@ -71,16 +79,7 @@ export default function ExportDialog({
     }
   }, [context.pages, currentPageIndex, range, scope]);
 
-  useEffect(() => {
-    if (pageSelection.error || pageSelection.indices.length === 0) return;
-    let active = true;
-    void analyzeExportPreflight(context, pageSelection.indices, dpi).then((result) => {
-      if (active) setPreflight(result);
-    });
-    return () => {
-      active = false;
-    };
-  }, [context, pageSelection.error, pageSelection.indices, dpi]);
+  const { preflight, error: preflightError } = useExportPreflight(context, pageSelection.indices, dpi);
 
   const issues = preflight
     ? preflight.emptySlotCount + preflight.missingAssetCount + preflight.lowResolutionCount
@@ -149,7 +148,7 @@ export default function ExportDialog({
               <select value={dpi} onChange={(event) => setDpi(Number(event.target.value))} className="editor-input min-h-11 w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 text-sm text-neutral-100">
                 {[150, 300, 600].map((value) => <option key={value} value={value}>{value} DPI</option>)}
               </select>
-              <span className="mt-1 block">{Math.round(getPageSize(context.pageFormat).width * getExportPixelRatio(context.pageFormat, dpi))} × {Math.round(getPageSize(context.pageFormat).height * getExportPixelRatio(context.pageFormat, dpi))} px</span>
+              <span className="mt-1 block">{outputWidth} × {outputHeight} px</span>
             </label>
             <label className="block text-xs text-neutral-400">
               <span className="mb-1 block">{t('outputFilename')}</span>
@@ -170,8 +169,8 @@ export default function ExportDialog({
 
           <section className="rounded-xl border border-neutral-700 bg-neutral-950/50 p-4">
             <h3 className="text-sm font-semibold text-neutral-200">{t('exportPreflight')}</h3>
-            {!preflight ? (
-              <div className="mt-3 text-xs text-neutral-500">…</div>
+            {preflightError ? <p role="alert" className="mt-3 text-sm text-red-300">{t('preflightFailed')}: {preflightError}</p> : !preflight ? (
+              <div role="status" className="mt-3 text-xs text-neutral-400">{t('preflightChecking')}</div>
             ) : issues === 0 ? (
               <div className="mt-3 rounded-lg border border-emerald-800 bg-emerald-950/40 p-3 text-xs text-emerald-200">{t('preflightReady')}</div>
             ) : (
@@ -181,16 +180,25 @@ export default function ExportDialog({
                 {preflight.lowResolutionCount > 0 && <li className="rounded-lg border border-amber-800 bg-amber-950/30 p-2 text-amber-200">{t('preflightLowResolution').replace('{count}', String(preflight.lowResolutionCount))}</li>}
               </ul>
             )}
+            {preflight && preflight.issues.length > 0 && onNavigateToIssue && <>
+              <p className="mt-3 text-xs text-neutral-400">{t('preflightIssueHint')}</p>
+              <ul className="mt-2 max-h-64 space-y-2 overflow-auto">{preflight.issues.map((issue) => <li key={`${issue.pageId}-${issue.slotIndex ?? issue.elementId}-${issue.kind}`}>
+                <button type="button" onClick={() => onNavigateToIssue(issue)} className={`min-h-11 w-full rounded-lg border p-2 text-left text-xs ${issue.kind === 'missing-asset' ? 'border-red-800 text-red-200' : 'border-amber-800 text-amber-200'}`}>
+                  <span className="block font-medium">{t('pageLabel')} {issue.pageIndex + 1} · {t('imageSlotLabel')} {issue.imageNumber}: {t(({ 'empty-slot': 'preflightIssueEmpty', 'missing-asset': 'preflightIssueMissing', 'low-resolution': 'preflightIssueLow' } as const)[issue.kind])}</span>
+                  {issue.assetPath && <span className="mt-1 block break-all text-neutral-400">{getAssetFileName(issue.assetPath)}</span>}
+                </button>
+              </li>)}</ul>
+            </>}
             <div className="mt-4 flex items-center justify-between border-t border-neutral-800 pt-3 text-xs text-neutral-400">
               <span>{t('estimatedSize')}</span>
-              <strong className="text-neutral-200">{estimateSize(format, compression, pageSelection.indices.length)}</strong>
+              <strong className="text-neutral-200">{estimateSize(format, compression, pageSelection.indices.length, outputWidth * outputHeight)}</strong>
             </div>
           </section>
         </div>
 
         <button
           type="button"
-          disabled={pageSelection.error || pageSelection.indices.length === 0 || !fileName.trim() || (preflight?.missingAssetCount ?? 0) > 0}
+          disabled={!preflight || !!preflightError || pageSelection.error || pageSelection.indices.length === 0 || !fileName.trim() || (preflight?.missingAssetCount ?? 0) > 0}
           onClick={() => onExport({
             format,
             dpi,

@@ -261,3 +261,21 @@ test('browses facing pages without changing the editor and returns explicitly to
   await dialog.getByRole('button', { name: 'Im Editor öffnen: Seite 2' }).click();
   await expect(page.locator('.editor-page-count')).toHaveText('2 / 4');
 });
+
+test('jumps from an export warning to the exact empty slot and corrects it', async ({ page }) => {
+  await createProject(page, 'Actionable preflight');
+  await selectLayout(page, /Raster \(4\)/);
+  await insertFixtureImage(page);
+  let dialog = await openExportDialog(page);
+  await dialog.getByRole('button', { name: 'Aktuelle Seite' }).click();
+  await dialog.getByRole('button', { name: 'Seite 1 · Bild 3: Leerer Bildplatz' }).click();
+  await expect(dialog).not.toBeVisible();
+  await insertFixtureImage(page);
+  dialog = await openExportDialog(page);
+  await dialog.getByRole('button', { name: 'Aktuelle Seite' }).click();
+  await expect(dialog.getByText('2 leere Bildplätze', { exact: true })).toBeVisible();
+  await expect(dialog.getByRole('button', { name: 'Seite 1 · Bild 3: Leerer Bildplatz' })).toHaveCount(0);
+  await expect(dialog.getByRole('button', { name: 'Seite 1 · Bild 2: Leerer Bildplatz' })).toBeVisible();
+  await dialog.getByRole('combobox', { name: 'Exportauflösung' }).selectOption('600');
+  await expect(dialog.getByRole('button', { name: /Seite 1 · Bild 3: Geringe Auflösung/ })).toBeVisible();
+});

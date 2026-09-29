@@ -47,4 +47,35 @@ describe('ExportDialog', () => {
     expect(screen.getByText('invalidPageRange')).toBeVisible();
     expect(screen.getByRole('button', { name: 'startExport' })).toBeDisabled();
   });
+  it('provides the exact target for a clickable empty-slot issue', async () => {
+    const user = userEvent.setup();
+    const source = context();
+    source.pages[1].layoutId = 'single';
+    const onNavigateToIssue = vi.fn();
+    render(<ExportDialog t={t} context={source} currentPageIndex={0} defaultCompression="medium" onClose={vi.fn()} onExport={vi.fn()} onNavigateToIssue={onNavigateToIssue} />);
+    await user.click(await screen.findByRole('button', { name: /pageLabel 2 · imageSlotLabel 1: preflightIssueEmpty/ }));
+    expect(onNavigateToIssue).toHaveBeenCalledWith({ kind: 'empty-slot', pageIndex: 1, pageId: 'page-1', imageNumber: 1, slotIndex: 0 });
+  });
+
+  it('blocks export when a selected page contains a missing asset', async () => {
+    const source = context();
+    source.pages[1].layoutId = 'single';
+    source.pages[1].slotAssignments = { 0: { assetPath: 'assets/missing.jpg', scale: 1, offsetX: 0, offsetY: 0 } };
+    render(<ExportDialog t={t} context={source} currentPageIndex={0} defaultCompression="medium" onClose={vi.fn()} onExport={vi.fn()} onNavigateToIssue={vi.fn()} />);
+    expect(screen.getByRole('button', { name: 'startExport' })).toBeDisabled();
+    await screen.findByText('preflightMissingAssets');
+    expect(screen.getByRole('button', { name: 'startExport' })).toBeDisabled();
+  });
+
+  it('shows whole-pixel output dimensions and updates size estimates for the selected DPI', async () => {
+    const user = userEvent.setup();
+    const source = { ...context(), pageFormat: 'square' as const };
+    render(<ExportDialog t={t} context={source} currentPageIndex={0} defaultCompression="medium" onClose={vi.fn()} onExport={vi.fn()} />);
+    expect(screen.getByText('2480 × 2480 px')).toBeVisible();
+    const previous = screen.getByText(/~.*MB/).textContent;
+    await user.selectOptions(screen.getByRole('combobox', { name: /exportResolution/ }), '600');
+    expect(screen.getByText('4960 × 4960 px')).toBeVisible();
+    expect(screen.getByText(/~.*MB/).textContent).not.toBe(previous);
+  });
+
 });

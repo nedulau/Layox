@@ -84,6 +84,9 @@ Detailed feature set of the local photo album editor.
 - PNG export of current page (2x retina resolution)
 - JPEG export of current page
 - ZIP export of all pages as PNG or JPEG
+- Clickable preflight warnings with exact page, slot/element and image filename
+- Selected-page/DPI-aware checks account for zoom and crop; missing images block export
+- Pending or outdated checks never enable export
 - Shared offscreen page renderer for every export format
 - Editor overlays, selection frames, snap lines, warnings, and actions never enter exports
 - Multi-page export preserves the visible page and selection, with progress and cancellation
