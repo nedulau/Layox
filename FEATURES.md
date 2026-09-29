@@ -54,6 +54,9 @@ Detailed feature set of the local photo album editor.
 - Free image elements: move, scale, rotate (outside slot layouts)
 - Resolution warning icon for low-quality slot images
 
+- Image library: capture-time sorting, orientation filters, pixel dimensions and explicit undated state
+- Direct navigation to each image usage with exact slot/element selection
+
 ## Text
 
 - Add free text elements with move/rotate controls

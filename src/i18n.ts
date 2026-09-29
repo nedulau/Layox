@@ -1,6 +1,17 @@
 export type Language = 'de' | 'en';
 
 export const de = {
+  imageOrientation: 'Bildformat',
+  imageLandscape: 'Querformat',
+  imagePortrait: 'Hochformat',
+  imageSquare: 'Quadratisch',
+  imageUnknown: 'Unbekannt',
+  imageSort: 'Sortierung',
+  imageSortName: 'Dateiname',
+  imageSortNewest: 'Aufnahme: neueste zuerst',
+  imageSortOldest: 'Aufnahme: älteste zuerst',
+  noCaptureDate: 'Kein Aufnahmedatum',
+  goToImageUsage: 'Zur Verwendungsstelle',
   pageTemplates: 'Eigene Seitenvorlagen',
   templateName: 'Vorlagenname',
   savePageTemplate: 'Aktuelle Seite als Vorlage speichern',
@@ -240,6 +251,17 @@ export type TranslationKey = keyof typeof de;
 export type Translator = (key: TranslationKey) => string;
 
 export const en = {
+  imageOrientation: 'Image orientation',
+  imageLandscape: 'Landscape',
+  imagePortrait: 'Portrait',
+  imageSquare: 'Square',
+  imageUnknown: 'Unknown',
+  imageSort: 'Sort order',
+  imageSortName: 'File name',
+  imageSortNewest: 'Capture: newest first',
+  imageSortOldest: 'Capture: oldest first',
+  noCaptureDate: 'No capture date',
+  goToImageUsage: 'Go to image usage',
   pageTemplates: 'Custom page templates',
   templateName: 'Template name',
   savePageTemplate: 'Save current page as template',

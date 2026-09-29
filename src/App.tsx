@@ -1355,12 +1355,21 @@ function Editor({
         defaultLayoutGap={defaultLayoutGap}
       />
 
-      <AssetLibraryModal
+      {showAssetLibrary && <AssetLibraryModal
+        pages={pages}
+        t={t}
+        onNavigate={(location) => {
+          setCurrentPageIndex(location.pageIndex);
+          if (location.slotIndex !== undefined) setSelectedSlotIndex(location.slotIndex);
+          else setSelectedElementId(location.elementId ?? null);
+          setCanvasZoomMode('fit');
+          setShowAssetLibrary(false);
+        }}
         open={showAssetLibrary}
         assetBlobs={assetBlobs}
         title={t('assetLibrary')}
         closeLabel={t('close')}
-        emptyLabel={t('noAssets')}
+        emptyLabel={t('noMatchingAssets')}
         searchPlaceholder={t('searchImages')}
         usageLabel={(count) => t('imageUsage').replace('{count}', String(count))}
         removeLabel={t('removeUnusedAsset')}
@@ -1371,7 +1380,7 @@ function Editor({
           removeAsset(assetPath);
         }}
         onClose={() => setShowAssetLibrary(false)}
-      />
+      />}
 
       <NewProjectModal
         open={showNewProjectModal}
