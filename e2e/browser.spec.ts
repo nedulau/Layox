@@ -214,3 +214,22 @@ test('reuses a saved page template in a different project without copying photos
   await page.getByLabel('Rückgängig').click();
   await expect(page.locator('.editor-page-count')).toHaveText('2 / 2');
 });
+
+test('filters image orientation, reads EXIF capture time and navigates to an image usage', async ({ page }) => {
+  await createProject(page, 'Library metadata');
+  await selectLayout(page, /Raster \(4\)/);
+  const chooser = page.waitForEvent('filechooser');
+  await openMenuItem(page, 'Einfügen', 'Bild einfügen');
+  await (await chooser).setFiles([fixtureImage, path.resolve('e2e/fixtures/dated-photo.jpg')]);
+  await openMenuItem(page, 'Einfügen', 'Aus Bibliothek einfügen');
+  const dialog = page.getByRole('dialog', { name: 'Asset-Bibliothek' });
+  await expect(dialog.getByText('2024-07-19 15:24:30')).toBeVisible();
+  await dialog.getByRole('combobox', { name: 'Bildformat' }).selectOption('portrait');
+  await expect(dialog.getByRole('button', { name: /dated-photo\.jpg/ })).toHaveCount(1);
+  await expect(dialog.getByRole('button', { name: /icon-512\.png/ })).toHaveCount(0);
+  await dialog.getByRole('combobox', { name: 'Sortierung' }).selectOption('capture-newest');
+  await dialog.getByRole('button', { name: 'Zur Verwendungsstelle: Seite 1, Bild 2' }).click();
+  await expect(dialog).not.toBeVisible();
+  await openMenuItem(page, 'Bearbeiten', 'Beschneiden');
+  await expect(page.getByRole('button', { name: 'Fertig' })).toBeVisible();
+});
