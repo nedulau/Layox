@@ -74,9 +74,7 @@ Detailed feature set of the local photo album editor.
 
 ## Canvas
 
-- Responsive scaling to available horizontal space
-- Explicit zoom controls (`100%`, `Fit`, `+`, `-`) from 20% to 300%
-- Grouped zoom controls with active Fit/100% indication and a separate current-scale readout
+- Automatic scaling to the available width and height, without a canvas zoom toolbar
 - Central format-aware canvas: classic 1200 × 900, A4 landscape/portrait, and square
 - Album-wide format changes with proportional placement and undo
 

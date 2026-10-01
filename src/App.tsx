@@ -286,9 +286,6 @@ function Editor({
   const [showQuickImageBar, setShowQuickImageBar] = useState<boolean>(() => readStoredBoolean('layox_showQuickImageBar', true));
   const [deleteFromLibraryOnImageDelete, setDeleteFromLibraryOnImageDelete] = useState<boolean>(() => readStoredBoolean('layox_deleteFromLibraryOnImageDelete', false));
   const [quickInsertAssetPath, setQuickInsertAssetPath] = useState<string | null>(null);
-  const [canvasZoomMode, setCanvasZoomMode] = useState<'fit' | 'manual'>('fit');
-  const [canvasManualZoom, setCanvasManualZoom] = useState(1);
-  const [canvasDisplayScale, setCanvasDisplayScale] = useState(1);
   const [uiError, setUiError] = useState<string | null>(null);
   const [uiNotice, setUiNotice] = useState<string | null>(null);
   const [noticeCanUndo, setNoticeCanUndo] = useState(false);
@@ -573,16 +570,6 @@ function Editor({
   const handleOpenExport = () => {
     closeMenu();
     editorExport.openDialog();
-  };
-
-  const setManualCanvasZoom = (scale: number) => {
-    setCanvasZoomMode('manual');
-    setCanvasManualZoom(Math.max(0.2, Math.min(3, scale)));
-  };
-
-  const changeCanvasZoom = (delta: number) => {
-    const currentScale = canvasZoomMode === 'manual' ? canvasManualZoom : canvasDisplayScale;
-    setManualCanvasZoom(Math.round((currentScale + delta) * 10) / 10);
   };
 
   const btnPageNav =
@@ -919,16 +906,6 @@ function Editor({
 
         </div>
 
-        <div className="editor-zoom-controls" role="group" aria-label={t('zoomLevel')}>
-          <button type="button" onClick={() => changeCanvasZoom(-0.1)} className="editor-zoom-button editor-zoom-icon" title={t('zoomOut')} aria-label={t('zoomOut')}>−</button>
-          <button type="button" onClick={() => setCanvasZoomMode('fit')} className="editor-zoom-button" title={t('zoomFit')} aria-pressed={canvasZoomMode === 'fit'}>{t('zoomFit')}</button>
-          <button type="button" onClick={() => setManualCanvasZoom(1)} className="editor-zoom-button" title={t('zoom100')} aria-pressed={canvasZoomMode === 'manual' && canvasManualZoom === 1}>{t('zoom100')}</button>
-          <button type="button" onClick={() => changeCanvasZoom(0.1)} className="editor-zoom-button editor-zoom-icon" title={t('zoomIn')} aria-label={t('zoomIn')}>+</button>
-          <span className="editor-zoom-value" aria-live="polite">
-            {Math.round(canvasDisplayScale * 100)}%
-          </span>
-        </div>
-
         {/* ── Page navigation (numbers + add/delete) ── */}
         <div className="editor-page-navigation relative flex flex-wrap items-center gap-y-2" data-menu>
           <QuickSettingsMenu
@@ -1224,9 +1201,6 @@ function Editor({
 
         <div className="h-full max-w-full aspect-[4/3] min-w-0">
           <EditorCanvas
-            zoomMode={canvasZoomMode}
-            manualZoom={canvasManualZoom}
-            onDisplayScaleChange={setCanvasDisplayScale}
             onRequestSlotDelete={handleSlotDeleteFromCanvas}
             dropImagesLabel={t('dropImagesHere')}
             imageLabelPrefix={t('imageSlotLabel')}

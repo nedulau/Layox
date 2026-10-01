@@ -117,7 +117,7 @@ test('is usable at tablet width without document overflow', async ({ page }) => 
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 
-test('centers the project name independently of controls and save status at every editor width', async ({ page }, testInfo) => {
+test('centers the project name and automatically fits the canvas at every editor width', async ({ page }, testInfo) => {
   await createProject(page, 'A long album title that stays centered while editing');
   const title = page.getByRole('textbox', { name: 'Projektname bearbeiten' });
   const status = page.locator('.editor-save-status');
@@ -137,21 +137,16 @@ test('centers the project name independently of controls and save status at ever
     expect(toolbarBounds.y).toBeGreaterThanOrEqual(titleBounds.y + titleBounds.height);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     expect(await navigation.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+    await expect.poll(() => page.locator('.konvajs-content').evaluate((canvas) => {
+      const rect = canvas.getBoundingClientRect();
+      const header = document.querySelector('.editor-topbar')!.getBoundingClientRect();
+      return rect.left >= 0 && rect.right <= window.innerWidth + 1
+        && rect.top >= header.bottom && rect.bottom <= window.innerHeight + 1;
+    })).toBe(true);
     if (width === 1440 || width === 768) {
       await page.screenshot({ path: testInfo.outputPath(`header-${width}.png`) });
     }
   }
-
-  const zoom = page.getByRole('group', { name: 'Zoomstufe' });
-  await zoom.getByRole('button', { name: '100%', exact: true }).click();
-  await expect(zoom.getByRole('button', { name: '100%', exact: true })).toHaveAttribute('aria-pressed', 'true');
-  await expect(zoom.locator('.editor-zoom-value')).toHaveText('100%');
-  await zoom.getByRole('button', { name: 'Vergrößern' }).click();
-  await expect(zoom.locator('.editor-zoom-value')).toHaveText('110%');
-  await zoom.getByRole('button', { name: 'Verkleinern' }).click();
-  await expect(zoom.locator('.editor-zoom-value')).toHaveText('100%');
-  await zoom.getByRole('button', { name: 'Anpassen' }).click();
-  await expect(zoom.getByRole('button', { name: 'Anpassen' })).toHaveAttribute('aria-pressed', 'true');
 
   const download = page.waitForEvent('download');
   await openMenuItem(page, 'Datei', 'Speichern unter');
