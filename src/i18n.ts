@@ -1,6 +1,13 @@
 export type Language = 'de' | 'en';
 
 export const de = {
+  pageFormat: 'Seitenformat',
+  formatClassic: 'Klassisch (4:3)',
+  formatLandscape: 'A4 Querformat',
+  formatPortrait: 'A4 Hochformat',
+  formatSquare: 'Quadratisch (21 × 21 cm)',
+  pageFormatHint: 'Gilt für das ganze Album. Bildplätze passen sich an; freie Elemente werden proportional verschoben.',
+  exportResolution: 'Exportauflösung',
   file: 'Datei',
   insert: 'Einfügen',
   edit: 'Bearbeiten',
@@ -226,6 +233,13 @@ export type TranslationKey = keyof typeof de;
 export type Translator = (key: TranslationKey) => string;
 
 export const en = {
+  pageFormat: 'Page format',
+  formatClassic: 'Classic (4:3)',
+  formatLandscape: 'A4 landscape',
+  formatPortrait: 'A4 portrait',
+  formatSquare: 'Square (21 × 21 cm)',
+  pageFormatHint: 'Applies to the whole album. Slots reflow; free elements move proportionally.',
+  exportResolution: 'Export resolution',
   file: 'File',
   insert: 'Insert',
   edit: 'Edit',

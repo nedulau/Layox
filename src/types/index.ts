@@ -1,3 +1,5 @@
+import type { PageFormat } from '../domain/pageFormat';
+
 export type ElementType = 'image' | 'text';
 
 export interface BaseElement {
@@ -91,7 +93,8 @@ export interface Project {
   meta: {
     id: string;
     name: string;
-    version: '1.1';
+    version: '1.1' | '1.2';
+    pageFormat?: PageFormat;
     defaultLayoutPadding?: number;
     defaultLayoutGap?: number;
   };

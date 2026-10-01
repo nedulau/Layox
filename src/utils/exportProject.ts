@@ -1,6 +1,6 @@
 import type { Page } from '../types';
 import type { PageRenderer, PageRenderOptions } from '../ports/pageRenderer';
-import { CANVAS_H, CANVAS_W } from '../constants/canvas';
+import { getExportPixelRatio, getPageSize, getPrintSize, type PageFormat } from '../domain/pageFormat';
 import type { TranslationKey } from '../i18n';
 import { computeLayoutSlots } from './layouts';
 
@@ -22,12 +22,14 @@ export interface ProjectExportContext {
   assets: Record<string, Blob>;
   projectName: string;
   renderer: PageRenderer;
+  pageFormat?: PageFormat;
   defaultLayoutPadding: number;
   defaultLayoutGap: number;
 }
 
 export interface ExportJobOptions {
   signal?: AbortSignal;
+  dpi?: number;
   onProgress?: (completed: number, total: number) => void;
 }
 
@@ -82,9 +84,12 @@ function renderOptions(
   context: ProjectExportContext,
   format: RenderFormat,
   signal?: AbortSignal,
+  dpi?: number,
 ): PageRenderOptions {
   return {
     ...format,
+    pageFormat: context.pageFormat,
+    pixelRatio: dpi === undefined ? format.pixelRatio : getExportPixelRatio(context.pageFormat, dpi),
     defaultLayoutPadding: context.defaultLayoutPadding,
     defaultLayoutGap: context.defaultLayoutGap,
     signal,
@@ -103,7 +108,7 @@ export async function renderProjectPages(
     throwIfAborted(job.signal);
     const page = context.pages[pageIndex];
     if (!page) throw new Error(`Page ${pageIndex + 1} no longer exists.`);
-    blobs.push(await context.renderer.renderPage(page, context.assets, renderOptions(context, format, job.signal)));
+    blobs.push(await context.renderer.renderPage(page, context.assets, renderOptions(context, format, job.signal, job.dpi)));
     job.onProgress?.(progressIndex + 1, pageIndices.length);
   }
   return blobs;
@@ -128,12 +133,14 @@ export async function exportAsPdf(
   ]);
   throwIfAborted(job.signal);
 
-  const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+  const size = getPageSize(context.pageFormat);
+  const print = getPrintSize(context.pageFormat);
+  const pdf = new jsPDF({ orientation: print.width >= print.height ? 'landscape' : 'portrait', unit: 'mm', format: [print.width, print.height] });
   const pageWidth = pdf.internal.pageSize.getWidth();
   const pageHeight = pdf.internal.pageSize.getHeight();
-  const scale = Math.min(pageWidth / CANVAS_W, pageHeight / CANVAS_H);
-  const imageWidth = CANVAS_W * scale;
-  const imageHeight = CANVAS_H * scale;
+  const scale = Math.min(pageWidth / size.width, pageHeight / size.height);
+  const imageWidth = size.width * scale;
+  const imageHeight = size.height * scale;
   const offsetX = (pageWidth - imageWidth) / 2;
   const offsetY = (pageHeight - imageHeight) / 2;
 
@@ -166,7 +173,7 @@ async function exportCurrentPage(
   const page = context.pages[pageIndex];
   if (!page) throw new Error('The selected page no longer exists.');
   job.onProgress?.(0, 1);
-  const blob = await context.renderer.renderPage(page, context.assets, renderOptions(context, format, job.signal));
+  const blob = await context.renderer.renderPage(page, context.assets, renderOptions(context, format, job.signal, job.dpi));
   throwIfAborted(job.signal);
   job.onProgress?.(1, 1);
   await saveBlob(blob, `${safeProjectName(fileName)}_Page${pageIndex + 1}.${extension}`);
@@ -258,7 +265,9 @@ async function decodeBlobDimensions(blob: Blob): Promise<{ width: number; height
 export async function analyzeExportPreflight(
   context: ProjectExportContext,
   pageIndices: number[],
+  dpi?: number,
 ): Promise<ExportPreflight> {
+  const pixelRatio = dpi === undefined ? 2 : getExportPixelRatio(context.pageFormat, dpi);
   let emptySlotCount = 0;
   let missingAssetCount = 0;
   let lowResolutionCount = 0;
@@ -281,6 +290,7 @@ export async function analyzeExportPreflight(
         page.layoutId,
         page.layoutPadding ?? context.defaultLayoutPadding,
         page.layoutGap ?? context.defaultLayoutGap,
+        getPageSize(context.pageFormat),
       );
       for (const [slotIndex, slot] of slots.entries()) {
         const assignment = page.slotAssignments?.[slotIndex];
@@ -297,7 +307,7 @@ export async function analyzeExportPreflight(
           const natural = await pendingDimensions;
           const sourceWidth = assignment.cropW ?? natural.width;
           const sourceHeight = assignment.cropH ?? natural.height;
-          if (sourceWidth < slot.width * 2 || sourceHeight < slot.height * 2) lowResolutionCount += 1;
+          if (sourceWidth < slot.width * pixelRatio * (assignment.cropW === undefined ? Math.max(1, assignment.scale) : 1) || sourceHeight < slot.height * pixelRatio * (assignment.cropH === undefined ? Math.max(1, assignment.scale) : 1)) lowResolutionCount += 1;
         } catch {
           missingAssetCount += 1;
         }
@@ -312,7 +322,7 @@ export async function analyzeExportPreflight(
       }
       try {
         const natural = await pendingDimensions;
-        if (natural.width < element.width * 2 || natural.height < element.height * 2) {
+        if (natural.width < element.width * pixelRatio || natural.height < element.height * pixelRatio) {
           lowResolutionCount += 1;
         }
       } catch {

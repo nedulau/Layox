@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { PageFormat } from '../domain/pageFormat';
 import type { Page } from '../types';
 import type { ExportRequest } from '../components/editor/ExportDialog';
 import {
@@ -19,6 +20,7 @@ interface EditorExportOptions {
   pages: Page[];
   assets: Record<string, Blob>;
   projectName: string;
+  pageFormat?: PageFormat;
   defaultLayoutPadding: number;
   defaultLayoutGap: number;
 }
@@ -33,6 +35,7 @@ export function useEditorExport({
   pages,
   assets,
   projectName,
+  pageFormat,
   defaultLayoutPadding,
   defaultLayoutGap,
 }: EditorExportOptions) {
@@ -55,10 +58,11 @@ export function useEditorExport({
     pages,
     assets,
     projectName,
+    pageFormat,
     renderer: konvaPageRenderer,
     defaultLayoutPadding,
     defaultLayoutGap,
-  }), [assets, defaultLayoutGap, defaultLayoutPadding, pages, projectName]);
+  }), [assets, defaultLayoutGap, defaultLayoutPadding, pages, projectName, pageFormat]);
 
   const run = useCallback(async (
     label: string,
@@ -93,7 +97,7 @@ export function useEditorExport({
       await run('PDF', total, (options) => exportAsPdf(
         context,
         request.compression,
-        options,
+        { ...options, dpi: request.dpi },
         request.pageIndices,
         request.fileName,
       ));
@@ -103,15 +107,15 @@ export function useEditorExport({
       const pageIndex = request.pageIndices[0];
       await run(request.format.toUpperCase(), 1, (options) => (
         request.format === 'png'
-          ? exportCurrentPageAsPng(context, pageIndex, options, request.fileName)
-          : exportCurrentPageAsJpeg(context, pageIndex, options, request.fileName, request.compression)
+          ? exportCurrentPageAsPng(context, pageIndex, { ...options, dpi: request.dpi }, request.fileName)
+          : exportCurrentPageAsJpeg(context, pageIndex, { ...options, dpi: request.dpi }, request.fileName, request.compression)
       ));
       return;
     }
     await run(`${request.format.toUpperCase()} ZIP`, total, (options) => exportAllPagesAsZip(
       context,
       request.format === 'png' ? 'png' : 'jpeg',
-      options,
+      { ...options, dpi: request.dpi },
       request.pageIndices,
       request.fileName,
       request.compression,

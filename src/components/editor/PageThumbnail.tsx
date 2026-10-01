@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
+import type { CSSProperties } from 'react';
+import type { PageFormat } from '../../domain/pageFormat';
 import type { Page } from '../../types';
 import { konvaPageRenderer } from '../../utils/konvaPageRenderer';
 import BlobImage from '../common/BlobImage';
@@ -9,12 +11,16 @@ export default function PageThumbnail({
   defaultLayoutPadding,
   defaultLayoutGap,
   className = '',
+  pageFormat,
+  style,
 }: {
   page: Page;
   assetBlobs: Record<string, Blob>;
   defaultLayoutPadding: number;
   defaultLayoutGap: number;
   className?: string;
+  pageFormat?: PageFormat;
+  style?: CSSProperties;
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(false);
@@ -41,6 +47,7 @@ export default function PageThumbnail({
     if (!visible) return;
     const controller = new AbortController();
     void konvaPageRenderer.renderPage(page, assetBlobs, {
+      pageFormat,
       mimeType: 'image/jpeg',
       quality: 0.74,
       pixelRatio: 0.24,
@@ -56,10 +63,10 @@ export default function PageThumbnail({
       if (!controller.signal.aborted) setFailed(true);
     });
     return () => controller.abort();
-  }, [assetBlobs, defaultLayoutGap, defaultLayoutPadding, page, visible]);
+  }, [assetBlobs, defaultLayoutGap, defaultLayoutPadding, page, pageFormat, visible]);
 
   return (
-    <div ref={rootRef} className={`relative overflow-hidden bg-neutral-950 ${className}`}>
+    <div style={style} ref={rootRef} className={`relative overflow-hidden bg-neutral-950 ${className}`}>
       {thumbnail ? (
         <BlobImage blob={thumbnail} alt="" draggable={false} className="h-full w-full object-cover" />
       ) : (

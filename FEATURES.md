@@ -56,6 +56,8 @@ Detailed feature set of the local photo album editor.
 
 ## Export
 
+- Selectable 150/300/600 DPI for all export formats, with output pixel dimensions
+- Matching physical PDF size for A4 landscape, portrait and 21 cm square
 - PDF export with compression presets:
   - No compression (max quality, PNG)
   - Low (JPEG 95%)
@@ -72,7 +74,8 @@ Detailed feature set of the local photo album editor.
 
 - Responsive scaling to available horizontal space
 - Explicit zoom controls (`100%`, `Fit`, `+`, `-`) from 20% to 300%
-- Internal 1200 x 900 coordinate system with CSS transform scaling
+- Central format-aware canvas: classic 1200 × 900, A4 landscape/portrait, and square
+- Album-wide format changes with proportional placement and undo
 
 ## Editing
 
@@ -121,8 +124,8 @@ Detailed feature set of the local photo album editor.
 
 ## File Format
 
-- `.layox` 1.1 files are ZIP containers with validated `project.json` and `assets/`
-- Unversioned and 1.0 files migrate to 1.1; unknown future versions are rejected
+- `.layox` 1.2 files are ZIP containers with validated `project.json` and `assets/`
+- Unversioned, 1.0 and 1.1 files migrate to 1.2; unknown future versions are rejected
 - Archive, JSON, numeric range, and asset-reference validation before the open project changes
 - Offline-first architecture: no backend, no cloud, all local
 - No analytics, telemetry, or production tracking requests

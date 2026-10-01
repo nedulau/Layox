@@ -7,6 +7,7 @@ import CropModal from './components/CropModal';
 import NewProjectModal from './components/NewProjectModal';
 import useProjectStore from './store/useProjectStore';
 import { tr, type Language, type TranslationKey } from './i18n';
+import { PAGE_FORMATS, type PageFormat } from './domain/pageFormat';
 import type { Page } from './types';
 import { readStoredBoolean, readStoredString, writeStoredString } from './infra/storage';
 import { getFileSystemPort } from './infra/fileSystem';
@@ -140,6 +141,8 @@ function Editor({
   const resetProject = useProjectStore((s) => s.resetProject);
   const setProjectName = useProjectStore((s) => s.setProjectName);
   const projectName = useProjectStore((s) => s.project.meta.name);
+  const pageFormat = useProjectStore((s) => s.project.meta.pageFormat ?? 'classic');
+  const setPageFormat = useProjectStore((s) => s.setPageFormat);
   const projectId = useProjectStore((s) => s.project.meta.id);
   const snapshot = useProjectStore((s) => s.snapshot);
   const undo = useProjectStore((s) => s.undo);
@@ -300,6 +303,7 @@ function Editor({
   const editorExport = useEditorExport({
     pages,
     assets: assetBlobs,
+    pageFormat,
     projectName,
     defaultLayoutPadding,
     defaultLayoutGap,
@@ -752,6 +756,13 @@ function Editor({
           <MenuButton label={t('layout')} isOpen={openMenu === 'layout'} onClick={() => toggleMenu('layout')} />
           {openMenu === 'layout' && (
             <div className="editor-dropdown absolute top-full left-0 mt-2 bg-neutral-900 border border-neutral-700 rounded-xl shadow-2xl z-[90] py-3 px-3 min-w-[280px]">
+              <label className="mb-3 block text-xs text-neutral-400">
+                {t('pageFormat')}
+                <select value={pageFormat} onChange={(event) => { snapshot(); setPageFormat(event.target.value as PageFormat); }} className="editor-input mt-1 min-h-11 w-full rounded-lg border border-neutral-700 bg-neutral-800 px-2 text-neutral-100">
+                  {PAGE_FORMATS.map((format) => <option key={format} value={format}>{t(({ classic: 'formatClassic', 'a4-landscape': 'formatLandscape', 'a4-portrait': 'formatPortrait', square: 'formatSquare' } as const)[format])}</option>)}
+                </select>
+                <span className="mt-1 block">{t('pageFormatHint')}</span>
+              </label>
               <div className="mb-2">
                 <LayoutPicker
                   currentLayoutId={currentLayoutId}
@@ -1315,6 +1326,7 @@ function Editor({
       )}
 
       <PageOverviewModal
+        pageFormat={pageFormat}
         open={showPageOverview}
         pages={pages}
         assetBlobs={assetBlobs}

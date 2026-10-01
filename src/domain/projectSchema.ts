@@ -1,8 +1,9 @@
 import { v4 as uuidv4 } from 'uuid';
 import type { Page, PageElement, Project, SlotAssignment } from '../types';
+import { PAGE_FORMATS } from './pageFormat';
 import { LAYOUT_IDS, LAYOUT_SLOT_COUNTS, MAX_LAYOUT_SPACING } from '../constants/layouts';
 
-export const CURRENT_PROJECT_VERSION = '1.1' as const;
+export const CURRENT_PROJECT_VERSION = '1.2' as const;
 export const MAX_PROJECT_JSON_BYTES = 5 * 1024 * 1024;
 export const MAX_PROJECT_ARCHIVE_BYTES = 2 * 1024 * 1024 * 1024;
 export const MAX_PROJECT_ASSET_BYTES = 128 * 1024 * 1024;
@@ -216,7 +217,7 @@ export function migrateAndValidateProject(value: unknown): Project {
   const project = requireRecord(value, 'project');
   const meta = requireRecord(project.meta, 'project.meta');
   const sourceVersion = meta.version;
-  if (sourceVersion !== undefined && sourceVersion !== '1.0' && sourceVersion !== CURRENT_PROJECT_VERSION) {
+  if (sourceVersion !== undefined && sourceVersion !== '1.0' && sourceVersion !== '1.1' && sourceVersion !== CURRENT_PROJECT_VERSION) {
     throw new Error(`Unsupported Layox project version: ${String(sourceVersion)}.`);
   }
   if (!Array.isArray(project.pages) || project.pages.length === 0 || project.pages.length > 10_000) {
@@ -234,11 +235,12 @@ export function migrateAndValidateProject(value: unknown): Project {
 
   return {
     meta: {
-      id: sourceVersion === CURRENT_PROJECT_VERSION
+      id: sourceVersion === CURRENT_PROJECT_VERSION || sourceVersion === '1.1'
         ? requireString(meta.id, 'project.meta.id', 200)
         : optionalString(meta.id, 'project.meta.id', 200) || uuidv4(),
       name: requireString(meta.name, 'project.meta.name', 500),
       version: CURRENT_PROJECT_VERSION,
+      pageFormat: optionalEnum(meta.pageFormat, PAGE_FORMATS, 'project.meta.pageFormat'),
       defaultLayoutPadding,
       defaultLayoutGap,
     },

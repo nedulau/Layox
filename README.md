@@ -164,7 +164,7 @@ src/
 
 ## File Format
 
-Projects are saved as versioned `.layox` files: a ZIP container holding `project.json` and an `assets/` folder. Format 1.1 is written today; unversioned and 1.0 projects are migrated on load. Newer unknown versions, invalid values, missing assets and oversized/corrupt archives are rejected without replacing the open project.
+Projects are saved as versioned `.layox` files: a ZIP container holding `project.json` and an `assets/` folder. Format 1.2 is written today; unversioned, 1.0 and 1.1 projects are migrated on load. Newer unknown versions, invalid values, missing assets and oversized/corrupt archives are rejected without replacing the open project.
 
 ## Persistence and recovery
 
@@ -181,3 +181,9 @@ Pull requests, `main`, and releases use the same lint, coverage, build, audit, b
 ## License
 
 This project is licensed under the MIT License. See [LICENSE](LICENSE).
+
+## Page format and print resolution
+
+Choose **Layout → Page format** to set Classic (4:3), A4 landscape, A4 portrait, or square (21 × 21 cm) for the entire album. Slots reflow to the new size. Free elements move proportionally; photos retain their aspect ratio. The change supports undo. Older projects keep the classic 1200 × 900 canvas and its A4 landscape PDF margins. New formats fill their matching PDF page without extra margins.
+
+The export dialog offers 150, 300 and 600 DPI for PDF, PNG, JPEG and image ZIPs and displays the resulting pixel dimensions. Compression controls encoding quality independently of the chosen resolution. Resolution warnings use the chosen DPI. Increasing DPI cannot restore detail missing from an original photo. Format 1.2 stores the selected page format; previous Layox versions reject these files.
