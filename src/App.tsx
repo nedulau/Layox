@@ -24,6 +24,7 @@ import {
 } from './domain/projectDefaults';
 import { MenuButton, MenuDivider, MenuItem } from './components/editor/MenuComponents';
 import BlobImage from './components/common/BlobImage';
+import AlbumPreviewDialog from './components/editor/AlbumPreviewDialog';
 import PageTemplatesDialog from './components/editor/PageTemplatesDialog';
 import AssetLibraryModal from './components/editor/AssetLibraryModal';
 import { useMediaQuery } from './hooks/useMediaQuery';
@@ -284,6 +285,7 @@ function Editor({
   // ─── Dropdown menu state ────────────────────────────────────────────────
   const [openMenu, setOpenMenu] = useState<string | null>(null);
   const [showNewProjectModal, setShowNewProjectModal] = useState(false);
+  const [showAlbumPreview, setShowAlbumPreview] = useState(false);
   const [showPageTemplates, setShowPageTemplates] = useState(false);
   const [showPageOverview, setShowPageOverview] = useState(false);
   const [showAssetLibrary, setShowAssetLibrary] = useState(false);
@@ -391,6 +393,7 @@ function Editor({
   }, [t]);
   const openNewProjectModal = useCallback(() => setShowNewProjectModal(true), []);
   useEditorKeyboardShortcuts({
+    enabled: !showAlbumPreview,
     imageInputRef,
     deleteUnusedAssetsAfterImageDelete: deleteFromLibraryOnImageDelete,
     onNewProject: openNewProjectModal,
@@ -957,6 +960,7 @@ function Editor({
             onRestore={(point) => void handleRestoreRecoveryPoint(point)}
           />
 
+          <button type="button" onClick={() => { closeMenu(); setShowAlbumPreview(true); }} className="editor-surface-control mr-2 min-h-11 rounded-lg border border-neutral-700 px-3 text-xs text-neutral-300">{t('albumPreview')}</button>
           <button
             onClick={() => setShowPageOverview(true)}
             className="editor-page-label mr-2 px-2.5 py-1 rounded-md border border-neutral-700 bg-neutral-900 text-[11px] uppercase tracking-wide text-neutral-400 hover:bg-neutral-800 transition-colors cursor-pointer select-none"
@@ -1329,6 +1333,8 @@ function Editor({
           onExport={(request) => void editorExport.requestExport(request)}
         />
       )}
+
+      {showAlbumPreview && <AlbumPreviewDialog context={editorExport.context} currentPageIndex={currentPageIndex} t={t} onClose={() => setShowAlbumPreview(false)} onEditPage={(index) => { setCurrentPageIndex(index); setSelectedElementId(null); setSelectedSlotIndex(null); setShowAlbumPreview(false); }} />}
 
       {showPageTemplates && currentPage && <PageTemplatesDialog page={currentPage} pageFormat={pageFormat} t={t} onClose={() => setShowPageTemplates(false)} onApply={(template) => { snapshot(); addPageFromTemplate(template); setShowPageTemplates(false); }} />}
 

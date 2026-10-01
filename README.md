@@ -199,3 +199,9 @@ Open **Layout → Custom page templates**, enter a name, and save the current pa
 The image library combines filename search, unused-image filtering and landscape/portrait/square/unknown orientation filters. Sort by filename or capture time (oldest/newest). JPEG EXIF `DateTimeOriginal` is read locally; images without that field remain explicitly undated and sort after dated photos. File modification time is never substituted for capture time. EXIF rotation is respected when classifying JPEG orientation. PNG/JPEG dimensions are read from bounded headers where possible; other image types use local decoding. Metadata is cached by image blob and processed in small batches, with lazy image thumbnails.
 
 Each image lists buttons for its actual page/slot/element usages. Clicking one closes the library, opens the page, selects the matching image and fits the canvas. Reusing an image in several places lists each occurrence. All analysis stays local and works again after reopening the original project assets.
+
+## Album spread preview
+
+Open **Album preview** next to the page controls to read the album as facing pages. A leading cover is shown alone on the right, followed by paired pages; an unmatched final page keeps a blank facing side. Albums without a leading cover pair from the first page. The preview starts at the current editor page and respects the chosen page format.
+
+Use arrow buttons, Left/Right, Page Up/Down, Home/End, the spread selector, or horizontal touch swipes. Closing with Escape or Close preserves the editor page and selection. **Open in editor: page …** deliberately returns to that page for editing. Editor editing shortcuts are suspended during preview. Only visible pages are rendered, using the same printable renderer as export; obsolete renders are cancelled and failures are shown. Preview resolution is intended for screen viewing; use export for print output.

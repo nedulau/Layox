@@ -2,6 +2,7 @@ import { useEffect, type RefObject } from 'react';
 import useProjectStore from '../store/useProjectStore';
 
 interface EditorKeyboardShortcutOptions {
+  enabled?: boolean;
   imageInputRef: RefObject<HTMLInputElement | null>;
   deleteUnusedAssetsAfterImageDelete: boolean;
   onNewProject: () => void;
@@ -21,6 +22,7 @@ function isTextEntryTarget(target: EventTarget | null): boolean {
 
 /** Registers the editor's global keyboard shortcuts. */
 export function useEditorKeyboardShortcuts({
+  enabled = true,
   imageInputRef,
   deleteUnusedAssetsAfterImageDelete,
   onNewProject,
@@ -28,7 +30,9 @@ export function useEditorKeyboardShortcuts({
   onSaveError,
 }: EditorKeyboardShortcutOptions): void {
   useEffect(() => {
+    if (!enabled) return;
     const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) return;
       const isTextEntry = isTextEntryTarget(event.target);
       const key = event.key.toLowerCase();
       const hasCommandModifier = event.ctrlKey || event.metaKey;
@@ -127,6 +131,7 @@ export function useEditorKeyboardShortcuts({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [
+    enabled,
     deleteUnusedAssetsAfterImageDelete,
     imageInputRef,
     onCloseMenu,

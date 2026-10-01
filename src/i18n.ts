@@ -1,6 +1,14 @@
 export type Language = 'de' | 'en';
 
 export const de = {
+  albumPreview: 'Albumvorschau',
+  previewSpread: 'Doppelseite',
+  previewNavigation: 'Vorschau-Navigation',
+  previewPrevious: 'Vorherige Doppelseite',
+  previewNext: 'Nächste Doppelseite',
+  previewLoading: 'Vorschau wird geladen…',
+  previewFailed: 'Vorschau konnte nicht geladen werden',
+  editPreviewPage: 'Im Editor öffnen: Seite',
   imageOrientation: 'Bildformat',
   imageLandscape: 'Querformat',
   imagePortrait: 'Hochformat',
@@ -251,6 +259,14 @@ export type TranslationKey = keyof typeof de;
 export type Translator = (key: TranslationKey) => string;
 
 export const en = {
+  albumPreview: 'Album preview',
+  previewSpread: 'Spread',
+  previewNavigation: 'Preview navigation',
+  previewPrevious: 'Previous spread',
+  previewNext: 'Next spread',
+  previewLoading: 'Loading preview…',
+  previewFailed: 'Preview could not be loaded',
+  editPreviewPage: 'Open in editor: page',
   imageOrientation: 'Image orientation',
   imageLandscape: 'Landscape',
   imagePortrait: 'Portrait',
