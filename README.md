@@ -187,3 +187,9 @@ This project is licensed under the MIT License. See [LICENSE](LICENSE).
 Choose **Layout → Page format** to set Classic (4:3), A4 landscape, A4 portrait, or square (21 × 21 cm) for the entire album. Slots reflow to the new size. Free elements move proportionally; photos retain their aspect ratio. The change supports undo. Older projects keep the classic 1200 × 900 canvas and its A4 landscape PDF margins. New formats fill their matching PDF page without extra margins.
 
 The export dialog offers 150, 300 and 600 DPI for PDF, PNG, JPEG and image ZIPs and displays the resulting pixel dimensions. Compression controls encoding quality independently of the chosen resolution. Resolution warnings use the chosen DPI. Increasing DPI cannot restore detail missing from an original photo. Format 1.2 stores the selected page format; previous Layox versions reject these files.
+
+## Custom page templates
+
+Open **Layout → Custom page templates**, enter a name, and save the current page. Up to 50 templates (2 MiB total) are kept locally for reuse across projects. Templates retain background, text, cover styling and image geometry, but contain no photos or original file paths. Fixed layout slots start empty; free photos become movable, resizable and rotatable placeholders.
+
+**New page from template** inserts a page after the current one, adapts it to the album format and creates fresh element IDs. Select a free placeholder before inserting a photo from a file or the image library; the photo fits within its bounds without stretching and retains its rotation. Empty placeholders remain editable and are omitted from exports, with an empty-place warning. Page insertion supports undo. Deleting a template requires confirmation and leaves existing pages intact. Templates are stored in the local app/browser profile; clearing app data removes them.

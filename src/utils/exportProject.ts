@@ -315,6 +315,7 @@ export async function analyzeExportPreflight(
     }
     for (const element of page.elements) {
       if (element.type !== 'image') continue;
+      if (element.isPlaceholder) { emptySlotCount += 1; continue; }
       const pendingDimensions = dimensionFor(element.src);
       if (!pendingDimensions) {
         missingAssetCount += 1;

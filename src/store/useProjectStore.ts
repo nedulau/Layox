@@ -37,6 +37,7 @@ import {
   assignAssetToLayoutPage,
   prepareImportedAsset,
 } from '../services/projectImagePlacement';
+import { instantiatePageTemplate, type PageTemplate } from '../domain/pageTemplates';
 import { changePageFormat, getPageSize, type PageFormat } from '../domain/pageFormat';
 import { MAX_LAYOUT_SPACING } from '../constants/layouts';
 import {
@@ -100,6 +101,7 @@ interface ProjectState {
 
   setCurrentPageIndex: (index: number) => void;
   addPage: () => void;
+  addPageFromTemplate: (template: PageTemplate) => void;
   removePage: (index: number) => void;
   movePage: (fromIndex: number, toIndex: number) => void;
   duplicatePage: (index: number) => void;
@@ -732,7 +734,7 @@ const useProjectStore = create<ProjectState>((baseSet, get) => {
         );
         const assignments: Record<number, SlotAssignment> = {};
         images.forEach((img, i) => {
-          if (i < layout.slots.length) {
+          if (!img.isPlaceholder && i < layout.slots.length) {
             assignments[i] = { assetPath: img.src, offsetX: 0, offsetY: 0, scale: 1 };
           }
         });
@@ -753,6 +755,14 @@ const useProjectStore = create<ProjectState>((baseSet, get) => {
         selectedSlotIndex: null,
       };
     }),
+
+  addPageFromTemplate: (template) => set((state) => {
+    const page = instantiatePageTemplate(template, state.project.meta.pageFormat);
+    const pages = [...state.project.pages];
+    const pageIndex = state.currentPageIndex + 1;
+    pages.splice(pageIndex, 0, page);
+    return { project: { ...state.project, pages }, currentPageIndex: pageIndex, selectedElementId: null, selectedSlotIndex: null };
+  }),
 
   setPageFormat: (format) => set((state) => {
     const project = changePageFormat(state.project, format);
@@ -810,6 +820,7 @@ const useProjectStore = create<ProjectState>((baseSet, get) => {
   addImageFromFile: async (file) => {
     const page = get().currentPage();
     if (!page) throw new Error('No active page.');
+    const placeholderId = get().selectedElementId;
     const targetPageId = page.id;
     const targetLayoutId = page.layoutId;
 
@@ -842,7 +853,7 @@ const useProjectStore = create<ProjectState>((baseSet, get) => {
 
       let placement: AddImageResult['placement'] = 'library-only';
       set((state) => {
-        const project = appendImageToFreePage(state.project, targetPageId, targetLayoutId, element);
+        const project = appendImageToFreePage(state.project, targetPageId, targetLayoutId, element, placeholderId);
         if (!project) {
           return { assetBlobs: { ...state.assetBlobs, [assetPath]: blob } };
         }
@@ -861,6 +872,7 @@ const useProjectStore = create<ProjectState>((baseSet, get) => {
   addImageFromAsset: async (assetPath) => {
     const page = get().currentPage();
     if (!page) return;
+    const placeholderId = get().selectedElementId;
     const targetPageId = page.id;
     const targetLayoutId = page.layoutId;
 
@@ -890,7 +902,7 @@ const useProjectStore = create<ProjectState>((baseSet, get) => {
     });
 
     set((state) => {
-      const project = appendImageToFreePage(state.project, targetPageId, targetLayoutId, element);
+      const project = appendImageToFreePage(state.project, targetPageId, targetLayoutId, element, placeholderId);
       if (!project) return state;
       return {
         project,

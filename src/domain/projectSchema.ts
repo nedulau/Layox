@@ -90,6 +90,7 @@ function validateElement(value: unknown, path: string): PageElement {
     return {
       ...base,
       type: 'image',
+      isPlaceholder: optionalBoolean(element.isPlaceholder, `${path}.isPlaceholder`),
       width,
       height,
       src: validateAssetPath(element.src, `${path}.src`),
@@ -252,7 +253,7 @@ export function collectReferencedAssetPaths(project: Project): Set<string> {
   const paths = new Set<string>();
   for (const page of project.pages) {
     for (const element of page.elements) {
-      if (element.type === 'image') paths.add(element.src);
+      if (element.type === 'image' && !element.isPlaceholder) paths.add(element.src);
     }
     for (const assignment of Object.values(page.slotAssignments ?? {})) {
       paths.add(assignment.assetPath);

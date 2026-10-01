@@ -184,3 +184,33 @@ test('persists the page format and exports the selected pixel resolution', async
   expect(bytes.readUInt32BE(16)).toBe(1240);
   expect(bytes.readUInt32BE(20)).toBe(1240);
 });
+
+test('reuses a saved page template in a different project without copying photos', async ({ page }) => {
+  await createProject(page, 'Template source');
+  await selectLayout(page, /Raster \(4\)/);
+  await insertFixtureImage(page);
+  await openMenuItem(page, 'Layout', 'Eigene Seitenvorlagen');
+  let dialog = page.getByRole('dialog', { name: 'Eigene Seitenvorlagen' });
+  await dialog.getByLabel('Vorlagenname').fill('Travel grid');
+  await dialog.getByRole('button', { name: 'Aktuelle Seite als Vorlage speichern' }).click();
+  await expect(dialog.getByText('Travel grid', { exact: true })).toBeVisible();
+  await dialog.getByRole('button', { name: 'Schließen' }).click();
+
+  await openMenuItem(page, 'Datei', 'Startseite');
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Änderungen verwerfen' }).click();
+  await page.getByRole('button', { name: 'Neues Projekt' }).click();
+  const creating = page.getByRole('dialog', { name: 'Neues Projekt' });
+  await creating.getByRole('textbox').fill('Template target');
+  await creating.getByRole('button', { name: 'Erstellen' }).click();
+  await openMenuItem(page, 'Layout', 'Eigene Seitenvorlagen');
+  dialog = page.getByRole('dialog', { name: 'Eigene Seitenvorlagen' });
+  await dialog.getByRole('button', { name: 'Neue Seite aus Vorlage: Travel grid' }).click();
+  await expect(dialog).not.toBeVisible();
+  await expect(page.locator('.editor-page-count')).toHaveText('2 / 3');
+  const exporting = await openExportDialog(page);
+  await exporting.getByRole('button', { name: 'Aktuelle Seite' }).click();
+  await expect(exporting.getByText('4 leere Bildplätze')).toBeVisible();
+  await exporting.getByRole('button', { name: 'Schließen' }).click();
+  await page.getByLabel('Rückgängig').click();
+  await expect(page.locator('.editor-page-count')).toHaveText('2 / 2');
+});

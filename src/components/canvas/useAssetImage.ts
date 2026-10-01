@@ -95,7 +95,7 @@ export function collectImagePathsFromPage(elementPage: {
     if (assignment?.assetPath) paths.add(assignment.assetPath);
   });
   elementPage.elements.forEach((element) => {
-    if (element.type === 'image') paths.add(element.src);
+    if (element.type === 'image' && !element.isPlaceholder) paths.add(element.src);
   });
   return [...paths];
 }

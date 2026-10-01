@@ -404,23 +404,25 @@ function ImageElementComponent({
   onSelect: () => void;
   onChange: (changes: Partial<ImageElement>) => void;
 }) {
-  const image = useCachedBlobImage(projectId, element.src, assetBlobs);
+  const image = useCachedBlobImage(projectId, element.isPlaceholder ? undefined : element.src, assetBlobs);
+  const placeholderRef = useRef<Konva.Rect>(null);
   const shapeRef = useRef<Konva.Image>(null);
   const trRef = useRef<Konva.Transformer>(null);
 
   useEffect(() => {
-    if (isSelected && trRef.current && shapeRef.current) {
-      trRef.current.nodes([shapeRef.current]);
+    const node = element.isPlaceholder ? placeholderRef.current : shapeRef.current;
+    if (isSelected && trRef.current && node) {
+      trRef.current.nodes([node]);
       trRef.current.getLayer()?.batchDraw();
     }
-  }, [isSelected]);
+  }, [isSelected, element.isPlaceholder]);
 
   const handleDragEnd = (e: Konva.KonvaEventObject<DragEvent>) => {
     onChange({ x: Math.round(e.target.x()), y: Math.round(e.target.y()) });
   };
 
   const handleTransformEnd = () => {
-    const node = shapeRef.current;
+    const node = element.isPlaceholder ? placeholderRef.current : shapeRef.current;
     if (!node) return;
     const scaleX = node.scaleX();
     const scaleY = node.scaleY();
@@ -434,6 +436,13 @@ function ImageElementComponent({
       rotation: Math.round(node.rotation()),
     });
   };
+
+  if (element.isPlaceholder) {
+    return <>
+      <Rect ref={placeholderRef} x={element.x} y={element.y} width={element.width} height={element.height} rotation={element.rotation} fill="#f0f0f0" stroke={isSelected ? '#3b82f6' : '#999'} dash={[8, 4]} draggable onClick={onSelect} onTap={onSelect} onDragEnd={handleDragEnd} onTransformEnd={handleTransformEnd} />
+      {isSelected && <Transformer ref={trRef} rotateEnabled keepRatio={false} />}
+    </>;
+  }
 
   if (!image) {
     return (

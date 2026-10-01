@@ -1,6 +1,13 @@
 export type Language = 'de' | 'en';
 
 export const de = {
+  pageTemplates: 'Eigene Seitenvorlagen',
+  templateName: 'Vorlagenname',
+  savePageTemplate: 'Aktuelle Seite als Vorlage speichern',
+  usePageTemplate: 'Neue Seite aus Vorlage',
+  noPageTemplates: 'Noch keine eigenen Vorlagen gespeichert.',
+  pageTemplatesHint: 'Vorlagen bleiben lokal auf diesem Gerät. Gestaltung und Text werden übernommen; Fotos werden zu leeren Bildplätzen. Neue Seiten passen sich dem Albumformat an.',
+  deletePageTemplateConfirm: 'Diese gespeicherte Seitenvorlage löschen? Bereits erstellte Seiten bleiben erhalten.',
   pageFormat: 'Seitenformat',
   formatClassic: 'Klassisch (4:3)',
   formatLandscape: 'A4 Querformat',
@@ -233,6 +240,13 @@ export type TranslationKey = keyof typeof de;
 export type Translator = (key: TranslationKey) => string;
 
 export const en = {
+  pageTemplates: 'Custom page templates',
+  templateName: 'Template name',
+  savePageTemplate: 'Save current page as template',
+  usePageTemplate: 'New page from template',
+  noPageTemplates: 'No custom templates saved yet.',
+  pageTemplatesHint: 'Templates stay on this device. Design and text are retained; photos become empty image placeholders. New pages adapt to the album format.',
+  deletePageTemplateConfirm: 'Delete this saved page template? Existing pages are retained.',
   pageFormat: 'Page format',
   formatClassic: 'Classic (4:3)',
   formatLandscape: 'A4 landscape',

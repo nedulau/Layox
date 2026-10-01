@@ -37,6 +37,13 @@ Detailed feature set of the local photo album editor.
 - Configurable layout margin and spacing
 - Free arrangement mode for manual positioning
 
+## Custom Page Templates
+
+- Save page design and text locally for reuse across projects (up to 50 templates)
+- Photos become empty slots/placeholders; no photo data is stored in templates
+- Fresh IDs and automatic adaptation to the target album format
+- Insert after the current page with undo; confirmed template deletion
+
 ## Images
 
 - Insert images via button or drag and drop
