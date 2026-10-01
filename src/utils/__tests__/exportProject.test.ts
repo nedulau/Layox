@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Blob as NodeBlob } from 'node:buffer';
 import type { Page } from '../../types';
 import type { PageRenderer } from '../../ports/pageRenderer';
@@ -229,10 +229,60 @@ describe('project export rendering', () => {
     };
 
     await expect(analyzeExportPreflight(context, [0])).resolves.toEqual({
+      issues: [
+        { kind: 'missing-asset', pageIndex: 0, pageId: 'layout', imageNumber: 1, slotIndex: 0, assetPath: 'assets/missing.jpg' },
+        { kind: 'empty-slot', pageIndex: 0, pageId: 'layout', imageNumber: 2, slotIndex: 1 },
+      ],
       pageCount: 1,
       emptySlotCount: 1,
       missingAssetCount: 1,
       lowResolutionCount: 0,
     });
+  });
+});
+
+describe('actionable export preflight', () => {
+  afterEach(() => vi.unstubAllGlobals());
+  const image = { id: 'photo', type: 'image' as const, x: 0, y: 0, width: 1200, height: 1200, src: 'assets/photo.jpg', rotation: 0, zIndex: 0 };
+  const source = (): ProjectExportContext => ({ ...createContext({ renderPage: vi.fn() }), pageFormat: 'square', pages: [{ id: 'cover', elements: [], background: '#fff' }, { id: 'photos', elements: [image, { ...image, id: 'placeholder', isPlaceholder: true }], background: '#fff' }], assets: { 'assets/photo.jpg': new Blob(['photo']) } });
+
+  it('records exact free element targets and changes resolution warnings with DPI', async () => {
+    const close = vi.fn(); vi.stubGlobal('createImageBitmap', vi.fn(async () => ({ width: 2000, height: 2000, close })));
+    const low = await analyzeExportPreflight(source(), [1], 150);
+    expect(low.lowResolutionCount).toBe(0);
+    expect(low.issues).toEqual([{ kind: 'empty-slot', pageIndex: 1, pageId: 'photos', imageNumber: 2, elementId: 'placeholder' }]);
+    const high = await analyzeExportPreflight(source(), [1], 300);
+    expect(high.issues[0]).toEqual({ kind: 'low-resolution', pageIndex: 1, pageId: 'photos', imageNumber: 1, elementId: 'photo', assetPath: image.src });
+    expect(high.emptySlotCount).toBe(1); expect(high.pageCount).toBe(1); expect(close).toHaveBeenCalledTimes(2);
+  });
+
+  it('uses the visible slot zoom and crop and decodes a repeated asset only once', async () => {
+    const decode = vi.fn(async () => ({ width: 2000, height: 2000, close: vi.fn() })); vi.stubGlobal('createImageBitmap', decode);
+    const context = source();
+    context.pages = [{ id: 'slots', elements: [{ ...image, src: 'assets/hidden.jpg' }], background: '#fff', layoutId: 'two-side', slotAssignments: {
+      0: { assetPath: image.src, offsetX: 0, offsetY: 0, scale: 4 },
+      1: { assetPath: image.src, offsetX: 0, offsetY: 0, scale: 1, cropX: 0, cropY: 0, cropW: 200, cropH: 200 },
+    } }];
+    const result = await analyzeExportPreflight(context, [0], 150);
+    expect(result.lowResolutionCount).toBe(2);
+    expect(result.missingAssetCount).toBe(0);
+    expect(result.issues.map((issue) => issue.slotIndex)).toEqual([0, 1]);
+    expect(decode).toHaveBeenCalledTimes(1);
+  });
+
+  it('distinguishes missing and undecodable assets and handles invalid page indices', async () => {
+    vi.stubGlobal('createImageBitmap', vi.fn(async () => { throw new Error('corrupt image'); }));
+    const context = source(); context.pages[1].elements = [image, { ...image, id: 'missing', src: 'assets/missing.jpg' }];
+    const result = await analyzeExportPreflight(context, [1, 99]);
+    expect(result.missingAssetCount).toBe(2); expect(result.pageCount).toBe(1);
+    expect(result.issues.map((issue) => issue.elementId)).toEqual(['photo', 'missing']);
+  });
+
+  it('does not misreport cancellation as a damaged image', async () => {
+    const controller = new AbortController(); controller.abort();
+    await expect(analyzeExportPreflight(source(), [1], 300, controller.signal)).rejects.toMatchObject({ name: 'AbortError' });
+    const running = new AbortController();
+    vi.stubGlobal('createImageBitmap', vi.fn(async () => { running.abort(); return { width: 2000, height: 2000, close: vi.fn() }; }));
+    await expect(analyzeExportPreflight(source(), [1], 300, running.signal)).rejects.toMatchObject({ name: 'AbortError' });
   });
 });

@@ -440,7 +440,7 @@ function ImageElementComponent({
   if (element.isPlaceholder) {
     return <>
       <Rect ref={placeholderRef} x={element.x} y={element.y} width={element.width} height={element.height} rotation={element.rotation} fill="#f0f0f0" stroke={isSelected ? '#3b82f6' : '#999'} dash={[8, 4]} draggable onClick={onSelect} onTap={onSelect} onDragEnd={handleDragEnd} onTransformEnd={handleTransformEnd} />
-      {isSelected && <Transformer ref={trRef} rotateEnabled keepRatio={false} />}
+      {isSelected && <Transformer ref={trRef} rotateEnabled keepRatio={false} boundBoxFunc={(oldBox, newBox) => newBox.width < 20 || newBox.height < 20 ? oldBox : newBox} />}
     </>;
   }
 

@@ -1,6 +1,12 @@
 export type Language = 'de' | 'en';
 
 export const de = {
+  preflightChecking: 'Seiten werden geprüft…',
+  preflightFailed: 'Exportprüfung fehlgeschlagen',
+  preflightIssueHint: 'Eine Fundstelle anklicken, um sie auf der Seite zu korrigieren.',
+  preflightIssueEmpty: 'Leerer Bildplatz',
+  preflightIssueMissing: 'Fehlendes oder beschädigtes Bild',
+  preflightIssueLow: 'Geringe Auflösung',
   albumPreview: 'Albumvorschau',
   previewSpread: 'Doppelseite',
   previewNavigation: 'Vorschau-Navigation',
@@ -259,6 +265,12 @@ export type TranslationKey = keyof typeof de;
 export type Translator = (key: TranslationKey) => string;
 
 export const en = {
+  preflightChecking: 'Checking pages…',
+  preflightFailed: 'Export preflight failed',
+  preflightIssueHint: 'Click an issue to correct it on the page.',
+  preflightIssueEmpty: 'Empty image placeholder',
+  preflightIssueMissing: 'Missing or damaged image',
+  preflightIssueLow: 'Low resolution',
   albumPreview: 'Album preview',
   previewSpread: 'Spread',
   previewNavigation: 'Preview navigation',

@@ -149,4 +149,10 @@ describe('konvaPageRenderer', () => {
       defaultLayoutGap: 20,
     })).rejects.toThrow('missing the referenced image');
   });
+  it('does not decode hidden free images on a layout page', async () => {
+    const page: Page = { id: 'hidden', background: '#fff', layoutId: 'single', elements: [{ id: 'hidden-image', type: 'image', src: 'assets/missing.jpg', x: 0, y: 0, width: 100, height: 100, rotation: 0, zIndex: 0 }] };
+    await expect(konvaPageRenderer.renderPage(page, {}, { mimeType: 'image/png', quality: 1, pixelRatio: 1, defaultLayoutPadding: 20, defaultLayoutGap: 20 })).resolves.toBeInstanceOf(Blob);
+    expect(konvaState.created.some((node) => node.kind === 'Image')).toBe(false);
+  });
+
 });
