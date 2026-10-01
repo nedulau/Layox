@@ -645,19 +645,6 @@ function Editor({
       {/* ─── Menu Bar ─── */}
       <div className="editor-topbar relative z-40 px-3 py-2 bg-neutral-900/95 border border-neutral-800 rounded-xl shadow-lg mx-4 mt-4 shrink-0 backdrop-blur-sm">
 
-        <div className="editor-project-header">
-          <input
-            type="text"
-            value={projectName}
-            onChange={(e) => setProjectName(e.target.value)}
-            onFocus={() => snapshot()}
-            className="editor-project-name"
-            title={t('projectNameEdit')}
-            aria-label={t('projectNameEdit')}
-          />
-          <SaveStatus t={t} isDirty={isDirty} isSaving={isSaving} error={saveError} />
-        </div>
-
         <div className="editor-toolbar">
         <div className="editor-menu-controls">
         {/* Undo / Redo */}
@@ -906,8 +893,21 @@ function Editor({
 
         </div>
 
+        <div className="editor-project-header">
+          <input
+            type="text"
+            value={projectName}
+            onChange={(e) => setProjectName(e.target.value)}
+            onFocus={() => snapshot()}
+            className="editor-project-name"
+            title={t('projectNameEdit')}
+            aria-label={t('projectNameEdit')}
+          />
+        </div>
+
         {/* ── Page navigation (numbers + add/delete) ── */}
         <div className="editor-page-navigation relative flex flex-wrap items-center gap-y-2" data-menu>
+          <div className="editor-navigation-controls">
           <QuickSettingsMenu
             t={t}
             buttonClassName={btnPageNav}
@@ -986,6 +986,8 @@ function Editor({
             )}
           </div>
 
+          </div>
+          <SaveStatus t={t} isDirty={isDirty} isSaving={isSaving} error={saveError} />
         </div>
         </div>
 

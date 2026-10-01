@@ -224,15 +224,12 @@ body {
 }
 
 .editor-project-header {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 20rem) minmax(0, 1fr);
-  align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 0.5rem;
+  grid-column: 2;
+  min-width: 0;
+  margin-top: 6px;
 }
 
 .editor-project-name {
-  grid-column: 2;
   width: 100%;
   min-width: 0;
   height: 2rem;
@@ -260,8 +257,8 @@ body {
 }
 
 .editor-save-status {
-  grid-column: 3;
-  justify-self: end;
+  flex: 0 0 auto;
+  margin-left: 0.75rem;
   display: inline-flex;
   align-items: center;
   gap: 0.375rem;
@@ -291,7 +288,6 @@ body {
 .editor-ui[data-ui-theme='light'] .editor-save-status[data-state='saving'] { --save-status-color: #2563eb; }
 .editor-ui[data-ui-theme='light'] .editor-save-status[data-state='error'] { --save-status-color: #dc2626; color: #b91c1c; }
 
-.editor-toolbar,
 .editor-menu-controls {
   display: flex;
   flex-wrap: wrap;
@@ -299,9 +295,37 @@ body {
   gap: 0.375rem;
 }
 
-.editor-toolbar { gap: 0.75rem; }
-.editor-menu-controls { max-width: 100%; }
-.editor-page-navigation { min-width: 0; max-width: 100%; margin-left: auto; }
+.editor-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) clamp(10rem, 14vw, 20rem) minmax(0, 1fr);
+  align-items: start;
+  gap: 0.75rem;
+}
+
+.editor-menu-controls { grid-column: 1; min-width: 0; max-width: 100%; }
+.editor-page-navigation { grid-column: 3; min-width: 0; max-width: 100%; justify-content: flex-end; }
+.editor-navigation-controls { display: contents; }
+
+@media (max-width: 1099px) {
+  .editor-toolbar {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 20rem) minmax(0, 1fr);
+    gap: 0.5rem 0.75rem;
+  }
+
+  .editor-menu-controls { grid-column: 1 / -1; grid-row: 1; }
+  .editor-project-header { grid-column: 2; grid-row: 2; margin-top: 0; }
+  .editor-page-navigation { display: contents; }
+  .editor-navigation-controls {
+    grid-column: 1 / -1;
+    grid-row: 3;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    row-gap: 0.5rem;
+  }
+  .editor-save-status { grid-column: 3; grid-row: 2; justify-self: end; align-self: center; margin-left: 0; }
+}
 
 .editor-context-bar { min-width: 0; max-width: 100%; overflow-x: auto; }
 

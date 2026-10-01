@@ -122,6 +122,14 @@ test('centers the project name and automatically fits the canvas at every editor
   const title = page.getByRole('textbox', { name: 'Projektname bearbeiten' });
   const status = page.locator('.editor-save-status');
   const navigation = page.locator('.editor-page-navigation');
+  const toolbar = page.locator('.editor-toolbar');
+  await page.setViewportSize({ width: 1440, height: 1024 });
+  await expect.poll(() => toolbar.evaluate((element) => element.getBoundingClientRect().height)).toBeLessThanOrEqual(44);
+  const initialTitleBounds = (await title.boundingBox())!;
+  const initialStatusBounds = (await status.boundingBox())!;
+  const initialMenuBounds = (await page.getByRole('button', { name: 'Rückgängig' }).boundingBox())!;
+  expect(Math.abs(initialTitleBounds.y + initialTitleBounds.height / 2 - initialMenuBounds.y - initialMenuBounds.height / 2)).toBeLessThan(1);
+  expect(Math.abs(initialStatusBounds.y + initialStatusBounds.height / 2 - initialMenuBounds.y - initialMenuBounds.height / 2)).toBeLessThan(1);
   for (let count = 2; count < 9; count++) await navigation.getByTitle('Neue Seite').click();
 
   for (const width of [2048, 1440, 1280, 1024, 768]) {
@@ -132,9 +140,16 @@ test('centers the project name and automatically fits the canvas at every editor
     })).toBeLessThan(1);
     const titleBounds = (await title.boundingBox())!;
     const statusBounds = (await status.boundingBox())!;
-    const toolbarBounds = (await page.locator('.editor-toolbar').boundingBox())!;
     expect(statusBounds.x).toBeGreaterThanOrEqual(titleBounds.x + titleBounds.width);
-    expect(toolbarBounds.y).toBeGreaterThanOrEqual(titleBounds.y + titleBounds.height);
+    expect(await toolbar.locator('button:visible').evaluateAll((buttons) => {
+      const title = document.querySelector('.editor-project-name')!.getBoundingClientRect();
+      return buttons.every((button) => {
+        const rect = button.getBoundingClientRect();
+        return rect.right <= title.left || rect.left >= title.right
+          || rect.bottom <= title.top || rect.top >= title.bottom;
+      });
+    })).toBe(true);
+    if (width === 2048) expect((await toolbar.boundingBox())!.height).toBeLessThanOrEqual(44);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     expect(await navigation.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
     await expect.poll(() => page.locator('.konvajs-content').evaluate((canvas) => {
