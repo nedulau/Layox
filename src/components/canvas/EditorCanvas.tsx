@@ -26,9 +26,6 @@ import { ElementRenderer, SlotComponent } from './EditorCanvasElements';
 // ─── Main canvas ─────────────────────────────────────────────────────────────
 
 function EditorCanvas({
-  zoomMode = 'fit',
-  manualZoom = 1,
-  onDisplayScaleChange,
   onRequestSlotDelete,
   dropImagesLabel = 'Drop image(s) here',
   imageLabelPrefix = 'Image',
@@ -39,9 +36,6 @@ function EditorCanvas({
   lowResolutionHintText = (qualityPercent: number) =>
     `Low resolution - may appear pixelated\nAbout ${qualityPercent}% of the recommended size`,
 }: {
-  zoomMode?: 'fit' | 'manual';
-  manualZoom?: number;
-  onDisplayScaleChange?: (scale: number) => void;
   onRequestSlotDelete?: (slotIndex: number) => void;
   dropImagesLabel?: string;
   imageLabelPrefix?: string;
@@ -163,22 +157,19 @@ function EditorCanvas({
       const scaleX = rect.width / canvasWidth;
       const scaleY = rect.height / canvasHeight;
       const fitScale = Math.max(0.12, Math.min(3, Math.min(scaleX, scaleY)));
-      const manualScale = Math.min(3, Math.max(0.2, manualZoom));
-      const nextScale = zoomMode === 'fit' ? fitScale : manualScale;
       setContainerSize((current) => (
         current.width === rect.width && current.height === rect.height
           ? current
           : { width: rect.width, height: rect.height }
       ));
-      setDisplayScale(nextScale);
-      onDisplayScaleChange?.(nextScale);
+      setDisplayScale(fitScale);
     };
 
     updateScale();
     const observer = new ResizeObserver(updateScale);
     observer.observe(container);
     return () => observer.disconnect();
-  }, [canvasWidth, canvasHeight, manualZoom, onDisplayScaleChange, zoomMode]);
+  }, [canvasWidth, canvasHeight]);
 
   // ─── Drag & drop ─────────────────────────────────────────────────────────
   const [dragOver, setDragOver] = useState(false);

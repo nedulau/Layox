@@ -11,15 +11,17 @@ export default function SaveStatus({
   isSaving: boolean;
   error: string | null;
 }) {
+  const state = error ? 'error' : isSaving ? 'saving' : isDirty ? 'unsaved' : 'saved';
+
   return (
     <span
-      className={`text-[11px] tabular-nums ${
-        error ? 'text-red-300' : isSaving ? 'text-blue-300' : isDirty ? 'text-amber-300' : 'text-emerald-300'
-      }`}
+      className="editor-save-status"
+      data-state={state}
       title={error ?? undefined}
       role="status"
       aria-live="polite"
     >
+      <span className="editor-save-status-dot" aria-hidden="true" />
       {error ? t('saveFailed') : isSaving ? t('saving') : isDirty ? t('unsaved') : t('saved')}
     </span>
   );

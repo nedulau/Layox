@@ -117,6 +117,106 @@ test('is usable at tablet width without document overflow', async ({ page }) => 
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 
+test('centers the project name and automatically fits the canvas at every editor width', async ({ page }, testInfo) => {
+  await createProject(page, 'A long album title that stays centered while editing');
+  const title = page.getByRole('textbox', { name: 'Projektname bearbeiten' });
+  const status = page.locator('.editor-save-status');
+  const settings = page.getByRole('button', { name: 'Schnelleinstellungen' });
+  const expectStatusBesideSettings = async () => {
+    const statusBounds = (await status.boundingBox())!;
+    const settingsBounds = (await settings.boundingBox())!;
+    expect(settingsBounds.x - statusBounds.x - statusBounds.width).toBeCloseTo(12, 0);
+    expect(Math.abs(statusBounds.y + statusBounds.height / 2 - settingsBounds.y - settingsBounds.height / 2)).toBeLessThan(1);
+  };
+  const navigation = page.locator('.editor-page-navigation');
+  const toolbar = page.locator('.editor-toolbar');
+  await page.setViewportSize({ width: 1440, height: 1024 });
+  await expect.poll(() => toolbar.evaluate((element) => element.getBoundingClientRect().height)).toBeLessThanOrEqual(44);
+  const initialTitleBounds = (await title.boundingBox())!;
+  const initialStatusBounds = (await status.boundingBox())!;
+  const initialMenuBounds = (await page.getByRole('button', { name: 'Rückgängig' }).boundingBox())!;
+  expect(Math.abs(initialTitleBounds.y + initialTitleBounds.height / 2 - initialMenuBounds.y - initialMenuBounds.height / 2)).toBeLessThan(1);
+  expect(Math.abs(initialStatusBounds.y + initialStatusBounds.height / 2 - initialMenuBounds.y - initialMenuBounds.height / 2)).toBeLessThan(1);
+  for (let count = 2; count < 9; count++) await navigation.getByTitle('Neue Seite').click();
+
+  for (const width of [2048, 1440, 1280, 1024, 768]) {
+    await page.setViewportSize({ width, height: 1024 });
+    await expect.poll(async () => title.evaluate((input) => {
+      const rect = input.getBoundingClientRect();
+      return Math.abs(rect.left + rect.width / 2 - window.innerWidth / 2);
+    })).toBeLessThan(1);
+    await expectStatusBesideSettings();
+    expect(await toolbar.locator('button:visible, .editor-save-status').evaluateAll((controls) => {
+      const title = document.querySelector('.editor-project-name')!.getBoundingClientRect();
+      return controls.every((control) => {
+        const rect = control.getBoundingClientRect();
+        return rect.right <= title.left || rect.left >= title.right
+          || rect.bottom <= title.top || rect.top >= title.bottom;
+      });
+    })).toBe(true);
+    if (width === 2048) expect((await toolbar.boundingBox())!.height).toBeLessThanOrEqual(44);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    expect(await navigation.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+    await expect.poll(() => page.locator('.konvajs-content').evaluate((canvas) => {
+      const rect = canvas.getBoundingClientRect();
+      const header = document.querySelector('.editor-topbar')!.getBoundingClientRect();
+      return rect.left >= 0 && rect.right <= window.innerWidth + 1
+        && rect.top >= header.bottom && rect.bottom <= window.innerHeight + 1;
+    })).toBe(true);
+    if (width === 1440 || width === 768) {
+      await page.screenshot({ path: testInfo.outputPath(`header-${width}.png`) });
+    }
+  }
+
+  const download = page.waitForEvent('download');
+  await openMenuItem(page, 'Datei', 'Speichern unter');
+  await download;
+  await expect(status).toHaveText('Gespeichert');
+  await expectStatusBesideSettings();
+  const savedTitleBounds = (await title.boundingBox())!;
+  await title.fill('Renamed album');
+  await expect(status).toHaveText('Ungespeichert');
+  await expectStatusBesideSettings();
+  expect(await title.boundingBox()).toEqual(savedTitleBounds);
+});
+
+test('keeps image previews loaded and the library button fixed outside the scrolling strip', async ({ page }) => {
+  await createProject(page, 'Image previews');
+  const libraryButton = page.locator('.editor-asset-library-button');
+  const emptyBounds = (await libraryButton.boundingBox())!;
+  await libraryButton.click();
+  let dialog = page.getByRole('dialog', { name: 'Asset-Bibliothek' });
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole('button', { name: 'Schließen' }).click();
+
+  const chooser = page.waitForEvent('filechooser');
+  await openMenuItem(page, 'Einfügen', 'Bild einfügen');
+  await (await chooser).setFiles(Array.from({ length: 12 }, () => fixtureImage));
+  const strip = page.locator('.editor-asset-strip');
+  await expect(strip.locator('img')).toHaveCount(12);
+  await expect.poll(() => strip.locator('img').evaluateAll((images) =>
+    images.every((image) => (image as HTMLImageElement).naturalWidth > 0),
+  )).toBe(true);
+  expect(await libraryButton.boundingBox()).toEqual(emptyBounds);
+
+  const source = await strip.locator('img').first().getAttribute('src');
+  await page.getByRole('textbox', { name: 'Projektname bearbeiten' }).fill('Changed title');
+  await expect(strip.locator('img').first()).toHaveAttribute('src', source!);
+  await page.setViewportSize({ width: 768, height: 1024 });
+  const beforeScroll = await libraryButton.boundingBox();
+  await strip.evaluate((element) => { element.scrollLeft = element.scrollWidth; });
+  expect(await strip.evaluate((element) => element.scrollLeft)).toBeGreaterThan(0);
+  expect(await libraryButton.boundingBox()).toEqual(beforeScroll);
+
+  await libraryButton.click();
+  dialog = page.getByRole('dialog', { name: 'Asset-Bibliothek' });
+  await expect.poll(() => dialog.locator('img').evaluateAll((images) =>
+    images.length === 12 && images.every((image) => (image as HTMLImageElement).naturalWidth > 0),
+  )).toBe(true);
+  await dialog.getByRole('button', { name: 'Schließen' }).click();
+  await expect(strip.locator('img').first()).toHaveAttribute('src', source!);
+});
+
 test('keeps opening available on phones and restricts editing clearly', async ({ page }) => {
   await createProject(page, 'Phone');
   await page.setViewportSize({ width: 390, height: 844 });

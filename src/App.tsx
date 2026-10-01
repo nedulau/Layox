@@ -286,9 +286,6 @@ function Editor({
   const [showQuickImageBar, setShowQuickImageBar] = useState<boolean>(() => readStoredBoolean('layox_showQuickImageBar', true));
   const [deleteFromLibraryOnImageDelete, setDeleteFromLibraryOnImageDelete] = useState<boolean>(() => readStoredBoolean('layox_deleteFromLibraryOnImageDelete', false));
   const [quickInsertAssetPath, setQuickInsertAssetPath] = useState<string | null>(null);
-  const [canvasZoomMode, setCanvasZoomMode] = useState<'fit' | 'manual'>('fit');
-  const [canvasManualZoom, setCanvasManualZoom] = useState(1);
-  const [canvasDisplayScale, setCanvasDisplayScale] = useState(1);
   const [uiError, setUiError] = useState<string | null>(null);
   const [uiNotice, setUiNotice] = useState<string | null>(null);
   const [noticeCanUndo, setNoticeCanUndo] = useState(false);
@@ -575,16 +572,6 @@ function Editor({
     editorExport.openDialog();
   };
 
-  const setManualCanvasZoom = (scale: number) => {
-    setCanvasZoomMode('manual');
-    setCanvasManualZoom(Math.max(0.2, Math.min(3, scale)));
-  };
-
-  const changeCanvasZoom = (delta: number) => {
-    const currentScale = canvasZoomMode === 'manual' ? canvasManualZoom : canvasDisplayScale;
-    setManualCanvasZoom(Math.round((currentScale + delta) * 10) / 10);
-  };
-
   const btnPageNav =
     'min-w-11 h-11 px-2 flex items-center justify-center rounded-lg border text-sm transition-all cursor-pointer select-none';
   const btnIcon =
@@ -656,21 +643,10 @@ function Editor({
   return (
     <div className="editor-ui relative isolate flex flex-col w-screen h-screen bg-neutral-950 text-neutral-100" data-ui-theme={uiTheme}>
       {/* ─── Menu Bar ─── */}
-      <div className="editor-topbar relative z-40 flex flex-wrap items-center gap-1.5 px-3 py-1.5 bg-neutral-900/95 border border-neutral-800 rounded-xl shadow-lg mx-4 mt-4 shrink-0 backdrop-blur-sm">
+      <div className="editor-topbar relative z-40 px-3 py-2 bg-neutral-900/95 border border-neutral-800 rounded-xl shadow-lg mx-4 mt-4 shrink-0 backdrop-blur-sm">
 
-        <div className="order-first basis-full flex justify-center xl:order-none xl:basis-full xl:absolute xl:inset-x-0 xl:top-[21px] xl:-translate-y-1/2 xl:flex xl:justify-center xl:pointer-events-none">
-          <input
-            type="text"
-            value={projectName}
-            onChange={(e) => setProjectName(e.target.value)}
-            onFocus={() => snapshot()}
-            className="editor-input xl:pointer-events-auto w-full max-w-[380px] xl:w-[320px] xl:max-w-[320px] text-center text-sm text-neutral-300 font-semibold bg-neutral-900 border border-neutral-700 rounded-lg
-                       outline-none focus:text-white focus:border-blue-500 py-0.5 px-2 hover:border-neutral-500 transition-colors"
-            title={t('projectNameEdit')}
-          />
-          <SaveStatus t={t} isDirty={isDirty} isSaving={isSaving} error={saveError} />
-        </div>
-
+        <div className="editor-toolbar">
+        <div className="editor-menu-controls">
         {/* Undo / Redo */}
         <button onClick={handleUndo} disabled={!canUndo} className={`${btnIcon} editor-surface-control editor-toolbar-icon border-neutral-700 bg-neutral-900 text-neutral-300 hover:bg-neutral-800`} title={`${t('undo')} (Ctrl+Z)`} aria-label={t('undo')}>
           <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -915,21 +891,25 @@ function Editor({
           )}
         </div>
 
-        <div className="editor-zoom-controls flex items-center gap-1" role="group" aria-label={t('zoomLevel')}>
-          <button type="button" onClick={() => changeCanvasZoom(-0.1)} className={`${btnIcon} editor-surface-control`} title={t('zoomOut')} aria-label={t('zoomOut')}>−</button>
-          <button type="button" onClick={() => setCanvasZoomMode('fit')} className={`${btnPageNav} editor-surface-control text-xs`} title={t('zoomFit')}>{t('zoomFit')}</button>
-          <button type="button" onClick={() => setManualCanvasZoom(1)} className={`${btnPageNav} editor-surface-control text-xs`} title={t('zoom100')}>{t('zoom100')}</button>
-          <button type="button" onClick={() => changeCanvasZoom(0.1)} className={`${btnIcon} editor-surface-control`} title={t('zoomIn')} aria-label={t('zoomIn')}>+</button>
-          <span className="min-w-11 text-center text-[11px] text-neutral-400" aria-live="polite">
-            {Math.round(canvasDisplayScale * 100)}%
-          </span>
         </div>
 
-        {/* ── Spacer ── */}
-        <div className="flex-1" />
+        <div className="editor-project-header">
+          <input
+            type="text"
+            value={projectName}
+            onChange={(e) => setProjectName(e.target.value)}
+            onFocus={() => snapshot()}
+            className="editor-project-name"
+            title={t('projectNameEdit')}
+            aria-label={t('projectNameEdit')}
+          />
+        </div>
 
         {/* ── Page navigation (numbers + add/delete) ── */}
-        <div className="relative flex items-center" data-menu>
+        <div className="editor-page-navigation relative flex flex-wrap items-center gap-y-2" data-menu>
+          <div className="editor-navigation-controls">
+          <div className="editor-settings-controls">
+          <SaveStatus t={t} isDirty={isDirty} isSaving={isSaving} error={saveError} />
           <QuickSettingsMenu
             t={t}
             buttonClassName={btnPageNav}
@@ -951,6 +931,7 @@ function Editor({
             recoveryError={recoveryError}
             onRestore={(point) => void handleRestoreRecoveryPoint(point)}
           />
+          </div>
 
           <button
             onClick={() => setShowPageOverview(true)}
@@ -960,7 +941,7 @@ function Editor({
             {t('pages')}
           </button>
 
-          <div className="flex items-center gap-1">
+          <div className="flex flex-wrap items-center gap-1">
             {pageItems.map((item) => {
               if (item === 'ellipsis-left' || item === 'ellipsis-right') {
                 return (
@@ -985,7 +966,7 @@ function Editor({
             })}
           </div>
 
-          <span className="editor-page-count ml-2 text-xs text-neutral-400 tabular-nums select-none">
+          <span className="editor-page-count ml-2 text-xs text-neutral-400 tabular-nums select-none whitespace-nowrap">
             {currentPageIndex + 1} / {pages.length}
           </span>
 
@@ -1008,42 +989,46 @@ function Editor({
             )}
           </div>
 
+          </div>
+        </div>
         </div>
 
         {/* Hidden file inputs */}
         <input ref={fileInputRef} type="file" accept=".layox" className="hidden" onChange={handleFileSelected} />
         <input ref={imageInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleImageSelected} />
 
+        <div className="flex flex-col">
         {showQuickImageBar && currentLayoutId && (
-          <div className="editor-context-bar order-3 basis-full mt-2 pt-2 border-t border-neutral-800/90 flex items-center gap-3 px-1 pb-1 text-sm">
-            <div className="flex-1 min-w-0 overflow-x-auto">
+          <div className="editor-asset-bar order-3 mt-2 pt-2 border-t border-neutral-800/90">
+            <button
+              type="button"
+              onClick={() => {
+                setQuickInsertAssetPath(null);
+                setShowAssetLibrary(true);
+              }}
+              className="editor-asset-library-button"
+            >
+              <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
+                <rect x="3" y="3" width="7" height="7" rx="1.5" />
+                <rect x="14" y="3" width="7" height="7" rx="1.5" />
+                <rect x="3" y="14" width="7" height="7" rx="1.5" />
+                <rect x="14" y="14" width="7" height="7" rx="1.5" />
+              </svg>
+              {t('assetLibrary')}
+            </button>
+            <div className="editor-asset-strip">
               {quickInsertAssetPaths.length === 0 ? (
-                <div className="text-xs text-neutral-500 py-1">{t('noAssets')}</div>
+                <div className="text-xs text-neutral-500">{t('noAssets')}</div>
               ) : (
-                <div className="flex items-center gap-2 pr-1">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setQuickInsertAssetPath(null);
-                      setShowAssetLibrary(true);
-                    }}
-                    className="shrink-0 h-14 px-3 rounded-md border border-neutral-700 bg-neutral-900 text-neutral-200 text-xs hover:border-neutral-500 transition-colors cursor-pointer select-none"
-                  >
-                    {t('assetLibrary')}
-                  </button>
-
-                  {quickInsertAssetPaths.map((assetPath) => {
+                  quickInsertAssetPaths.map((assetPath) => {
                     const isActive = quickInsertAssetPath === assetPath;
                     return (
                       <button
                         key={`quick-insert-${assetPath}`}
                         type="button"
                         onClick={() => handleQuickInsertAssetPick(assetPath)}
-                        className={`shrink-0 w-14 h-14 rounded-md border overflow-hidden transition-colors cursor-pointer select-none ${
-                          isActive
-                            ? 'border-blue-500 ring-1 ring-blue-500/80'
-                            : 'border-neutral-700 hover:border-neutral-500'
-                        }`}
+                        className="editor-asset-thumbnail"
+                        aria-pressed={isActive}
                         title={assetPath.split('/').pop() || assetPath}
                       >
                         {assetBlobs[assetPath] ? (
@@ -1060,13 +1045,12 @@ function Editor({
                         )}
                       </button>
                     );
-                  })}
-                </div>
+                  })
               )}
             </div>
 
             {quickInsertAssetPath && (
-              <span className="text-[11px] text-blue-300 whitespace-nowrap">{t('insertFromLibrary')}</span>
+              <span className="max-w-48 text-[11px] text-blue-300">{t('insertFromLibrary')}</span>
             )}
           </div>
         )}
@@ -1198,6 +1182,7 @@ function Editor({
             ) : null}
           </div>
         )}
+        </div>
       </div>
 
       {/* ─── Canvas area with page arrows on sides ─── */}
@@ -1220,9 +1205,6 @@ function Editor({
 
         <div className="h-full max-w-full aspect-[4/3] min-w-0">
           <EditorCanvas
-            zoomMode={canvasZoomMode}
-            manualZoom={canvasManualZoom}
-            onDisplayScaleChange={setCanvasDisplayScale}
             onRequestSlotDelete={handleSlotDeleteFromCanvas}
             dropImagesLabel={t('dropImagesHere')}
             imageLabelPrefix={t('imageSlotLabel')}

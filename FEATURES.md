@@ -15,6 +15,7 @@ Detailed feature set of the local photo album editor.
 - Complete IndexedDB recovery snapshots with page position and image blobs
 - Up to twelve snapshots per project with asset deduplication, orphan cleanup, and quota-aware pruning
 - Visible saved/unsaved/saving/error status based on content revisions
+- Centered editable project name and separate save-status badge share the main toolbar row on desktop; the badge stays directly left of Quick Settings when control groups wrap on narrow screens
 - Recent projects persisted via localStorage + IndexedDB handles
 
 ## Pages and Navigation
@@ -46,6 +47,7 @@ Detailed feature set of the local photo album editor.
 - Reset crop via toolbar action
 - Free image elements: move, scale, rotate (outside slot layouts)
 - Resolution warning icon for low-quality slot images
+- Stable quick-image strip with a fixed library button and previews that remain valid during development remounts
 
 ## Text
 
@@ -72,8 +74,7 @@ Detailed feature set of the local photo album editor.
 
 ## Canvas
 
-- Responsive scaling to available horizontal space
-- Explicit zoom controls (`100%`, `Fit`, `+`, `-`) from 20% to 300%
+- Automatic scaling to the available width and height, without a canvas zoom toolbar
 - Central format-aware canvas: classic 1200 × 900, A4 landscape/portrait, and square
 - Album-wide format changes with proportional placement and undo
 
@@ -104,7 +105,7 @@ Detailed feature set of the local photo album editor.
 - Crop modal supports touch interaction for crop box and handles
 - Canvas elements support touch move/scale/rotate (via Konva)
 - Full editing support on tablets from 768 px
-- Scrollable/collapsible editor controls between 768 and 1023 px
+- Wrapping editor controls and horizontally scrollable contextual controls between 768 and 1023 px
 - On smartphones below 768 px, start screen, project opening, and recovery remain available; editing shows a clear platform notice
 
 ## Accessibility
