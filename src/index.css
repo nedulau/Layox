@@ -258,7 +258,6 @@ body {
 
 .editor-save-status {
   flex: 0 0 auto;
-  margin-left: 0.75rem;
   display: inline-flex;
   align-items: center;
   gap: 0.375rem;
@@ -305,6 +304,12 @@ body {
 .editor-menu-controls { grid-column: 1; min-width: 0; max-width: 100%; }
 .editor-page-navigation { grid-column: 3; min-width: 0; max-width: 100%; justify-content: flex-end; }
 .editor-navigation-controls { display: contents; }
+.editor-settings-controls {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.75rem;
+}
 
 @media (max-width: 1099px) {
   .editor-toolbar {
@@ -324,7 +329,6 @@ body {
     justify-content: flex-end;
     row-gap: 0.5rem;
   }
-  .editor-save-status { grid-column: 3; grid-row: 2; justify-self: end; align-self: center; margin-left: 0; }
 }
 
 .editor-context-bar { min-width: 0; max-width: 100%; overflow-x: auto; }

@@ -121,6 +121,13 @@ test('centers the project name and automatically fits the canvas at every editor
   await createProject(page, 'A long album title that stays centered while editing');
   const title = page.getByRole('textbox', { name: 'Projektname bearbeiten' });
   const status = page.locator('.editor-save-status');
+  const settings = page.getByRole('button', { name: 'Schnelleinstellungen' });
+  const expectStatusBesideSettings = async () => {
+    const statusBounds = (await status.boundingBox())!;
+    const settingsBounds = (await settings.boundingBox())!;
+    expect(settingsBounds.x - statusBounds.x - statusBounds.width).toBeCloseTo(12, 0);
+    expect(Math.abs(statusBounds.y + statusBounds.height / 2 - settingsBounds.y - settingsBounds.height / 2)).toBeLessThan(1);
+  };
   const navigation = page.locator('.editor-page-navigation');
   const toolbar = page.locator('.editor-toolbar');
   await page.setViewportSize({ width: 1440, height: 1024 });
@@ -138,13 +145,11 @@ test('centers the project name and automatically fits the canvas at every editor
       const rect = input.getBoundingClientRect();
       return Math.abs(rect.left + rect.width / 2 - window.innerWidth / 2);
     })).toBeLessThan(1);
-    const titleBounds = (await title.boundingBox())!;
-    const statusBounds = (await status.boundingBox())!;
-    expect(statusBounds.x).toBeGreaterThanOrEqual(titleBounds.x + titleBounds.width);
-    expect(await toolbar.locator('button:visible').evaluateAll((buttons) => {
+    await expectStatusBesideSettings();
+    expect(await toolbar.locator('button:visible, .editor-save-status').evaluateAll((controls) => {
       const title = document.querySelector('.editor-project-name')!.getBoundingClientRect();
-      return buttons.every((button) => {
-        const rect = button.getBoundingClientRect();
+      return controls.every((control) => {
+        const rect = control.getBoundingClientRect();
         return rect.right <= title.left || rect.left >= title.right
           || rect.bottom <= title.top || rect.top >= title.bottom;
       });
@@ -167,9 +172,11 @@ test('centers the project name and automatically fits the canvas at every editor
   await openMenuItem(page, 'Datei', 'Speichern unter');
   await download;
   await expect(status).toHaveText('Gespeichert');
+  await expectStatusBesideSettings();
   const savedTitleBounds = (await title.boundingBox())!;
   await title.fill('Renamed album');
   await expect(status).toHaveText('Ungespeichert');
+  await expectStatusBesideSettings();
   expect(await title.boundingBox()).toEqual(savedTitleBounds);
 });
 

@@ -908,6 +908,8 @@ function Editor({
         {/* ── Page navigation (numbers + add/delete) ── */}
         <div className="editor-page-navigation relative flex flex-wrap items-center gap-y-2" data-menu>
           <div className="editor-navigation-controls">
+          <div className="editor-settings-controls">
+          <SaveStatus t={t} isDirty={isDirty} isSaving={isSaving} error={saveError} />
           <QuickSettingsMenu
             t={t}
             buttonClassName={btnPageNav}
@@ -929,6 +931,7 @@ function Editor({
             recoveryError={recoveryError}
             onRestore={(point) => void handleRestoreRecoveryPoint(point)}
           />
+          </div>
 
           <button
             onClick={() => setShowPageOverview(true)}
@@ -987,7 +990,6 @@ function Editor({
           </div>
 
           </div>
-          <SaveStatus t={t} isDirty={isDirty} isSaving={isSaving} error={saveError} />
         </div>
         </div>
 

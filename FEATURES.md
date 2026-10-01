@@ -15,7 +15,7 @@ Detailed feature set of the local photo album editor.
 - Complete IndexedDB recovery snapshots with page position and image blobs
 - Up to twelve snapshots per project with asset deduplication, orphan cleanup, and quota-aware pruning
 - Visible saved/unsaved/saving/error status based on content revisions
-- Centered editable project name and separate save-status badge share the main toolbar row on desktop; control groups wrap on narrow screens without overlapping the title or menus
+- Centered editable project name and separate save-status badge share the main toolbar row on desktop; the badge stays directly left of Quick Settings when control groups wrap on narrow screens
 - Recent projects persisted via localStorage + IndexedDB handles
 
 ## Pages and Navigation
