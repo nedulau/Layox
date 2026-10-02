@@ -5,6 +5,7 @@ interface EditorKeyboardShortcutOptions {
   imageInputRef: RefObject<HTMLInputElement | null>;
   deleteUnusedAssetsAfterImageDelete: boolean;
   onNewProject: () => void;
+  onOpenProject: () => void;
   onCloseMenu: () => void;
   onSaveError: (error: unknown) => void;
 }
@@ -24,11 +25,13 @@ export function useEditorKeyboardShortcuts({
   imageInputRef,
   deleteUnusedAssetsAfterImageDelete,
   onNewProject,
+  onOpenProject,
   onCloseMenu,
   onSaveError,
 }: EditorKeyboardShortcutOptions): void {
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      if (document.querySelector('[role="dialog"][aria-modal="true"], [role="alertdialog"][aria-modal="true"]')) return;
       const isTextEntry = isTextEntryTarget(event.target);
       const key = event.key.toLowerCase();
       const hasCommandModifier = event.ctrlKey || event.metaKey;
@@ -55,7 +58,7 @@ export function useEditorKeyboardShortcuts({
 
       if (hasCommandModifier && key === 'o') {
         event.preventDefault();
-        void useProjectStore.getState().openProject();
+        onOpenProject();
         return;
       }
 
@@ -131,6 +134,7 @@ export function useEditorKeyboardShortcuts({
     imageInputRef,
     onCloseMenu,
     onNewProject,
+    onOpenProject,
     onSaveError,
   ]);
 }

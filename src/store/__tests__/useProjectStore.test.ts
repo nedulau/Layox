@@ -868,4 +868,29 @@ describe('useProjectStore', () => {
       expect(getState().isDirty).toBe(true);
     });
   });
+  it('clears both histories and selection when opening a recent project, including the same ID', async () => {
+    const loaded = structuredClone(getState().project);
+    getState().snapshot();
+    getState().setProjectName('Old change');
+    getState().undo();
+    getState().snapshot();
+    getState().setProjectName('Another old change');
+    useProjectStore.setState({ selectedElementId: 'old-element', selectedSlotIndex: 3 });
+    const session = getState().projectSession;
+    const file = new File([], 'recent.layox');
+    mockedFileSystemPort.openProjectFromPath.mockResolvedValueOnce({
+      file, location: { kind: 'native-path', filePath: '/tmp/recent.layox' },
+    });
+    vi.mocked(loadProject).mockResolvedValueOnce({ project: loaded, assetBlobs: {} });
+    await getState().openRecentProjectByPath('/tmp/recent.layox');
+    expect(getState()).toMatchObject({
+      projectSession: session + 1, historyPast: [], historyFuture: [],
+      selectedElementId: null, selectedSlotIndex: null, isDirty: false,
+      projectLocation: { kind: 'native-path', filePath: '/tmp/recent.layox' },
+    });
+    getState().undo();
+    getState().redo();
+    expect(getState().project.meta.name).toBe(loaded.meta.name);
+  });
+
 });

@@ -31,6 +31,7 @@ import PwaUpdatePrompt from './components/PwaUpdatePrompt';
 import { useEditorKeyboardShortcuts } from './hooks/useEditorKeyboardShortcuts';
 import { useEditorRecovery } from './hooks/useEditorRecovery';
 import { useEditorExport } from './hooks/useEditorExport';
+import { useProjectTransition } from './hooks/useProjectTransition';
 import EditorFeedback from './components/editor/EditorFeedback';
 
 const FONTS = ['Arial', 'Times New Roman', 'Georgia', 'Verdana', 'Courier New', 'Trebuchet MS', 'Impact', 'Comic Sans MS'];
@@ -59,9 +60,27 @@ function App() {
   const setShowEditor = useProjectStore((s) => s.setShowEditor);
   const isDirty = useProjectStore((s) => s.isDirty);
   const phoneViewport = useMediaQuery('(max-width: 767px)');
+  const transition = useProjectTransition();
+  const transitionDialog = (
+    <ConfirmDialog
+      open={transition.isPending}
+      title={tr(language, 'attention')}
+      message={tr(language, 'projectTransitionConfirm')}
+      cancelLabel={tr(language, 'cancel')}
+      confirmLabel={tr(language, 'discardChanges')}
+      saveLabel={tr(language, 'save')}
+      danger
+      busy={transition.isSaving}
+      error={transition.saveError}
+      onCancel={transition.cancelTransition}
+      onConfirm={transition.discardAndTransition}
+      onSave={() => { void transition.saveAndTransition(); }}
+    />
+  );
   if (!showEditor) {
     return (
       <>
+        {transitionDialog}
         <StartScreen uiTheme={uiTheme} setUiTheme={setUiTheme} language={language} setLanguage={setLanguage} />
         <PwaUpdatePrompt language={language} isDirty={isDirty} />
       </>
@@ -70,11 +89,12 @@ function App() {
   if (phoneViewport) {
     return (
       <>
+      {transitionDialog}
       <div className="app-ui start-ui flex h-screen w-screen items-center justify-center px-6" data-ui-theme={uiTheme}>
         <div className="max-w-md rounded-2xl border border-neutral-700 bg-neutral-900 p-6 text-center shadow-2xl">
           <h1 className="text-xl font-semibold text-white">{tr(language, 'phoneEditorTitle')}</h1>
           <p className="mt-3 text-sm leading-6 text-neutral-300">{tr(language, 'phoneEditorMessage')}</p>
-          <button type="button" onClick={() => setShowEditor(false)} className="mt-5 min-h-11 rounded-lg bg-blue-600 px-5 py-2.5 font-medium text-white hover:bg-blue-500">
+          <button type="button" onClick={() => transition.requestTransition(() => setShowEditor(false))} className="mt-5 min-h-11 rounded-lg bg-blue-600 px-5 py-2.5 font-medium text-white hover:bg-blue-500">
             {tr(language, 'backHome')}
           </button>
         </div>
@@ -85,7 +105,8 @@ function App() {
   }
   return (
     <>
-      <Editor uiTheme={uiTheme} setUiTheme={setUiTheme} language={language} setLanguage={setLanguage} />
+      {transitionDialog}
+      <Editor uiTheme={uiTheme} setUiTheme={setUiTheme} language={language} setLanguage={setLanguage} requestTransition={transition.requestTransition} />
       <PwaUpdatePrompt language={language} isDirty={isDirty} />
     </>
   );
@@ -122,11 +143,13 @@ function Editor({
   setUiTheme,
   language,
   setLanguage,
+  requestTransition,
 }: {
   uiTheme: UiTheme;
   setUiTheme: (theme: UiTheme) => void;
   language: Language;
   setLanguage: (language: Language) => void;
+  requestTransition: (action: () => void) => void;
 }) {
   const t = useCallback((key: TranslationKey) => tr(language, key), [language]);
 
@@ -293,7 +316,6 @@ function Editor({
   const [uiNotice, setUiNotice] = useState<string | null>(null);
   const [noticeCanUndo, setNoticeCanUndo] = useState(false);
   const [importJob, setImportJob] = useState<{ completed: number; total: number } | null>(null);
-  const [showHomeConfirm, setShowHomeConfirm] = useState(false);
   const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false);
   const toggleMenu = useCallback(
     (name: string) => setOpenMenu((prev) => (prev === name ? null : name)),
@@ -386,13 +408,6 @@ function Editor({
     setUiError(`${t('saveError')}: ${error instanceof Error ? error.message : String(error)}`);
   }, [t]);
   const openNewProjectModal = useCallback(() => setShowNewProjectModal(true), []);
-  useEditorKeyboardShortcuts({
-    imageInputRef,
-    deleteUnusedAssetsAfterImageDelete: deleteFromLibraryOnImageDelete,
-    onNewProject: openNewProjectModal,
-    onCloseMenu: closeMenu,
-    onSaveError: reportShortcutSaveFailure,
-  });
 
   useEffect(() => {
     if (!isDirty) return;
@@ -404,17 +419,18 @@ function Editor({
   }, [isDirty]);
 
   // ─── Handlers ─────────────────────────────────────────────────────────
-  const handleOpen = async () => {
+  const handleOpen = useCallback(() => {
     closeMenu();
-    if (hasFileSystemAccess) {
-      try { await openProject(); } catch (err) {
-        console.error(t('openError'), err);
-        setUiError(`${t('openError')}: ${err instanceof Error ? err.message : err}`);
+    requestTransition(() => {
+      if (hasFileSystemAccess) {
+        void openProject().catch((error: unknown) => {
+          setUiError(`${t('openError')}: ${error instanceof Error ? error.message : String(error)}`);
+        });
+      } else {
+        fileInputRef.current?.click();
       }
-    } else {
-      fileInputRef.current?.click();
-    }
-  };
+    });
+  }, [closeMenu, hasFileSystemAccess, openProject, requestTransition, t]);
 
   const handleFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -433,6 +449,15 @@ function Editor({
     closeMenu();
     setShowNewProjectModal(true);
   };
+
+  useEditorKeyboardShortcuts({
+    imageInputRef,
+    deleteUnusedAssetsAfterImageDelete: deleteFromLibraryOnImageDelete,
+    onNewProject: openNewProjectModal,
+    onOpenProject: handleOpen,
+    onCloseMenu: closeMenu,
+    onSaveError: reportShortcutSaveFailure,
+  });
 
   const handleAddImage = () => { closeMenu(); imageInputRef.current?.click(); };
   const handleImageSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -566,8 +591,7 @@ function Editor({
 
   const handleGoHome = () => {
     closeMenu();
-    if (isDirty) setShowHomeConfirm(true);
-    else setShowEditor(false);
+    requestTransition(() => setShowEditor(false));
   };
 
   const handleOpenExport = () => {
@@ -1287,20 +1311,6 @@ function Editor({
         }}
       />
 
-      <ConfirmDialog
-        open={showHomeConfirm}
-        title={t('attention')}
-        message={t('homeConfirm')}
-        cancelLabel={t('cancel')}
-        confirmLabel={t('discardChanges')}
-        danger
-        onCancel={() => setShowHomeConfirm(false)}
-        onConfirm={() => {
-          setShowHomeConfirm(false);
-          setShowEditor(false);
-        }}
-      />
-
       {/* ─── Crop modal ─── */}
       {cropModal && (
         <CropModal
@@ -1375,8 +1385,8 @@ function Editor({
         confirmLabel={t('create')}
         placeholder={t('projectNamePlaceholder')}
         onConfirm={(name) => {
-          resetProject(name);
           setShowNewProjectModal(false);
+          requestTransition(() => resetProject(name));
         }}
       />
 

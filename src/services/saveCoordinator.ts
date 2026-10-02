@@ -6,6 +6,7 @@ export interface SaveCoordinatorState {
   assetBlobs: Record<string, Blob>;
   projectLocation: ProjectLocation | null;
   revision: number;
+  projectSession: number;
 }
 
 export interface SaveStatePatch {
@@ -33,12 +34,15 @@ export function createSaveCoordinator({
   updateSaveState: (patch: SaveStatePatch) => void;
   onSavedProject: (details: SavedProjectDetails) => void;
 }) {
-  let activeSave: Promise<SaveOutcome> | null = null;
+  const activeSaves = new Map<number, Promise<SaveOutcome>>();
 
   return (saveAs: boolean): Promise<SaveOutcome> => {
+    const stateAtStart = getState();
+    const sessionAtStart = stateAtStart.projectSession;
+    const activeSave = activeSaves.get(sessionAtStart);
     if (activeSave) return activeSave;
+    const isCurrentSession = () => getState().projectSession === sessionAtStart;
     const task = (async () => {
-      const stateAtStart = getState();
       const revisionAtStart = stateAtStart.revision;
       updateSaveState({ isSaving: true, saveError: null });
       try {
@@ -50,6 +54,7 @@ export function createSaveCoordinator({
               stateAtStart.projectLocation,
             );
 
+        if (!isCurrentSession()) return outcome;
         if (outcome.status === 'cancelled') {
           updateSaveState({ isSaving: false });
           return outcome;
@@ -75,16 +80,18 @@ export function createSaveCoordinator({
         }
         return outcome;
       } catch (error) {
-        updateSaveState({
-          isSaving: false,
-          saveError: error instanceof Error ? error.message : String(error),
-        });
+        if (isCurrentSession()) {
+          updateSaveState({
+            isSaving: false,
+            saveError: error instanceof Error ? error.message : String(error),
+          });
+        }
         throw error;
-      } finally {
-        activeSave = null;
       }
-    })();
-    activeSave = task;
+    })().finally(() => {
+      activeSaves.delete(sessionAtStart);
+    });
+    activeSaves.set(sessionAtStart, task);
     return task;
   };
 }
