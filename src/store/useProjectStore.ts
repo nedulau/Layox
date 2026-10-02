@@ -74,6 +74,7 @@ interface ProjectState {
   selectedSlotIndex: number | null;
   projectLocation: ProjectLocation | null;
   revision: number;
+  projectSession: number;
   savedRevision: number;
   isDirty: boolean;
   isSaving: boolean;
@@ -180,6 +181,44 @@ const useProjectStore = create<ProjectState>((baseSet, get) => {
     });
   };
 
+  const activateProject = (
+    project: Project,
+    assetBlobs: Record<string, Blob>,
+    projectLocation: ProjectLocation | null = null,
+    isDirty = false,
+    pageIndex = 0,
+  ): void => {
+    const normalizedProject = normalizeProject(project);
+    set((state) => ({
+      project: normalizedProject,
+      assetBlobs,
+      projectLocation,
+      projectSession: state.projectSession + 1,
+      currentPageIndex: Math.max(0, Math.min(pageIndex, normalizedProject.pages.length - 1)),
+      selectedElementId: null,
+      selectedSlotIndex: null,
+      revision: isDirty ? 1 : 0,
+      savedRevision: 0,
+      isDirty,
+      isSaving: false,
+      saveError: null,
+      historyPast: [],
+      historyFuture: [],
+      showEditor: true,
+    }));
+  };
+
+  const loadProjectFile = async (file: File, location: ProjectLocation | null = null): Promise<void> => {
+    const { project, assetBlobs } = await loadProject(file);
+    activateProject(project, assetBlobs, location);
+    const handle = location?.kind === 'web-handle' ? location.handle : null;
+    const filePath = location?.kind === 'native-path' ? location.filePath : undefined;
+    get().addRecentProject(project.meta.name, handle?.name ?? file.name, filePath);
+    if (handle) {
+      storeHandle(handle.name, handle as unknown as FileSystemFileHandle).catch(() => {});
+    }
+  };
+
   const runSave = createSaveCoordinator({
     fileSystemPort,
     getState: get,
@@ -197,6 +236,7 @@ const useProjectStore = create<ProjectState>((baseSet, get) => {
   selectedSlotIndex: null,
   projectLocation: null,
   revision: 0,
+  projectSession: 0,
   savedRevision: 0,
   isDirty: false,
   isSaving: false,
@@ -213,30 +253,13 @@ const useProjectStore = create<ProjectState>((baseSet, get) => {
     return project.pages[currentPageIndex];
   },
 
-  setProject: (project) =>
-    set({ project: normalizeProject(project), currentPageIndex: 0, selectedElementId: null, selectedSlotIndex: null }),
+  setProject: (project) => activateProject(project, get().assetBlobs, null, true),
 
-  restoreRecoveredProject: (project, assetBlobs, pageIndex) =>
-    set((state) => {
-      const recoveredCopy = normalizeProject(structuredClone(project));
-      recoveredCopy.meta.id = uuidv4();
-      return {
-        project: recoveredCopy,
-        assetBlobs,
-        currentPageIndex: Math.max(0, Math.min(pageIndex, project.pages.length - 1)),
-        selectedElementId: null,
-        selectedSlotIndex: null,
-        projectLocation: null,
-        revision: state.revision + 1,
-        savedRevision: state.savedRevision,
-        isDirty: true,
-        isSaving: false,
-        saveError: null,
-        showEditor: true,
-        historyPast: [],
-        historyFuture: [],
-      };
-    }),
+  restoreRecoveredProject: (project, assetBlobs, pageIndex) => {
+    const recoveredCopy = structuredClone(project);
+    recoveredCopy.meta.id = uuidv4();
+    activateProject(recoveredCopy, assetBlobs, null, true, pageIndex);
+  },
 
   setProjectName: (name) =>
     set((state) => ({ project: renameProject(state.project, name) })),
@@ -246,25 +269,7 @@ const useProjectStore = create<ProjectState>((baseSet, get) => {
       assetBlobs: { ...state.assetBlobs, [path]: blob },
     })),
 
-  resetProject: (name) => {
-    const projectName = name || 'Untitled Project';
-    set({
-      project: createDefaultProject(projectName),
-      currentPageIndex: 0,
-      assetBlobs: {},
-      selectedElementId: null,
-      selectedSlotIndex: null,
-      projectLocation: null,
-      revision: 1,
-      savedRevision: 0,
-      isDirty: true,
-      isSaving: false,
-      saveError: null,
-      historyPast: [],
-      historyFuture: [],
-      showEditor: true,
-    });
-  },
+  resetProject: (name) => activateProject(createDefaultProject(name || 'Untitled Project'), {}, null, true),
 
   setAutoSaveEnabled: (enabled) => {
     writeStoredString('layox_autoSaveEnabled', String(enabled));
@@ -303,24 +308,7 @@ const useProjectStore = create<ProjectState>((baseSet, get) => {
     const result = await fileSystemPort.openProjectFromPath(filePath);
     if (!result) return false;
 
-    const { project, assetBlobs } = await loadProject(result.file);
-    const normalizedProject = normalizeProject(project);
-    set({
-      project: normalizedProject,
-      assetBlobs,
-      currentPageIndex: 0,
-      selectedElementId: null,
-      selectedSlotIndex: null,
-      projectLocation: result.location,
-      revision: 0,
-      savedRevision: 0,
-      isDirty: false,
-      isSaving: false,
-      saveError: null,
-      showEditor: true,
-    });
-    const recentPath = result.location?.kind === 'native-path' ? result.location.filePath : undefined;
-    get().addRecentProject(normalizedProject.meta.name, result.file.name, recentPath);
+    await loadProjectFile(result.file, result.location);
     return true;
   },
 
@@ -940,62 +928,10 @@ const useProjectStore = create<ProjectState>((baseSet, get) => {
 
   openProject: async () => {
     const result = await fileSystemPort.openProjectDialog();
-    if (result) {
-      const { project, assetBlobs } = await loadProject(result.file);
-      const normalizedProject = normalizeProject(project);
-      set({
-        project: normalizedProject,
-        assetBlobs,
-        currentPageIndex: 0,
-        selectedElementId: null,
-        selectedSlotIndex: null,
-        projectLocation: result.location,
-        revision: 0,
-        savedRevision: 0,
-        isDirty: false,
-        isSaving: false,
-        saveError: null,
-        historyPast: [],
-        historyFuture: [],
-        showEditor: true,
-      });
-      const handle = result.location?.kind === 'web-handle' ? result.location.handle : null;
-      const filePath = result.location?.kind === 'native-path' ? result.location.filePath : undefined;
-      get().addRecentProject(normalizedProject.meta.name, handle?.name ?? result.file.name, filePath);
-      // Persist handle in IndexedDB for later re-open
-      if (handle) {
-        storeHandle(handle.name, handle as unknown as FileSystemFileHandle).catch(() => {});
-      }
-    }
+    if (result) await loadProjectFile(result.file, result.location);
   },
 
-  loadFromFile: async (file, location) => {
-    const { project, assetBlobs } = await loadProject(file);
-    const normalizedProject = normalizeProject(project);
-    set({
-      project: normalizedProject,
-      assetBlobs,
-      currentPageIndex: 0,
-      selectedElementId: null,
-      selectedSlotIndex: null,
-      projectLocation: location ?? null,
-      revision: 0,
-      savedRevision: 0,
-      isDirty: false,
-      isSaving: false,
-      saveError: null,
-      historyPast: [],
-      historyFuture: [],
-      showEditor: true,
-    });
-    const handle = location?.kind === 'web-handle' ? location.handle : null;
-    const filePath = location?.kind === 'native-path' ? location.filePath : undefined;
-    get().addRecentProject(normalizedProject.meta.name, handle?.name ?? file.name, filePath);
-    // Persist handle in IndexedDB if available
-    if (handle) {
-      storeHandle(handle.name, handle as unknown as FileSystemFileHandle).catch(() => {});
-    }
-  },
+  loadFromFile: (file, location) => loadProjectFile(file, location ?? null),
   });
 });
 

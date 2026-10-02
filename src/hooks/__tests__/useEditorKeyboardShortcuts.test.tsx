@@ -45,11 +45,13 @@ vi.mock('../../store/useProjectStore', () => ({
 function ShortcutHarness({
   deleteUnusedAssetsAfterImageDelete = false,
   onNewProject = vi.fn(),
+  onOpenProject = vi.fn(),
   onCloseMenu = vi.fn(),
   onSaveError = vi.fn(),
 }: {
   deleteUnusedAssetsAfterImageDelete?: boolean;
   onNewProject?: () => void;
+  onOpenProject?: () => void;
   onCloseMenu?: () => void;
   onSaveError?: (error: unknown) => void;
 }) {
@@ -58,6 +60,7 @@ function ShortcutHarness({
     imageInputRef,
     deleteUnusedAssetsAfterImageDelete,
     onNewProject,
+    onOpenProject,
     onCloseMenu,
     onSaveError,
   });
@@ -164,4 +167,21 @@ describe('useEditorKeyboardShortcuts', () => {
     expect(storeMock.state.setSelectedElementId).toHaveBeenCalledWith(null);
     expect(storeMock.state.setSelectedSlotIndex).toHaveBeenCalledWith(null);
   });
+  it('routes Ctrl+O through the guarded UI action', () => {
+    const onOpenProject = vi.fn();
+    render(<ShortcutHarness onOpenProject={onOpenProject} />);
+    fireEvent.keyDown(window, { key: 'o', ctrlKey: true });
+    expect(onOpenProject).toHaveBeenCalledOnce();
+    expect(storeMock.state.openProject).not.toHaveBeenCalled();
+  });
+
+  it('does not run editor shortcuts behind a modal dialog', () => {
+    const onOpenProject = vi.fn();
+    render(<><ShortcutHarness onOpenProject={onOpenProject} /><div role="dialog" aria-modal="true" /></>);
+    fireEvent.keyDown(window, { key: 'o', ctrlKey: true });
+    fireEvent.keyDown(window, { key: 'z', ctrlKey: true });
+    expect(onOpenProject).not.toHaveBeenCalled();
+    expect(storeMock.state.undo).not.toHaveBeenCalled();
+  });
+
 });

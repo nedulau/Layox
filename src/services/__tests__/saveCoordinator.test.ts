@@ -22,7 +22,7 @@ describe('saveCoordinator', () => {
   const onSavedProject = vi.fn();
 
   beforeEach(() => {
-    state = { project, assetBlobs: {}, projectLocation: null, revision: 3 };
+    state = { project, assetBlobs: {}, projectLocation: null, revision: 3, projectSession: 1 };
     patches = [];
     onSavedProject.mockReset();
     vi.mocked(port.saveProject).mockReset();
@@ -140,4 +140,51 @@ describe('saveCoordinator', () => {
 
     expect(onSavedProject).toHaveBeenCalledWith(expect.objectContaining({ fileName: 'Album.layox' }));
   });
+  it.each<SaveOutcome>([
+    { status: 'saved', location: { kind: 'native-path', filePath: '/tmp/old.layox' } },
+    { status: 'downloaded' },
+    { status: 'cancelled' },
+  ])('ignores late outcomes from a previous project session: %s', async (outcome) => {
+    let finish!: (result: SaveOutcome) => void;
+    vi.mocked(port.saveProject).mockReturnValueOnce(new Promise((resolve) => { finish = resolve; }));
+    const saving = coordinator()(false);
+    state = { ...state, projectSession: 2, revision: 1, projectLocation: null };
+    patches.length = 0;
+    finish(outcome);
+    await saving;
+    expect(patches).toEqual([]);
+    expect(onSavedProject).not.toHaveBeenCalled();
+  });
+
+  it('keeps a new session save independent of an old rejected save', async () => {
+    let fail!: (error: Error) => void;
+    let finish!: (result: SaveOutcome) => void;
+    vi.mocked(port.saveProject)
+      .mockReturnValueOnce(new Promise((_, reject) => { fail = reject; }))
+      .mockReturnValueOnce(new Promise((resolve) => { finish = resolve; }));
+    const save = coordinator();
+    const first = save(false);
+    state = { ...state, projectSession: 2, revision: 1 };
+    const second = save(false);
+    expect(second).not.toBe(first);
+    expect(port.saveProject).toHaveBeenCalledTimes(2);
+    patches.length = 0;
+    const rejected = expect(first).rejects.toThrow('old failure');
+    fail(new Error('old failure'));
+    await rejected;
+    expect(patches).toEqual([]);
+    expect(save(false)).toBe(second);
+    finish({ status: 'saved', location: { kind: 'native-path', filePath: '/tmp/new.layox' } });
+    await second;
+    expect(patches.at(-1)).toMatchObject({ savedRevision: 1, isDirty: false });
+  });
+
+  it('permits retry after a synchronous port failure', async () => {
+    vi.mocked(port.saveProject).mockImplementationOnce(() => { throw new Error('sync failure'); });
+    const save = coordinator();
+    await expect(save(false)).rejects.toThrow('sync failure');
+    vi.mocked(port.saveProject).mockResolvedValueOnce({ status: 'downloaded' });
+    await expect(save(false)).resolves.toEqual({ status: 'downloaded' });
+  });
+
 });

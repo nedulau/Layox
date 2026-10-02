@@ -172,7 +172,8 @@ Projects are saved as versioned `.layox` files: a ZIP container holding `project
 - New projects are never forced into a save dialog by auto-save.
 - Auto-save creates complete IndexedDB recovery snapshots, including referenced image blobs, and also updates an existing project file when possible.
 - Up to twelve snapshots per project are retained with deduplicated assets and quota-aware pruning.
-- Closing, reloading, or returning home warns only when content is genuinely unsaved.
+- Closing or reloading warns only when content is genuinely unsaved. New, Open (including `Ctrl+O`) and returning home use a shared Save / Discard / Cancel dialog. Cancelled or failed saves keep the current project; edits made during saving require another save before continuing.
+- Each loaded, new or recovered project starts a separate session with empty undo/redo history and cleared selection. A late save from an earlier session cannot change the active project’s file destination, saved status or save error, including when reopening the same album.
 
 ## Release quality gates
 

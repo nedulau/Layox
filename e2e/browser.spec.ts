@@ -122,6 +122,7 @@ test('keeps opening available on phones and restricts editing clearly', async ({
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.getByRole('heading', { name: 'Bearbeitung benötigt ein größeres Display' })).toBeVisible();
   await page.getByRole('button', { name: 'Zur Startseite' }).click();
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Änderungen verwerfen' }).click();
   await expect(page.getByRole('button', { name: 'Projekt öffnen' })).toBeVisible();
 });
 
@@ -183,4 +184,31 @@ test('persists the page format and exports the selected pixel resolution', async
   // PNG IHDR records the actual raster size, independently of UI labels.
   expect(bytes.readUInt32BE(16)).toBe(1240);
   expect(bytes.readUInt32BE(20)).toBe(1240);
+});
+
+
+test('protects New and Ctrl+O with cancel, save and discard choices', async ({ page }) => {
+  await createProject(page, 'Keep Album');
+  await page.keyboard.press('Control+o');
+  const warning = page.getByRole('alertdialog');
+  await expect(warning).toContainText('ungespeicherte Änderungen');
+  await warning.getByRole('button', { name: 'Abbrechen' }).click();
+  await expect(page.getByTitle('Projektname bearbeiten')).toHaveValue('Keep Album');
+
+  await page.keyboard.press('Control+n');
+  const newDialog = page.getByRole('dialog');
+  await newDialog.getByRole('textbox').fill('Replacement');
+  await newDialog.getByRole('button', { name: 'Erstellen' }).click();
+  const saving = page.waitForEvent('download');
+  const confirmation = page.getByRole('alertdialog');
+  await confirmation.getByRole('button', { name: 'Speichern', exact: true }).click();
+  expect((await saving).suggestedFilename()).toBe('Keep Album.layox');
+  await expect(page.getByTitle('Projektname bearbeiten')).toHaveValue('Replacement');
+
+  await page.keyboard.press('Control+o');
+  const choosing = page.waitForEvent('filechooser');
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Änderungen verwerfen' }).click();
+  const chooser = await choosing;
+  await chooser.setFiles([]);
+  await expect(page.getByTitle('Projektname bearbeiten')).toHaveValue('Replacement');
 });
