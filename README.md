@@ -31,12 +31,15 @@ See the [support matrix](SUPPORT.md) for the exact platform scope. Smartphones c
 ## Getting Started
 
 ```bash
+nvm install
 nvm use
-npm install
+npm ci
 npm run dev
 ```
 
-Development and release builds use Node.js 24 LTS (see `.nvmrc` and `package.json#engines`).
+Development and release builds use Node.js 24.21.0 LTS (`nvm install && nvm use`); CI reads the same `.nvmrc` pin. The supported range is Node.js >=24.15 and <25, matching the minimum required by jsdom. Node.js 26 is outside this project’s supported range.
+
+The dependency baseline uses Electron 44.5.1, electron-builder 26.17.0 with `@electron/asar` 4.3.1, Konva 10.7.0 / react-konva 19.3.0, Vite 8.3.2 and matching Vitest / coverage 5.0.3. Release deployment pins Vercel CLI 59.26.0. TypeScript stays on 5.9 because the current typescript-eslint release does not support TypeScript 7.
 
 Open [http://localhost:5173](http://localhost:5173) in your browser.
 
