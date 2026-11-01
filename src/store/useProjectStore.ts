@@ -1,12 +1,14 @@
 import { create } from 'zustand';
 import { v4 as uuidv4 } from 'uuid';
-import type { Project, Page, PageElement, ImageElement, TextElement, SlotAssignment } from '../types';
+import type { Project, Page, PageElement, ImageElement, TextElement, SlotAssignment, FileSystemFileHandleExt } from '../types';
 import { loadProject } from '../utils/fileIO';
 import { getLayoutById, computeLayoutSlots } from '../utils/layouts';
-import { storeHandle } from '../utils/handleStore';
+import { getHandle, storeHandle } from '../utils/handleStore';
 import { readStoredBoolean, readStoredJson, readStoredNumber, writeStoredString } from '../infra/storage';
 import { getFileSystemPort } from '../infra/fileSystem';
-import type { ProjectLocation, SaveOutcome } from '../infra/ports/fileSystemPort';
+import type { OpenProjectDialogResult, ProjectLocation, SaveOutcome } from '../infra/ports/fileSystemPort';
+import { createProjectLoadCoordinator } from '../services/projectLoadCoordinator';
+import { recoveryRepository } from '../utils/recoveryRepository';
 import {
   createCoverPage,
   createDefaultProject,
@@ -63,7 +65,7 @@ export type { RecentProject };
 
 export interface AddImageResult {
   assetPath: string;
-  placement: 'placed' | 'library-only';
+  placement: 'placed' | 'library-only' | 'cancelled';
 }
 
 interface ProjectState {
@@ -88,6 +90,7 @@ interface ProjectState {
 
   setProject: (project: Project) => void;
   restoreRecoveredProject: (project: Project, assetBlobs: Record<string, Blob>, pageIndex: number) => void;
+  restoreRecoveryPoint: (id: string) => Promise<boolean>;
   setProjectName: (name: string) => void;
   setPageFormat: (format: PageFormat) => void;
   addAsset: (path: string, blob: Blob) => void;
@@ -98,6 +101,7 @@ interface ProjectState {
   addRecentProject: (name: string, fileName: string, filePath?: string) => void;
   removeRecentProject: (fileName: string, filePath?: string) => void;
   openRecentProjectByPath: (filePath: string) => Promise<boolean>;
+  openRecentProjectByHandle: (fileName: string) => Promise<boolean>;
 
   setCurrentPageIndex: (index: number) => void;
   addPage: () => void;
@@ -208,16 +212,22 @@ const useProjectStore = create<ProjectState>((baseSet, get) => {
     }));
   };
 
-  const loadProjectFile = async (file: File, location: ProjectLocation | null = null): Promise<void> => {
-    const { project, assetBlobs } = await loadProject(file);
-    activateProject(project, assetBlobs, location);
-    const handle = location?.kind === 'web-handle' ? location.handle : null;
-    const filePath = location?.kind === 'native-path' ? location.filePath : undefined;
-    get().addRecentProject(project.meta.name, handle?.name ?? file.name, filePath);
-    if (handle) {
-      storeHandle(handle.name, handle as unknown as FileSystemFileHandle).catch(() => {});
-    }
-  };
+  const runProjectLoad = createProjectLoadCoordinator(get);
+  const openProjectSource = (source: () => Promise<OpenProjectDialogResult | null>): Promise<boolean> => (
+    runProjectLoad(async () => {
+      const result = await source();
+      if (!result) return null;
+      return { ...result, ...await loadProject(result.file) };
+    }, ({ file, location, project, assetBlobs }) => {
+      activateProject(project, assetBlobs, location);
+      const handle = location?.kind === 'web-handle' ? location.handle : null;
+      const filePath = location?.kind === 'native-path' ? location.filePath : undefined;
+      get().addRecentProject(project.meta.name, handle?.name ?? file.name, filePath);
+      if (handle) {
+        storeHandle(handle.name, handle as unknown as FileSystemFileHandle).catch(() => {});
+      }
+    })
+  );
 
   const runSave = createSaveCoordinator({
     fileSystemPort,
@@ -260,6 +270,11 @@ const useProjectStore = create<ProjectState>((baseSet, get) => {
     recoveredCopy.meta.id = uuidv4();
     activateProject(recoveredCopy, assetBlobs, null, true, pageIndex);
   },
+
+  restoreRecoveryPoint: (id) => runProjectLoad(
+    () => recoveryRepository.restore(id),
+    ({ project, assetBlobs, pageIndex }) => get().restoreRecoveredProject(project, assetBlobs, pageIndex),
+  ),
 
   setProjectName: (name) =>
     set((state) => ({ project: renameProject(state.project, name) })),
@@ -304,13 +319,20 @@ const useProjectStore = create<ProjectState>((baseSet, get) => {
     set({ recentProjects });
   },
 
-  openRecentProjectByPath: async (filePath) => {
-    const result = await fileSystemPort.openProjectFromPath(filePath);
-    if (!result) return false;
+  openRecentProjectByPath: (filePath) => openProjectSource(() => fileSystemPort.openProjectFromPath(filePath)),
 
-    await loadProjectFile(result.file, result.location);
-    return true;
-  },
+  openRecentProjectByHandle: (fileName) => openProjectSource(async () => {
+    const handle = await getHandle(fileName) as unknown as (FileSystemFileHandleExt & {
+      requestPermission?: (options: { mode: 'readwrite' }) => Promise<PermissionState>;
+    }) | null;
+    if (!handle) return null;
+    const permission = await handle.requestPermission?.({ mode: 'readwrite' });
+    if (permission !== undefined && permission !== 'granted') return null;
+    return {
+      file: await handle.getFile(),
+      location: { kind: 'web-handle', handle },
+    };
+  }),
 
   snapshot: () => {
     const { project, assetBlobs, historyPast } = get();
@@ -796,6 +818,7 @@ const useProjectStore = create<ProjectState>((baseSet, get) => {
   // --- Add image (slot-aware) ---
 
   addImageFromFile: async (file) => {
+    const projectSession = get().projectSession;
     const page = get().currentPage();
     if (!page) throw new Error('No active page.');
     const targetPageId = page.id;
@@ -825,8 +848,10 @@ const useProjectStore = create<ProjectState>((baseSet, get) => {
         assetPath,
         blob,
         zIndex: page.elements.length,
-      size: getPageSize(get().project.meta.pageFormat),
+        size: getPageSize(get().project.meta.pageFormat),
       });
+
+      if (get().projectSession !== projectSession) return { assetPath, placement: 'cancelled' };
 
       let placement: AddImageResult['placement'] = 'library-only';
       set((state) => {
@@ -847,6 +872,7 @@ const useProjectStore = create<ProjectState>((baseSet, get) => {
   },
 
   addImageFromAsset: async (assetPath) => {
+    const projectSession = get().projectSession;
     const page = get().currentPage();
     if (!page) return;
     const targetPageId = page.id;
@@ -878,6 +904,7 @@ const useProjectStore = create<ProjectState>((baseSet, get) => {
     });
 
     set((state) => {
+      if (state.projectSession !== projectSession || state.assetBlobs[assetPath] !== blob) return state;
       const project = appendImageToFreePage(state.project, targetPageId, targetLayoutId, element);
       if (!project) return state;
       return {
@@ -927,11 +954,12 @@ const useProjectStore = create<ProjectState>((baseSet, get) => {
   saveCurrentProjectAs: () => runSave(true),
 
   openProject: async () => {
-    const result = await fileSystemPort.openProjectDialog();
-    if (result) await loadProjectFile(result.file, result.location);
+    await openProjectSource(() => fileSystemPort.openProjectDialog());
   },
 
-  loadFromFile: (file, location) => loadProjectFile(file, location ?? null),
+  loadFromFile: async (file, location) => {
+    await openProjectSource(async () => ({ file, location: location ?? null }));
+  },
   });
 });
 

@@ -11,6 +11,9 @@ vi.mock('../../utils/fileIO', () => ({
   showOpenDialog: vi.fn(),
 }));
 
+vi.mock('../../utils/recoveryRepository', () => ({ recoveryRepository: { restore: vi.fn() } }));
+vi.mock('../../utils/handleStore', () => ({ getHandle: vi.fn(), storeHandle: vi.fn(async () => undefined) }));
+
 const mockedFileSystemPort = {
   supportsNativePicker: vi.fn(() => true),
   openProjectDialog: vi.fn<() => Promise<OpenProjectDialogResult | null>>(async () => null),
@@ -38,6 +41,14 @@ Object.defineProperty(globalThis, 'localStorage', { value: localStorageMock });
 // Now import the store — it reads localStorage on init
 const { default: useProjectStore } = await import('../../store/useProjectStore');
 const { loadProject } = await import('../../utils/fileIO');
+const { recoveryRepository } = await import('../../utils/recoveryRepository');
+const { getHandle } = await import('../../utils/handleStore');
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((finish) => { resolve = finish; });
+  return { promise, resolve };
+}
 
 function getState() {
   return useProjectStore.getState();
@@ -56,6 +67,9 @@ describe('useProjectStore', () => {
     vi.mocked(mockedFileSystemPort.saveProject).mockResolvedValue({ status: 'cancelled' });
     vi.mocked(mockedFileSystemPort.saveProjectAs).mockResolvedValue({ status: 'cancelled' });
     vi.mocked(loadProject).mockReset();
+    vi.mocked(recoveryRepository.restore).mockReset();
+    vi.mocked(getHandle).mockReset();
+    mockedFileSystemPort.openProjectDialog.mockReset();
   });
 
   describe('initial state', () => {
@@ -891,6 +905,100 @@ describe('useProjectStore', () => {
     getState().undo();
     getState().redo();
     expect(getState().project.meta.name).toBe(loaded.meta.name);
+  });
+
+  describe('asynchronous project sessions', () => {
+    it('supersedes an earlier load as soon as a recent handle lookup begins', async () => {
+      const older = deferred<Awaited<ReturnType<typeof loadProject>>>();
+      const lookup = deferred<FileSystemFileHandle | null>();
+      const project = structuredClone(getState().project);
+      vi.mocked(loadProject).mockReturnValueOnce(older.promise);
+      const opening = getState().loadFromFile(new File([], 'older.layox'));
+      vi.mocked(getHandle).mockReturnValueOnce(lookup.promise);
+      const recent = getState().openRecentProjectByHandle('recent.layox');
+      older.resolve({ project: { ...project, meta: { ...project.meta, name: 'Stale' } }, assetBlobs: {} });
+      await opening;
+      expect(getState().project.meta.name).toBe('Test Project');
+      lookup.resolve(null);
+      expect(await recent).toBe(false);
+    });
+
+    it('ignores an older file load even if it finishes after a newer load', async () => {
+      const older = deferred<Awaited<ReturnType<typeof loadProject>>>();
+      const project = structuredClone(getState().project);
+      vi.mocked(loadProject).mockReturnValueOnce(older.promise).mockResolvedValueOnce({
+        project: { ...project, meta: { ...project.meta, name: 'Newest' } }, assetBlobs: {},
+      });
+      const opening = getState().loadFromFile(new File([], 'older.layox'));
+      await getState().loadFromFile(new File([], 'newer.layox'));
+      older.resolve({ project, assetBlobs: {} });
+      await opening;
+      expect(getState().project.meta.name).toBe('Newest');
+      expect(getState().recentProjects.map((recent) => recent.fileName)).toEqual(['newer.layox']);
+    });
+
+    it('keeps a new project when a native picker returns from an old session', async () => {
+      const picker = deferred<OpenProjectDialogResult | null>();
+      mockedFileSystemPort.openProjectDialog.mockReturnValueOnce(picker.promise);
+      vi.mocked(loadProject).mockResolvedValueOnce({ project: structuredClone(getState().project), assetBlobs: {} });
+      const opening = getState().openProject();
+      getState().resetProject('Keep new project');
+      picker.resolve({ file: new File([], 'old.layox'), location: null });
+      await opening;
+      expect(getState().project.meta.name).toBe('Keep new project');
+      expect(getState().recentProjects).toEqual([]);
+    });
+
+    it('keeps edits made while a recovery snapshot is loading', async () => {
+      const snapshot = deferred<Awaited<ReturnType<typeof recoveryRepository.restore>>>();
+      const project = structuredClone(getState().project);
+      vi.mocked(recoveryRepository.restore).mockReturnValueOnce(snapshot.promise);
+      const restoring = getState().restoreRecoveryPoint('snapshot');
+      getState().setProjectName('Keep new edit');
+      snapshot.resolve({ project, assetBlobs: {}, pageIndex: 0 });
+      expect(await restoring).toBe(false);
+      expect(getState().project.meta.name).toBe('Keep new edit');
+    });
+
+    it('lets a later file open supersede a recovery request', async () => {
+      const snapshot = deferred<Awaited<ReturnType<typeof recoveryRepository.restore>>>();
+      const project = structuredClone(getState().project);
+      vi.mocked(recoveryRepository.restore).mockReturnValueOnce(snapshot.promise);
+      const restoring = getState().restoreRecoveryPoint('snapshot');
+      vi.mocked(loadProject).mockResolvedValueOnce({
+        project: { ...project, meta: { ...project.meta, name: 'Opened file' } }, assetBlobs: {},
+      });
+      await getState().loadFromFile(new File([], 'opened.layox'));
+      snapshot.resolve({ project, assetBlobs: {}, pageIndex: 0 });
+      expect(await restoring).toBe(false);
+      expect(getState().project.meta.name).toBe('Opened file');
+    });
+
+    it.each(['file', 'asset'] as const)('ignores a deferred %s image when the same album is reopened', async (source) => {
+      let finishLoading!: () => void;
+      class DeferredImage {
+        naturalWidth = 1200;
+        naturalHeight = 900;
+        onload: (() => void) | null = null;
+        set src(_value: string) { finishLoading = () => this.onload?.(); }
+      }
+      vi.stubGlobal('Image', DeferredImage);
+      vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:deferred');
+      vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
+      getState().setCurrentPageIndex(1);
+      getState().addAsset('assets/existing.jpg', new Blob(['photo']));
+      const project = structuredClone(getState().project);
+      const importing = source === 'file'
+        ? getState().addImageFromFile(new File(['photo'], 'new.jpg', { type: 'image/jpeg' }))
+        : getState().addImageFromAsset('assets/existing.jpg');
+      getState().restoreRecoveredProject(project, {}, 1);
+      const stateBeforeCompletion = getState();
+      finishLoading();
+      await importing;
+      expect(getState()).toBe(stateBeforeCompletion);
+      expect(getState().project.pages[1].elements).toEqual([]);
+      expect(getState().assetBlobs).toEqual({});
+    });
   });
 
 });

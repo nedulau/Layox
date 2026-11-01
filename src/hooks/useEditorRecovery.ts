@@ -33,12 +33,16 @@ export function useEditorRecovery({
   const [recoveryPoints, setRecoveryPoints] = useState<RecoverySummary[]>([]);
   const [recoveryError, setRecoveryError] = useState<string | null>(null);
 
-  const refreshRecoveryPoints = useCallback(async () => {
+  const refreshRecoveryPoints = useCallback(async (projectSession: number) => {
+    const isCurrent = () => useProjectStore.getState().projectSession === projectSession;
+    if (!isCurrent()) return;
     try {
-      setRecoveryPoints(await recoveryRepository.list(projectId));
+      const points = await recoveryRepository.list(projectId);
+      if (!isCurrent()) return;
+      setRecoveryPoints(points);
       setRecoveryError(null);
     } catch (error) {
-      setRecoveryError(getErrorMessage(error));
+      if (isCurrent()) setRecoveryError(getErrorMessage(error));
     }
   }, [projectId]);
 
@@ -71,7 +75,7 @@ export function useEditorRecovery({
       projectName: projectCopy.meta.name,
       project: projectCopy,
     }, state.assetBlobs);
-    await refreshRecoveryPoints();
+    await refreshRecoveryPoints(state.projectSession);
   }, [refreshRecoveryPoints]);
 
   const handleAutoSaveSuccess = useCallback(() => setRecoveryError(null), []);
@@ -87,15 +91,15 @@ export function useEditorRecovery({
   });
 
   const restoreRecoveryPoint = useCallback(async (point: RecoverySummary) => {
+    const state = useProjectStore.getState();
     try {
-      const recovered = await recoveryRepository.restore(point.id);
-      const state = useProjectStore.getState();
-      state.snapshot();
-      state.restoreRecoveredProject(recovered.project, recovered.assetBlobs, recovered.pageIndex);
+      if (!await state.restoreRecoveryPoint(point.id)) return false;
       setRecoveryError(null);
       return true;
     } catch (error) {
-      setRecoveryError(getErrorMessage(error));
+      if (useProjectStore.getState().projectSession === state.projectSession) {
+        setRecoveryError(getErrorMessage(error));
+      }
       return false;
     }
   }, []);

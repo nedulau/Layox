@@ -374,9 +374,13 @@ function Editor({
     autoSaveInterval,
   });
 
-  const handleRestoreRecoveryPoint = useCallback(async (point: RecoverySummary) => {
-    if (await restoreRecoveryPoint(point)) closeMenu();
-  }, [closeMenu, restoreRecoveryPoint]);
+  const handleRestoreRecoveryPoint = useCallback((point: RecoverySummary) => {
+    requestTransition(() => {
+      void restoreRecoveryPoint(point).then((restored) => {
+        if (restored) closeMenu();
+      });
+    });
+  }, [closeMenu, requestTransition, restoreRecoveryPoint]);
 
   // Close menu on outside click
   useEffect(() => {
@@ -464,11 +468,14 @@ function Editor({
     const files = Array.from(e.target.files ?? []).filter((file) => file.type.startsWith('image/'));
     if (files.length === 0) return;
     snapshot();
+    const projectSession = useProjectStore.getState().projectSession;
     setImportJob({ completed: 0, total: files.length });
     let unplaced = 0;
     try {
       for (let index = 0; index < files.length; index += 1) {
+        if (useProjectStore.getState().projectSession !== projectSession) return;
         const result = await addImageFromFile(files[index]);
+        if (result.placement === 'cancelled') return;
         if (result.placement === 'library-only') unplaced += 1;
         setImportJob({ completed: index + 1, total: files.length });
       }

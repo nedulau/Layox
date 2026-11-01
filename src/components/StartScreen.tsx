@@ -1,17 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import useProjectStore from '../store/useProjectStore';
-import { getHandle } from '../utils/handleStore';
 import NewProjectModal from './NewProjectModal';
 import { tr, type Language, type TranslationKey } from '../i18n';
 import { getFileSystemPort } from '../infra/fileSystem';
 import type { RecentProject } from '../store/useProjectStore';
-import type { FileSystemFileHandleExt } from '../types';
 import { recoveryRepository, type RecoverySummary } from '../utils/recoveryRepository';
 import ConfirmDialog from './common/ConfirmDialog';
-
-type PermissionAwareFileHandle = FileSystemFileHandleExt & {
-  requestPermission?: (options: { mode: 'readwrite' }) => Promise<PermissionState>;
-};
 
 type UiTheme = 'dark' | 'light';
 
@@ -24,6 +18,7 @@ type StartScreenProps = {
 
 function StartScreen({ uiTheme, setUiTheme, language, setLanguage }: StartScreenProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const openRequestRef = useRef(0);
   const [showNewProjectModal, setShowNewProjectModal] = useState(false);
   const [recoveryPoints, setRecoveryPoints] = useState<RecoverySummary[]>([]);
   const [recoveryError, setRecoveryError] = useState<string | null>(null);
@@ -35,10 +30,11 @@ function StartScreen({ uiTheme, setUiTheme, language, setLanguage }: StartScreen
   const resetProject = useProjectStore((state) => state.resetProject);
   const openProject = useProjectStore((state) => state.openProject);
   const openRecentProjectByPath = useProjectStore((state) => state.openRecentProjectByPath);
+  const openRecentProjectByHandle = useProjectStore((state) => state.openRecentProjectByHandle);
   const loadFromFile = useProjectStore((state) => state.loadFromFile);
   const recentProjects = useProjectStore((state) => state.recentProjects);
   const removeRecentProject = useProjectStore((state) => state.removeRecentProject);
-  const restoreRecoveredProject = useProjectStore((state) => state.restoreRecoveredProject);
+  const restoreRecoveryPoint = useProjectStore((state) => state.restoreRecoveryPoint);
 
   const hasFileSystemAccess = getFileSystemPort().supportsNativePicker();
 
@@ -65,12 +61,24 @@ function StartScreen({ uiTheme, setUiTheme, language, setLanguage }: StartScreen
       });
     return () => {
       active = false;
+      openRequestRef.current += 1;
     };
   }, []);
+
+  const beginOpenRequest = () => {
+    const request = ++openRequestRef.current;
+    const { projectSession, revision } = useProjectStore.getState();
+    return () => {
+      const state = useProjectStore.getState();
+      return request === openRequestRef.current && !state.showEditor
+        && state.projectSession === projectSession && state.revision === revision;
+    };
+  };
 
   const recentKey = (recentProject: RecentProject) => recentProject.filePath ?? recentProject.fileName;
 
   const handleOpen = async () => {
+    beginOpenRequest();
     if (hasFileSystemAccess) {
       try {
         await openProject();
@@ -85,6 +93,7 @@ function StartScreen({ uiTheme, setUiTheme, language, setLanguage }: StartScreen
   const handleFileSelected = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
+    beginOpenRequest();
     try {
       await loadFromFile(file);
     } catch (error) {
@@ -94,28 +103,20 @@ function StartScreen({ uiTheme, setUiTheme, language, setLanguage }: StartScreen
   };
 
   const handleRecentOpen = async (recentProject: RecentProject) => {
+    const isCurrent = beginOpenRequest();
     const key = recentKey(recentProject);
-    if (recentProject.filePath) {
-      const opened = await openRecentProjectByPath(recentProject.filePath);
-      if (opened) return;
-      setUnavailableRecents((current) => new Set(current).add(key));
-    }
-
     try {
-      const handle = await getHandle(recentProject.fileName);
-      if (handle) {
-        const permissionHandle = handle as unknown as PermissionAwareFileHandle;
-        const permission = await permissionHandle.requestPermission?.({ mode: 'readwrite' });
-        if (permission === 'granted' || permission === undefined) {
-          const file = await permissionHandle.getFile();
-          await loadFromFile(file, { kind: 'web-handle', handle: permissionHandle });
-          return;
-        }
+      if (recentProject.filePath) {
+        const opened = await openRecentProjectByPath(recentProject.filePath);
+        if (opened || !isCurrent()) return;
+        setUnavailableRecents((current) => new Set(current).add(key));
       }
+      if (await openRecentProjectByHandle(recentProject.fileName) || !isCurrent()) return;
     } catch {
+      if (!isCurrent()) return;
       setUnavailableRecents((current) => new Set(current).add(key));
     }
-    await handleOpen();
+    if (isCurrent()) await handleOpen();
   };
 
   const formatDate = (timestamp: number) => new Date(timestamp).toLocaleDateString(
@@ -130,11 +131,11 @@ function StartScreen({ uiTheme, setUiTheme, language, setLanguage }: StartScreen
   );
 
   const handleRecovery = async (point: RecoverySummary) => {
+    const isCurrent = beginOpenRequest();
     try {
-      const recovered = await recoveryRepository.restore(point.id);
-      restoreRecoveredProject(recovered.project, recovered.assetBlobs, recovered.pageIndex);
+      await restoreRecoveryPoint(point.id);
     } catch (error) {
-      setRecoveryError(error instanceof Error ? error.message : String(error));
+      if (isCurrent()) setRecoveryError(error instanceof Error ? error.message : String(error));
     }
   };
 
