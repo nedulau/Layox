@@ -7,7 +7,7 @@
   "main": "electron/main/index.mjs",
   "type": "module",
   "engines": {
-    "node": ">=24.15 <25"
+    "node": ">=24.22.1 <25"
   },
   "allowScripts": {
     "core-js@3.50.0": false,
@@ -26,51 +26,52 @@
     "test:coverage": "vitest run --coverage",
     "test:ui:coverage": "vitest run --config vitest.ui.config.ts --coverage",
     "test:e2e": "npm run build && playwright test e2e/browser.spec.ts",
-    "test:e2e:electron": "npm run build:electron:renderer && cross-env LAYOX_ELECTRON_E2E=1 playwright test e2e/electron.spec.ts",
-    "electron:start": "electron ./electron/main/index.mjs",
+    "test:e2e:electron": "npm run electron:install && npm run build:electron:renderer && cross-env LAYOX_ELECTRON_E2E=1 playwright test e2e/electron.spec.ts",
+    "electron:start": "npm run electron:install && electron ./electron/main/index.mjs",
     "electron:dev:renderer": "vite --host",
-    "electron:dev:desktop": "cross-env LAYOX_DEV_SERVER_URL=http://localhost:5173 electron ./electron/main/index.mjs",
-    "electron:build:appimage": "npm run build:electron:renderer && electron-builder --config electron-builder.yml --linux AppImage --publish never"
+    "electron:dev:desktop": "npm run electron:install && cross-env LAYOX_DEV_SERVER_URL=http://localhost:5173 electron ./electron/main/index.mjs",
+    "electron:build:appimage": "npm run electron:install && npm run build:electron:renderer && electron-builder --config electron-builder.yml --linux AppImage --publish never",
+    "electron:install": "install-electron"
   },
   "dependencies": {
     "file-saver": "^2.0.5",
     "jspdf": "^4.2.1",
     "jszip": "^3.10.2",
-    "konva": "^10.7.0",
-    "react": "^19.3.0",
-    "react-dom": "^19.3.0",
-    "react-konva": "^19.3.0",
-    "uuid": "^14.0.2",
-    "zustand": "^5.0.15"
+    "konva": "^10.9.1",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "react-konva": "^19.3.2",
+    "uuid": "^14.0.3",
+    "zustand": "^5.0.16"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "@playwright/test": "^1.63.0",
+    "@playwright/test": "^1.64.1",
     "@tailwindcss/vite": "^4.3.3",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.3",
-    "@testing-library/user-event": "^14.6.7",
+    "@testing-library/user-event": "^14.6.8",
     "@types/file-saver": "^2.0.7",
-    "@types/node": "^24.19.0",
+    "@types/node": "^24.19.2",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
-    "@vitejs/plugin-react": "^6.1.1",
-    "@vitest/coverage-v8": "^5.0.3",
+    "@vitejs/plugin-react": "^6.1.2",
+    "@vitest/coverage-v8": "^5.0.5",
     "cross-env": "^10.1.0",
     "electron": "^44.5.1",
-    "electron-builder": "^26.17.0",
+    "electron-builder": "^26.18.0",
     "eslint": "^10.11.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.7",
-    "fake-indexeddb": "^6.2.5",
-    "globals": "^17.13.0",
+    "fake-indexeddb": "^6.2.7",
+    "globals": "^17.14.0",
     "jsdom": "^30.1.1",
     "tailwindcss": "^4.3.3",
     "typescript": "~5.9.3",
-    "typescript-eslint": "^8.71.0",
+    "typescript-eslint": "^8.72.1",
     "vite": "^8.3.2",
-    "vite-plugin-pwa": "^1.3.0",
-    "vitest": "^5.0.3"
+    "vite-plugin-pwa": "^2.0.0",
+    "vitest": "^5.0.5"
   },
   "overrides": {
     "@electron/asar": "4.3.1",
@@ -79,6 +80,9 @@
     "glob": "13.0.6",
     "temp": {
       "rimraf": "6.1.3"
+    },
+    "@rolldown/plugin-babel": {
+      "@babel/plugin-transform-runtime": "^7.29.0"
     }
   }
 }

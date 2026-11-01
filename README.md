@@ -37,9 +37,9 @@ npm ci
 npm run dev
 ```
 
-Development and release builds use Node.js 24.21.0 LTS (`nvm install && nvm use`); CI reads the same `.nvmrc` pin. The supported range is Node.js >=24.15 and <25, matching the minimum required by jsdom. Node.js 26 is outside this project’s supported range.
+Development and release builds use Node.js 24.22.2 Maintenance LTS (`nvm install && nvm use`); CI reads the same `.nvmrc` pin. The supported range is Node.js >=24.22.1 and <25, requiring the October 2026 security fixes and satisfying jsdom. Node.js 24 receives maintenance support until April 30, 2028. Node.js 26 is Active LTS but remains outside this project’s tested range.
 
-The dependency baseline uses Electron 44.5.1, electron-builder 26.17.0 with `@electron/asar` 4.3.1, Konva 10.7.0 / react-konva 19.3.0, Vite 8.3.2 and matching Vitest / coverage 5.0.3. Release deployment pins Vercel CLI 59.26.0. TypeScript stays on 5.9 because the current typescript-eslint release does not support TypeScript 7.
+The dependency baseline uses Electron 44.5.1, electron-builder 26.18.0 with `@electron/asar` 4.3.1, Konva 10.9.1 / react-konva 19.3.2, Vite 8.3.2 and matching Vitest / coverage 5.0.5. Release deployment pins Vercel CLI 65.9.0. TypeScript stays on 5.9 because the current typescript-eslint release does not support TypeScript 7. The optional Babel transform-runtime peer of @rolldown/plugin-babel is constrained to Babel 7 to keep npm resolution compatible with the Workbox Babel toolchain.
 
 Open [http://localhost:5173](http://localhost:5173) in your browser.
 
@@ -63,6 +63,8 @@ npm run preview -- --host
 Builds the optimized production app into `dist/` (including service worker and web app manifest) and starts a local preview server. With `--host`, other devices in your network can access it.
 
 ### Linux desktop bootstrap (Electron)
+
+Electron 44 installs its runtime binary explicitly through `npm run electron:install`. Desktop start, desktop E2E and AppImage scripts invoke this cached installer automatically; `npm ci` alone installs the JavaScript package.
 
 Start renderer and desktop shell in two terminals:
 
@@ -134,6 +136,7 @@ Vite prints a network URL (for example `http://192.168.1.X:5173`) that devices i
 | `npm run test:e2e:electron` | Build and run Electron end-to-end tests |
 | `npm run check` | Lint, coverage tests, web build, and Electron renderer build |
 | `npm run audit:ci` | Fail for high or critical dependency advisories |
+| `npm run electron:install` | Download and verify the Electron runtime binary |
 | `npm run electron:start` | Start Electron shell against built app |
 | `npm run electron:dev:renderer` | Start renderer dev server for Electron |
 | `npm run electron:dev:desktop` | Start Electron shell against renderer dev server |
@@ -179,6 +182,10 @@ Projects are saved as versioned `.layox` files: a ZIP container holding `project
 - Each loaded, new or recovered project starts a separate session with empty undo/redo history and cleared selection. A late save from an earlier session cannot change the active project’s file destination, saved status or save error, including when reopening the same album.
 
 ## Release quality gates
+
+The release workflow pins verified commits of github-script 9.0.0 and action-gh-release 3.0.3; setup-node 7.1.0 and upload-artifact 7.0.2 are pinned consistently across workflows. Vercel CLI 65.9.0 retains the existing `pull --environment=production`, `build --prod` and `deploy --prebuilt --prod` commands. CLI compatibility was checked without creating a deployment.
+
+The PWA build uses vite-plugin-pwa 2.0.0 with the existing prompt-based update flow. Its optional assets-generator peer supports version 2; Layox uses committed icons and does not require that generator.
 
 Pull requests, `main`, and releases use the same lint, coverage, build, audit, browser E2E and Electron E2E checks. Linux AppImages are built only after the quality job succeeds and are smoke-tested under Xvfb. The supported beta release baseline is `0.1.0-beta.1`.
 

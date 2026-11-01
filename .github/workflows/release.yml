@@ -16,7 +16,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Setup Node
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: '.nvmrc'
           cache: npm
@@ -54,7 +54,7 @@ jobs:
           test "$status" -eq 124
 
       - name: Generate and update release notes
-        uses: actions/github-script@373c709c69115d41ff229c7e5df9f8788daa9553 # v9
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
             const { owner, repo } = context.repo;
@@ -89,7 +89,7 @@ jobs:
             });
 
       - name: Attach AppImage to GitHub Release
-        uses: softprops/action-gh-release@5113cdc90fd4d541c801c55356214017bf5ae34b # v3
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           tag_name: ${{ github.event.release.tag_name }}
           files: |
@@ -107,7 +107,7 @@ jobs:
           test -n "$VERCEL_PROJECT_ID" || (echo "Missing secret VERCEL_PROJECT_ID" && exit 1)
 
       - name: Install Vercel CLI
-        run: npm i -g vercel@59.26.0
+        run: npm i -g vercel@65.9.0
 
       - name: Pull Vercel Environment Information
         env:
