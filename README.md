@@ -182,7 +182,7 @@ Projects are saved as versioned `.layox` files: a ZIP container holding `project
 
 Pull requests, `main`, and releases use the same lint, coverage, build, audit, browser E2E and Electron E2E checks. Linux AppImages are built only after the quality job succeeds and are smoke-tested under Xvfb. The supported beta release baseline is `0.1.0-beta.1`.
 
-The lockfile includes the patched build-tool dependencies `brace-expansion` 5.0.12 and `fast-uri` 3.1.8. These address the [brace-expansion denial-of-service advisories](https://github.com/advisories/GHSA-qhr7-859c-m2p7) (including [comma recursion](https://github.com/advisories/GHSA-6j4f-fj2g-mc7p) and [CPU complexity](https://github.com/advisories/GHSA-q2hr-2g5m-vwhr)) and the [fast-uri host normalization advisory](https://github.com/advisories/GHSA-hrr3-gc8f-f4qj). Run `npm ci` to use the reviewed lockfile and `npm run audit:ci` to check current advisories; the high-severity gate does not imply that lower-severity advisories are absent.
+The lockfile and scoped npm overrides include the security fixes reviewed on 2026-11-02. Run `npm ci` to use these versions and `npm run audit:ci` to check current advisories. See [SECURITY.md](SECURITY.md) for the affected dependency paths, compatibility checks and the documented local `deepmerge` patch. Local file packages are outside npm audit's registry matching, so its result must be read together with the patch regression tests; the high-severity gate also does not imply that lower-severity advisories are absent.
 
 ## License
 
