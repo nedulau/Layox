@@ -30,6 +30,8 @@ Both expose the same channel names as src/infra/electron/ipcContract.ts:
 
 ## Development
 
+The Electron npm package and its runtime binary install separately. Run `npm run electron:install` to populate the runtime cache. Start, Electron E2E and AppImage scripts do this automatically, including on CI.
+
 1) Start renderer:
 
 ```bash
