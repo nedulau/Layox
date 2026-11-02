@@ -39,7 +39,7 @@ npm run dev
 
 Development and release builds use Node.js 24.22.2 Maintenance LTS (`nvm install && nvm use`); CI reads the same `.nvmrc` pin. The supported range is Node.js >=24.22.1 and <25, requiring the October 2026 security fixes and satisfying jsdom. Node.js 24 receives maintenance support until April 30, 2028. Node.js 26 is Active LTS but remains outside this project’s tested range.
 
-The dependency baseline uses Electron 44.5.1, electron-builder 26.18.0 with `@electron/asar` 4.3.1, Konva 10.9.1 / react-konva 19.3.2, Vite 8.3.2 and matching Vitest / coverage 5.0.5. Release deployment pins Vercel CLI 65.9.0. TypeScript stays on 5.9 because the current typescript-eslint release does not support TypeScript 7. The optional Babel transform-runtime peer of @rolldown/plugin-babel is constrained to Babel 7 to keep npm resolution compatible with the Workbox Babel toolchain.
+The dependency baseline uses Electron 44.10.1, electron-builder 26.18.0 with `@electron/asar` 4.3.1, Konva 10.9.1 / react-konva 19.3.2, Vite 8.3.5 and matching Vitest / coverage 5.0.5. Release deployment pins Vercel CLI 65.9.0. TypeScript stays on 5.9 because the current typescript-eslint release does not support TypeScript 7. The optional Babel transform-runtime peer of @rolldown/plugin-babel is constrained to Babel 7 to keep npm resolution compatible with the Workbox Babel toolchain.
 
 Open [http://localhost:5173](http://localhost:5173) in your browser.
 
@@ -189,7 +189,7 @@ The PWA build uses vite-plugin-pwa 2.0.0 with the existing prompt-based update f
 
 Pull requests, `main`, and releases use the same lint, coverage, build, audit, browser E2E and Electron E2E checks. Linux AppImages are built only after the quality job succeeds and are smoke-tested under Xvfb. The supported beta release baseline is `0.1.0-beta.1`.
 
-The lockfile includes the patched build-tool dependencies `brace-expansion` 5.0.12 and `fast-uri` 3.1.8. These address the [brace-expansion denial-of-service advisories](https://github.com/advisories/GHSA-qhr7-859c-m2p7) (including [comma recursion](https://github.com/advisories/GHSA-6j4f-fj2g-mc7p) and [CPU complexity](https://github.com/advisories/GHSA-q2hr-2g5m-vwhr)) and the [fast-uri host normalization advisory](https://github.com/advisories/GHSA-hrr3-gc8f-f4qj). Run `npm ci` to use the reviewed lockfile and `npm run audit:ci` to check current advisories; the high-severity gate does not imply that lower-severity advisories are absent.
+The lockfile and scoped npm overrides include the security fixes reviewed on 2026-11-02. Run `npm ci` to use these versions and `npm run audit:ci` to check current advisories. See [SECURITY.md](SECURITY.md) for the affected dependency paths, compatibility checks and the documented local `deepmerge` patch. Local file packages are outside npm audit's registry matching, so its result must be read together with the patch regression tests; the high-severity gate also does not imply that lower-severity advisories are absent.
 
 ## License
 
