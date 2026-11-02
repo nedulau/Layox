@@ -29,6 +29,7 @@ export function useAutoSave({
         try {
           await createRecoveryPoint();
           const latestState = useProjectStore.getState();
+          if (latestState.projectSession !== state.projectSession) return;
           if (latestState.projectLocation && latestState.isDirty) {
             await latestState.saveCurrentProject();
           }

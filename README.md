@@ -177,6 +177,7 @@ Projects are saved as versioned `.layox` files: a ZIP container holding `project
 - Up to twelve snapshots per project are retained with deduplicated assets and quota-aware pruning.
 - Closing or reloading warns only when content is genuinely unsaved. New, Open (including `Ctrl+O`) and returning home use a shared Save / Discard / Cancel dialog. Cancelled or failed saves keep the current project; edits made during saving require another save before continuing.
 - Each loaded, new or recovered project starts a separate session with empty undo/redo history and cleared selection. A late save from an earlier session cannot change the active project’s file destination, saved status or save error, including when reopening the same album.
+- Opening files and restoring recovery points apply only the latest request while the original session and content revision are unchanged. Late image imports and import batches cannot modify another project session. Restoring from the editor uses the same Save / Discard / Cancel protection as New and Open; recovery starts a new session and does not preserve the previous undo history.
 
 ## Release quality gates
 

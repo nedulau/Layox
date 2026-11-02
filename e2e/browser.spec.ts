@@ -155,6 +155,31 @@ test('auto-saves a complete recovery point and restores it after reload', async 
   await expect(page.getByRole('button', { name: /icon-512\.png/ })).toBeVisible();
 });
 
+test('protects restoring a recovery point with cancel and save choices', async ({ page }) => {
+  await createProject(page, 'Recovery original');
+  await page.getByRole('button', { name: 'Schnelleinstellungen' }).click();
+  await page.getByRole('checkbox', { name: 'Auto-Save aktivieren' }).check();
+  await page.getByText('Intervall', { exact: true }).locator('..').getByRole('combobox').selectOption('10');
+  const restorePoint = page.getByTitle('Wiederherstellungspunkt laden').first();
+  await expect(restorePoint).toBeVisible({ timeout: 15_000 });
+  await page.getByRole('checkbox', { name: 'Auto-Save aktivieren' }).uncheck();
+  await page.getByTitle('Projektname bearbeiten').fill('Keep unsaved changes');
+
+  await restorePoint.click();
+  const confirmation = page.getByRole('alertdialog');
+  await confirmation.getByRole('button', { name: 'Abbrechen' }).click();
+  await expect(page.getByTitle('Projektname bearbeiten')).toHaveValue('Keep unsaved changes');
+  await expect(page.getByLabel('Rückgängig')).toBeEnabled();
+
+  await page.getByRole('button', { name: 'Schnelleinstellungen' }).click();
+  await restorePoint.click();
+  const saving = page.waitForEvent('download');
+  await confirmation.getByRole('button', { name: 'Speichern', exact: true }).click();
+  expect((await saving).suggestedFilename()).toBe('Keep unsaved changes.layox');
+  await expect(page.getByTitle('Projektname bearbeiten')).toHaveValue('Recovery original');
+  await expect(page.getByLabel('Rückgängig')).toBeDisabled();
+});
+
 test('persists the page format and exports the selected pixel resolution', async ({ page }) => {
   await createProject(page, 'Print format');
   await page.getByRole('button', { name: 'Layout', exact: true }).click();

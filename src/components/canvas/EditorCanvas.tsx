@@ -232,8 +232,10 @@ function EditorCanvas({
         f.type.startsWith('image/'),
       );
       if (files.length > 0) snapshot();
+      const projectSession = useProjectStore.getState().projectSession;
       for (const file of files) {
-        await addImageFromFile(file);
+        if (useProjectStore.getState().projectSession !== projectSession) return;
+        if ((await addImageFromFile(file)).placement === 'cancelled') return;
       }
     },
     [
@@ -255,13 +257,14 @@ function EditorCanvas({
       if (selectedSlotIndex !== slotIndex) return;
       if (currentPage?.slotAssignments?.[slotIndex]) return;
 
+      const projectSession = useProjectStore.getState().projectSession;
       const input = document.createElement('input');
       input.type = 'file';
       input.accept = 'image/*';
       input.multiple = false;
       input.onchange = async () => {
         const file = input.files?.[0];
-        if (!file) return;
+        if (!file || useProjectStore.getState().projectSession !== projectSession) return;
         snapshot();
         try {
           await addImageFromFile(file);
