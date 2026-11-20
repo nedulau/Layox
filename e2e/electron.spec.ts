@@ -1,5 +1,5 @@
 import { _electron as electron, expect, test } from '@playwright/test';
-import { mkdtemp, readFile, readdir, stat } from 'node:fs/promises';
+import { mkdtemp, readFile, readdir, stat, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -100,6 +100,58 @@ test('Electron saves in place, saves as and blocks external windows', async () =
     await expect(window.getByRole('alert')).toContainText('simulated atomic failure');
     expect(await readFile(firstPath)).toEqual(intactArchive);
     expect((await readdir(temporaryDirectory)).some((name) => name.endsWith('.tmp'))).toBe(false);
+
+    const unauthorizedPath = path.join(temporaryDirectory, 'unauthorized.layox');
+    const secretPath = path.join(temporaryDirectory, 'secret.txt');
+    const symlinkPath = path.join(temporaryDirectory, 'symlink.layox');
+    await writeFile(unauthorizedPath, intactArchive);
+    await writeFile(secretPath, 'secret-content');
+    await symlink(secretPath, symlinkPath);
+
+    const securityChecks = await window.evaluate(async ({ unauthPath, linkPath }) => {
+      const bridge = window.electronBridge;
+      if (!bridge) throw new Error('Missing electronBridge');
+      const bytes = new Uint8Array([80, 75, 3, 4]).buffer;
+      const openUnauthorized = await bridge.openProjectFromPath(unauthPath);
+      const openSymlink = await bridge.openProjectFromPath(linkPath);
+      const saveUnauthorized = await bridge.saveProject({
+        name: 'hack.layox',
+        data: bytes,
+        targetPath: unauthPath,
+      });
+      const saveTraversalName = await bridge.saveProject({
+        name: '../evil.layox',
+        data: bytes,
+      });
+      const protoRead = bridge.storage.getItem('toString');
+      bridge.storage.setItem('__proto__', 'polluted');
+      const protoAfterWrite = bridge.storage.getItem('__proto__');
+      const recentsBefore = bridge.storage.getItem('layox_recentProjects');
+      bridge.storage.setItem('layox_recentProjects', JSON.stringify([
+        { name: 'Injected', fileName: 'unauthorized.layox', filePath: unauthPath, lastOpened: 1 },
+      ]));
+      const recentsAfter = bridge.storage.getItem('layox_recentProjects');
+      return {
+        openUnauthorized,
+        openSymlink,
+        saveUnauthorized,
+        saveTraversalName,
+        protoRead,
+        protoAfterWrite,
+        recentsUnchanged: recentsBefore === recentsAfter,
+      };
+    }, { unauthPath: unauthorizedPath, linkPath: symlinkPath });
+
+    expect(securityChecks).toEqual({
+      openUnauthorized: null,
+      openSymlink: null,
+      saveUnauthorized: null,
+      saveTraversalName: null,
+      protoRead: null,
+      protoAfterWrite: null,
+      recentsUnchanged: true,
+    });
+    expect(await readFile(unauthorizedPath)).toEqual(intactArchive);
 
   } finally {
     await electronApp.evaluate(({ app }) => app.exit(0)).catch(() => undefined);

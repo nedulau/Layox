@@ -750,8 +750,14 @@ const useProjectStore = create<ProjectState>((baseSet, get) => {
         page.elements = page.elements.filter((el) => el.type !== 'image');
         page.slotAssignments = assignments;
       } else {
-        // Switching between layouts: keep existing slot assignments
-        page.slotAssignments = { ...(page.slotAssignments ?? {}) };
+        const validAssignments: Record<number, SlotAssignment> = {};
+        for (const [key, assignment] of Object.entries(page.slotAssignments ?? {})) {
+          const slotIndex = Number(key);
+          if (Number.isInteger(slotIndex) && slotIndex >= 0 && slotIndex < layout.slots.length) {
+            validAssignments[slotIndex] = assignment;
+          }
+        }
+        page.slotAssignments = validAssignments;
       }
 
       page.layoutId = layoutId;
@@ -775,8 +781,8 @@ const useProjectStore = create<ProjectState>((baseSet, get) => {
       const page = { ...pages[state.currentPageIndex] };
       if (!page.layoutId) return state;
 
-      const padding = page.layoutPadding ?? DEFAULT_LAYOUT_PADDING;
-      const gap = page.layoutGap ?? DEFAULT_LAYOUT_GAP;
+      const padding = page.layoutPadding ?? state.project.meta.defaultLayoutPadding ?? DEFAULT_LAYOUT_PADDING;
+      const gap = page.layoutGap ?? state.project.meta.defaultLayoutGap ?? DEFAULT_LAYOUT_GAP;
       const slots = computeLayoutSlots(page.layoutId, padding, gap, getPageSize(state.project.meta.pageFormat));
 
       // Convert slot assignments back to free ImageElements

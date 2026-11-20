@@ -39,7 +39,7 @@ npm run dev
 
 Development and release builds use Node.js 24.22.3 Maintenance LTS (`nvm install && nvm use`); CI reads the same `.nvmrc` pin. The supported range is Node.js >=24.22.3 and <25, requiring the November 2026 security fixes and satisfying jsdom. Node.js 24 receives maintenance support until April 30, 2028. Node.js 26 is Active LTS but remains outside this project’s tested range.
 
-The dependency baseline uses Electron 44.11.5 (bundling Node.js 24.22.3), electron-builder 26.18.0 with `@electron/asar` 4.3.2, Konva 10.9.1 / react-konva 19.3.2, Vite 8.3.5 and matching Vitest / coverage 5.0.5. Release deployment pins Vercel CLI 65.9.0. TypeScript stays on 5.9 because the current typescript-eslint release does not support TypeScript 7. The optional Babel transform-runtime peer of @rolldown/plugin-babel is constrained to Babel 7 to keep npm resolution compatible with the Workbox Babel toolchain.
+The dependency baseline uses Electron 44.11.5 (bundling Node.js 24.22.3), electron-builder 26.18.0 with `@electron/asar` 4.3.2, Konva 10.9.1 / react-konva 19.3.2, Vite 8.3.5 and matching Vitest / coverage 5.0.5. Release deployment pins Vercel CLI 65.9.0. TypeScript stays on 5.9 because the current typescript-eslint release does not support TypeScript 7.
 
 Open [http://localhost:5173](http://localhost:5173) in your browser.
 
@@ -170,7 +170,7 @@ src/
 
 ## File Format
 
-Projects are saved as versioned `.layox` files: a ZIP container holding `project.json` and an `assets/` folder. Format 1.2 is written today; unversioned, 1.0 and 1.1 projects are migrated on load. Newer unknown versions, invalid values, missing assets and oversized/corrupt archives are rejected without replacing the open project.
+Projects are saved as versioned `.layox` files: a ZIP container holding `project.json` and an `assets/` folder. Format 1.2 is written today; unversioned, 1.0 and 1.1 projects are migrated on load. Newer unknown versions, invalid values, missing assets and oversized/corrupt archives are rejected without replacing the open project. Switching a page to a layout with fewer slots trims out-of-range slot assignments (while keeping their images in the asset library) so saved archives remain schema-valid, and switching to free mode positions converted slot images using the page's effective layout padding and gap defaults.
 
 ## Persistence and recovery
 
@@ -190,7 +190,7 @@ The PWA build uses vite-plugin-pwa 2.0.0 with the existing prompt-based update f
 
 Pull requests, `main`, and releases use the same lint, coverage, build, audit, browser E2E and Electron E2E checks. Linux AppImages are built only after the quality job succeeds and are smoke-tested under Xvfb. The supported beta release baseline is `0.1.0-beta.1`.
 
-The lockfile, `.nvmrc` pin and scoped npm overrides include the runtime and dependency security fixes reviewed on 2026-11-02 and 2026-11-20. Run `npm ci` to use these versions and `npm run audit:ci` to check current advisories. See [SECURITY.md](SECURITY.md) for the affected dependency paths, compatibility checks and the documented local `deepmerge` patch. Local file packages are outside npm audit's registry matching, so its result must be read together with the patch regression tests; the high-severity gate also does not imply that lower-severity advisories are absent.
+The lockfile, `.nvmrc` pin and scoped npm overrides include the runtime and dependency security fixes reviewed on 2026-11-02 and 2026-11-20. Run `npm ci` to use these versions and `npm run audit:ci` to check current advisories. See [SECURITY.md](SECURITY.md) for the affected dependency paths and compatibility checks (the temporary local `deepmerge` vendor override was removed after `GHSA-gcqx-w48m-w2h4` was withdrawn on 2026-11-16). Note that the high-severity CI gate does not imply that lower-severity advisories are absent.
 
 ## License
 

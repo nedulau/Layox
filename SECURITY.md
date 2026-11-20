@@ -1,5 +1,7 @@
 # Dependency security maintenance
 
+## Runtime and dependency security updates (2026-11-20)
+
 The project health review on **2026-11-20** added the following runtime and
 dependency security updates:
 
@@ -8,6 +10,31 @@ dependency security updates:
 | SEC-01 / DEP-01 | Runtime & shipped desktop shell: Node.js 24.22.2 → 24.22.3 (`engines.node >=24.22.3 <25`) and Electron 44.10.1 → 44.11.5 (bundles Node.js 24.22.3, revokes `eMudhra` RSA intermediates, and includes Chromium/V8/Skia/PDFium backports). | [Node.js v24.22.3](https://github.com/nodejs/node/releases/tag/v24.22.3) (`CVE-2026-123863`–`CVE-2026-123877`, `CVE-2026-126051`), [Electron v44.11.2](https://github.com/electron/electron/releases/tag/v44.11.2)–[v44.11.5](https://github.com/electron/electron/releases/tag/v44.11.5) |
 | SEC-02 / DEP-02 | Dev/build/test HTTP client: version-scoped `undici` overrides updated to 7.30.2 (`@electron/get`) and 8.13.1 (`jsdom`, fix from 8.12.4); `undici@^6` remains on latest 6.29.1 (`node-gyp`). | [GHSA-mqg3-3v4r-cm32](https://github.com/nodejs/undici/security/advisories/GHSA-mqg3-3v4r-cm32), [GHSA-7xg3-fphp-28hg](https://github.com/nodejs/undici/security/advisories/GHSA-7xg3-fphp-28hg), [GHSA-5rm8-gv32-r954](https://github.com/nodejs/undici/security/advisories/GHSA-5rm8-gv32-r954), [GHSA-9v6h-8rgp-m69f](https://github.com/nodejs/undici/security/advisories/GHSA-9v6h-8rgp-m69f), [GHSA-3g9m-rv3r-w5w2](https://github.com/nodejs/undici/security/advisories/GHSA-3g9m-rv3r-w5w2), [GHSA-r4pc-4jcp-7pqc](https://github.com/nodejs/undici/security/advisories/GHSA-r4pc-4jcp-7pqc) |
 | SEC-05 / DEP-02 | jsPDF's optional runtime DOMPurify dependency: override 3.4.17 → 3.4.18 (compatible routine override patches also updated `@electron/asar` 4.3.2, `glob` 14.0.6, `minimatch` 11.0.9, `rimraf` 6.1.4, `source-map-js` 1.2.4). | [GHSA-qm7q-q8h9-jg8q](https://github.com/cure53/DOMPurify/security/advisories/GHSA-qm7q-q8h9-jg8q) |
+
+## Application security hardening (2026-11-20)
+
+In addition to the runtime and dependency updates above, the 2026-11-20 review
+hardened two local trust boundaries:
+
+- **SEC-03 (`.layox` archive decompression limits):** `src/utils/projectArchive.ts`
+  now streams `project.json` and every `assets/*` entry via JSZip
+  `internalStream('uint8array')`, enforcing per-entry byte limits, cumulative
+  uncompressed asset budgets (512 MiB), and compression-ratio limits (including
+  on `project.json`) against actual decompressed bytes rather than trusting ZIP
+  Central Directory headers alone. Asset paths in both schema validation and
+  archive handling also reject backslashes, empty segments, and control
+  characters.
+- **SEC-04 (Electron IPC path boundaries & storage isolation):**
+  `electron/main/index.mjs` and `electron/main/security.mjs` restrict
+  `layox:open-project-from-path` and in-place `layox:save-project` overwrites to
+  paths authorized by native dialogs in the current session or loaded from
+  persisted `layox_recentProjects` at startup, reject unauthorized paths in
+  renderer `layox_recentProjects` writes, reject symbolic links on read and
+  overwrite (`lstat` + `O_NOFOLLOW`), enforce pure `.layox` basenames for save
+  payloads, and isolate the settings cache via `Object.create(null)` while
+  blocking prototype keys.
+
+## Dependency security review (2026-11-02)
 
 The project health review on **2026-11-02** identified the following dependency
 issues. The remediation changes package versions and build tooling; project file
@@ -19,7 +46,7 @@ schema and archive validation (TD-03) are outside this change.
 | SEC-02 | Shipped desktop runtime: Electron 44.5.1 → 44.10.1, retaining the supported major line. | [GHSA-jr5w-w6x2-84p9](https://github.com/advisories/GHSA-jr5w-w6x2-84p9) |
 | SEC-03 | jsPDF's optional runtime DOMPurify dependency: override 3.4.17. | [GHSA-cg2g-xh64-v4q7](https://github.com/advisories/GHSA-cg2g-xh64-v4q7), [GHSA-mrv2-3pqr-j5jr](https://github.com/advisories/GHSA-mrv2-3pqr-j5jr) |
 | SEC-04 | Test environment jsdom 30.1.3; version-scoped undici overrides retain each consumer's major (6.29.1 for node-gyp, 7.30.1 for Electron download tooling, 8.12.3 for jsdom); source-map-js 1.2.2 for Tailwind/PostCSS; Zod 4.6.7 for React Hooks linting. | [GHSA-2m5v-pch6-74hx](https://github.com/advisories/GHSA-2m5v-pch6-74hx), [GHSA-68fv-2mgg-jv7q](https://github.com/advisories/GHSA-68fv-2mgg-jv7q), [GHSA-mrhx-c7xc-m3w5](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5) |
-| SEC-05 | Build/lint dependencies: fast-uri 3.1.9, glob 14.0.3, minimatch 11.0.3, serialize-javascript 7.1.4; local deepmerge patch for Workbox's Rollup resolver. | [GHSA-w74x-v6f9-j3xg](https://github.com/advisories/GHSA-w74x-v6f9-j3xg), [GHSA-3g3m-2fjr-6pw4](https://github.com/advisories/GHSA-3g3m-2fjr-6pw4), [GHSA-g3hv-75wg-m249](https://github.com/advisories/GHSA-g3hv-75wg-m249), [GHSA-m5mm-p8h7-m29v](https://github.com/advisories/GHSA-m5mm-p8h7-m29v), [GHSA-gcqx-w48m-w2h4](https://github.com/advisories/GHSA-gcqx-w48m-w2h4) |
+| SEC-05 | Build/lint dependencies: fast-uri 3.1.9, glob 14.0.3, minimatch 11.0.3, serialize-javascript 7.1.4; upstream `deepmerge` 4.3.1 restored after `GHSA-gcqx-w48m-w2h4` withdrawal. | [GHSA-w74x-v6f9-j3xg](https://github.com/advisories/GHSA-w74x-v6f9-j3xg), [GHSA-3g3m-2fjr-6pw4](https://github.com/advisories/GHSA-3g3m-2fjr-6pw4), [GHSA-g3hv-75wg-m249](https://github.com/advisories/GHSA-g3hv-75wg-m249), [GHSA-m5mm-p8h7-m29v](https://github.com/advisories/GHSA-m5mm-p8h7-m29v), [GHSA-gcqx-w48m-w2h4](https://github.com/advisories/GHSA-gcqx-w48m-w2h4) |
 
 The original npm audit reported 34 affected package entries, including parent
 packages affected through their dependencies; these are not 34 independent
@@ -29,24 +56,14 @@ versions because their fixes are unavailable on the old lines. Lint, coverage,
 web/PWA builds, browser and Electron E2E, and a real Linux AppImage build and
 startup check must pass when changing these overrides.
 
-## Local deepmerge patch
+## Withdrawn deepmerge advisory (2026-11-16)
 
-There is no patched upstream deepmerge release as of the review date. The
-repository contains its MIT-licensed 4.3.1 CommonJS bundle with a focused fix:
-merges define own data properties instead of invoking inherited setters. The
-root development dependency anchors the local package, and the `$deepmerge`
-override routes transitive consumers to that same implementation.
-
-See [vendor/deepmerge/README.md](vendor/deepmerge/README.md) for provenance,
-upstream hashes, the precise patch and removal instructions. The installed
-package is covered by `src/security/__tests__/deepmerge.test.ts`, including
-prototype attacks through both inputs and recursive merges, plus normal merge
-behavior. Vendored upstream files are excluded from project linting.
-
-**npm audit does not assess local file packages against registry advisories.**
-The local remediation is therefore supported by source review and regression
-tests, not a claim that npm has certified it. Keep this exception visible until
-the local package can be replaced with a verified upstream fix.
+[GHSA-gcqx-w48m-w2h4 / CVE-2026-93753](https://github.com/advisories/GHSA-gcqx-w48m-w2h4)
+was officially withdrawn on **2026-11-16** (*"This advisory has been withdrawn
+because it does not describe a security vulnerability"*). The temporary local
+`vendor/deepmerge` package, its npm override, its ESLint exclusion, and its
+dedicated patch regression test have therefore been removed, restoring the
+upstream `deepmerge` 4.3.1 registry package under standard `npm audit` tracking.
 
 ## Scope and continuing checks
 
