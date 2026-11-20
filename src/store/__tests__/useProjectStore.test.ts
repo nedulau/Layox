@@ -2,6 +2,8 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { v4 as uuidv4 } from 'uuid';
 import type { FileSystemPort, OpenProjectDialogResult, SaveOutcome } from '../../infra/ports/fileSystemPort';
 import type { Project, TextElement } from '../../types';
+import { computeLayoutSlots } from '../../utils/layouts';
+import { createProjectArchiveBlob, loadProjectArchive } from '../../utils/projectArchive';
 
 // Mock fileIO and browser APIs before importing the store
 vi.mock('../../utils/fileIO', () => ({
@@ -466,6 +468,71 @@ describe('useProjectStore', () => {
       getState().applyLayout('two-side');
 
       expect(getState().project.pages[1].slotAssignments?.[0].assetPath).toBe('assets/photo.jpg');
+    });
+
+    it('prunes out-of-range slot assignments when shrinking a layout so saved archives reload cleanly', async () => {
+      getState().setCurrentPageIndex(1);
+      getState().applyLayout('grid-4');
+      const assetPaths = ['assets/p0.jpg', 'assets/p1.jpg', 'assets/p2.jpg', 'assets/p3.jpg'];
+      const assetBlobs = Object.fromEntries(assetPaths.map((assetPath) => [assetPath, new Blob(['img'])]));
+      const pages = [...getState().project.pages];
+      pages[1] = {
+        ...pages[1],
+        slotAssignments: Object.fromEntries(
+          assetPaths.map((assetPath, slotIndex) => [slotIndex, { assetPath, offsetX: 0, offsetY: 0, scale: 1 }]),
+        ),
+      };
+      useProjectStore.setState({
+        project: { ...getState().project, pages },
+        assetBlobs,
+      });
+
+      getState().applyLayout('two-side');
+
+      const updatedPage = getState().project.pages[1];
+      expect(Object.keys(updatedPage.slotAssignments ?? {})).toEqual(['0', '1']);
+      expect(updatedPage.slotAssignments?.[0].assetPath).toBe('assets/p0.jpg');
+      expect(updatedPage.slotAssignments?.[1].assetPath).toBe('assets/p1.jpg');
+      expect(Object.keys(getState().assetBlobs)).toEqual(assetPaths);
+
+      const archive = await createProjectArchiveBlob(getState().project, getState().assetBlobs);
+      const reloaded = await loadProjectArchive(archive);
+      expect(reloaded.project.pages[1].layoutId).toBe('two-side');
+      expect(Object.keys(reloaded.project.pages[1].slotAssignments ?? {})).toEqual(['0', '1']);
+    });
+
+    it('uses project default layout padding and gap when clearLayout converts slots to free elements', () => {
+      getState().setDefaultLayoutPadding(60);
+      getState().setDefaultLayoutGap(40);
+      getState().setCurrentPageIndex(1);
+      getState().applyLayout('two-side');
+      const pages = [...getState().project.pages];
+      pages[1] = {
+        ...pages[1],
+        slotAssignments: {
+          0: { assetPath: 'assets/first.jpg', offsetX: 0, offsetY: 0, scale: 1 },
+          1: { assetPath: 'assets/second.jpg', offsetX: 0, offsetY: 0, scale: 1 },
+        },
+      };
+      useProjectStore.setState({ project: { ...getState().project, pages } });
+
+      getState().clearLayout();
+
+      const expectedSlots = computeLayoutSlots('two-side', 60, 40);
+      const imageElements = getState().project.pages[1].elements.filter((element) => element.type === 'image');
+      expect(imageElements).toHaveLength(2);
+      expect(imageElements[0]).toMatchObject({
+        x: Math.round(expectedSlots[0].x),
+        y: Math.round(expectedSlots[0].y),
+        width: Math.round(expectedSlots[0].width),
+        height: Math.round(expectedSlots[0].height),
+      });
+      expect(imageElements[1]).toMatchObject({
+        x: Math.round(expectedSlots[1].x),
+        y: Math.round(expectedSlots[1].y),
+        width: Math.round(expectedSlots[1].width),
+        height: Math.round(expectedSlots[1].height),
+      });
     });
   });
 
