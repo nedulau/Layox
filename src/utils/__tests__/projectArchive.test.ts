@@ -6,7 +6,9 @@ import {
   MAX_PROJECT_ARCHIVE_BYTES,
   MAX_PROJECT_ARCHIVE_ENTRIES,
   MAX_PROJECT_ASSET_BYTES,
+  MAX_PROJECT_COMPRESSION_RATIO,
   MAX_PROJECT_JSON_BYTES,
+  MAX_PROJECT_UNCOMPRESSED_BYTES,
 } from '../../domain/projectSchema';
 
 const project: Project = {
@@ -59,6 +61,36 @@ function metadataArchive(entries: Array<{
       _data: { compressedSize: entry.compressed, uncompressedSize: entry.uncompressed },
     }])),
   } as unknown as JSZip;
+}
+
+function patchZipUncompressedSizes(rawBytes: Uint8Array, entryName: string, forgedSize: number): Uint8Array<ArrayBuffer> {
+  const patched = new Uint8Array(rawBytes);
+  const view = new DataView(patched.buffer, patched.byteOffset, patched.byteLength);
+  const nameBytes = new TextEncoder().encode(entryName);
+
+  const matchesNameAt = (offset: number): boolean => {
+    if (offset + nameBytes.length > patched.length) return false;
+    for (let index = 0; index < nameBytes.length; index += 1) {
+      if (patched[offset + index] !== nameBytes[index]) return false;
+    }
+    return true;
+  };
+
+  for (let offset = 0; offset <= patched.length - 46; offset += 1) {
+    const signature = view.getUint32(offset, true);
+    if (signature === 0x04034b50) {
+      const fileNameLength = view.getUint16(offset + 26, true);
+      if (fileNameLength === nameBytes.length && matchesNameAt(offset + 30)) {
+        view.setUint32(offset + 22, forgedSize, true);
+      }
+    } else if (signature === 0x02014b50) {
+      const fileNameLength = view.getUint16(offset + 28, true);
+      if (fileNameLength === nameBytes.length && matchesNameAt(offset + 46)) {
+        view.setUint32(offset + 24, forgedSize, true);
+      }
+    }
+  }
+  return patched;
 }
 
 describe('project archive', () => {
@@ -208,5 +240,104 @@ describe('project archive', () => {
     const zip = new JSZip();
     zip.file('assets/photo.jpg', 'photo');
     await expect(loadProjectArchive(await zip.generateAsync({ type: 'blob' }))).rejects.toThrow('missing project.json');
+  });
+
+  it('rejects project.json with a suspicious compression ratio', async () => {
+    const zip = new JSZip();
+    zip.file('project.json', JSON.stringify(project) + ' '.repeat(1024 * 1024));
+    const archive = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
+
+    await expect(loadProjectArchive(archive)).rejects.toThrow('suspicious compression ratio for project.json');
+  });
+
+  it('rejects spoofed asset headers during streaming decompression when exceeding entry size', async () => {
+    const zip = new JSZip();
+    zip.file('project.json', JSON.stringify(project));
+    zip.file('assets/photo.jpg', new Uint8Array(64 * 1024).fill(65));
+    const rawBytes = await zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE' });
+    const forgedArchive = new Blob([patchZipUncompressedSizes(rawBytes, 'assets/photo.jpg', 16)]);
+
+    await expect(loadProjectArchive(forgedArchive, {
+      maxArchiveBytes: MAX_PROJECT_ARCHIVE_BYTES,
+      maxProjectJsonBytes: MAX_PROJECT_JSON_BYTES,
+      maxAssetBytes: 4 * 1024,
+      maxUncompressedBytes: MAX_PROJECT_UNCOMPRESSED_BYTES,
+      maxEntries: MAX_PROJECT_ARCHIVE_ENTRIES,
+      maxCompressionRatio: 10_000,
+    })).rejects.toThrow('exceeds 128 MiB');
+  });
+
+  it('rejects spoofed asset headers during streaming decompression when exceeding cumulative budget', async () => {
+    const zip = new JSZip();
+    zip.file('project.json', JSON.stringify(project));
+    zip.file('assets/photo.jpg', new Uint8Array(3 * 1024).fill(65));
+    zip.file('assets/extra.jpg', new Uint8Array(3 * 1024).fill(66));
+    const rawBytes = await zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE' });
+    const forgedSecond = patchZipUncompressedSizes(rawBytes, 'assets/extra.jpg', 16);
+
+    await expect(loadProjectArchive(new Blob([forgedSecond]), {
+      maxArchiveBytes: MAX_PROJECT_ARCHIVE_BYTES,
+      maxProjectJsonBytes: MAX_PROJECT_JSON_BYTES,
+      maxAssetBytes: 4 * 1024,
+      maxUncompressedBytes: 5 * 1024,
+      maxEntries: MAX_PROJECT_ARCHIVE_ENTRIES,
+      maxCompressionRatio: 10_000,
+    })).rejects.toThrow('uncompressed assets exceed 512 MiB');
+  });
+
+  it('rejects archives whose decompressed stream disagrees with ZIP integrity headers', async () => {
+    const zip = new JSZip();
+    zip.file('project.json', JSON.stringify(project));
+    zip.file('assets/photo.jpg', new Uint8Array(2 * 1024).fill(65));
+    const rawBytes = await zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE' });
+    const forged = patchZipUncompressedSizes(rawBytes, 'assets/photo.jpg', 16);
+
+    await expect(loadProjectArchive(new Blob([forged]))).rejects.toThrow('ZIP archive is damaged');
+  });
+
+  it('rejects spoofed compression ratio headers during streaming decompression', async () => {
+    const zip = new JSZip();
+    zip.file('project.json', JSON.stringify(project));
+    zip.file('assets/photo.jpg', new Uint8Array(512 * 1024));
+    const rawBytes = await zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE' });
+    const forgedArchive = new Blob([patchZipUncompressedSizes(rawBytes, 'assets/photo.jpg', 16)]);
+
+    await expect(loadProjectArchive(forgedArchive, {
+      maxArchiveBytes: MAX_PROJECT_ARCHIVE_BYTES,
+      maxProjectJsonBytes: MAX_PROJECT_JSON_BYTES,
+      maxAssetBytes: MAX_PROJECT_ASSET_BYTES,
+      maxUncompressedBytes: MAX_PROJECT_UNCOMPRESSED_BYTES,
+      maxEntries: MAX_PROJECT_ARCHIVE_ENTRIES,
+      maxCompressionRatio: MAX_PROJECT_COMPRESSION_RATIO,
+    })).rejects.toThrow('suspicious compression ratio for assets/photo.jpg');
+  });
+
+  it('rejects spoofed project.json headers during streaming decompression', async () => {
+    const zip = new JSZip();
+    zip.file('project.json', JSON.stringify(project) + ' '.repeat(16 * 1024));
+    zip.file('assets/photo.jpg', new Blob(['photo']));
+    const rawBytes = await zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE' });
+    const forgedArchive = new Blob([patchZipUncompressedSizes(rawBytes, 'project.json', 16)]);
+
+    await expect(loadProjectArchive(forgedArchive, {
+      maxArchiveBytes: MAX_PROJECT_ARCHIVE_BYTES,
+      maxProjectJsonBytes: 4 * 1024,
+      maxAssetBytes: MAX_PROJECT_ASSET_BYTES,
+      maxUncompressedBytes: MAX_PROJECT_UNCOMPRESSED_BYTES,
+      maxEntries: MAX_PROJECT_ARCHIVE_ENTRIES,
+      maxCompressionRatio: 10_000,
+    })).rejects.toThrow('project.json exceeds 5 MiB');
+  });
+
+  it('rejects asset paths with backslashes or control characters in metadata and archive creation', async () => {
+    expect(() => validateArchiveMetadata(metadataArchive([{
+      name: 'assets/sub\\photo.jpg',
+      compressed: 1,
+      uncompressed: 1,
+    }]))).toThrow('invalid asset path');
+
+    await expect(createProjectArchiveBlob(project, {
+      'assets/bad\u0000.jpg': new Blob(['photo']),
+    })).rejects.toThrow('Invalid asset path');
   });
 });

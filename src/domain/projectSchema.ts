@@ -64,9 +64,28 @@ function optionalEnum<T extends string>(
   return value as T;
 }
 
+function hasControlCharacters(value: string): boolean {
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if (code < 0x20 || code === 0x7f) return true;
+  }
+  return false;
+}
+
+export function isValidAssetPath(value: string): boolean {
+  return value.length > 'assets/'.length
+    && value.length <= 1_024
+    && value.startsWith('assets/')
+    && !value.endsWith('/')
+    && !value.includes('..')
+    && !value.includes('\\')
+    && !value.includes('//')
+    && !hasControlCharacters(value);
+}
+
 function validateAssetPath(value: unknown, path: string): string {
   const assetPath = requireString(value, path, 1_024);
-  if (!assetPath.startsWith('assets/') || assetPath.includes('..') || assetPath.endsWith('/')) {
+  if (!isValidAssetPath(assetPath)) {
     throw new Error(`${path} must reference a file below assets/.`);
   }
   return assetPath;
