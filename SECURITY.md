@@ -1,5 +1,14 @@
 # Dependency security maintenance
 
+The project health review on **2026-11-20** added the following runtime and
+dependency security updates:
+
+| Finding | Component / dependency path and remedy | Advisory examples |
+| --- | --- | --- |
+| SEC-01 / DEP-01 | Runtime & shipped desktop shell: Node.js 24.22.2 → 24.22.3 (`engines.node >=24.22.3 <25`) and Electron 44.10.1 → 44.11.5 (bundles Node.js 24.22.3, revokes `eMudhra` RSA intermediates, and includes Chromium/V8/Skia/PDFium backports). | [Node.js v24.22.3](https://github.com/nodejs/node/releases/tag/v24.22.3) (`CVE-2026-123863`–`CVE-2026-123877`, `CVE-2026-126051`), [Electron v44.11.2](https://github.com/electron/electron/releases/tag/v44.11.2)–[v44.11.5](https://github.com/electron/electron/releases/tag/v44.11.5) |
+| SEC-02 / DEP-02 | Dev/build/test HTTP client: version-scoped `undici` overrides updated to 7.30.2 (`@electron/get`) and 8.13.1 (`jsdom`, fix from 8.12.4); `undici@^6` remains on latest 6.29.1 (`node-gyp`). | [GHSA-mqg3-3v4r-cm32](https://github.com/nodejs/undici/security/advisories/GHSA-mqg3-3v4r-cm32), [GHSA-7xg3-fphp-28hg](https://github.com/nodejs/undici/security/advisories/GHSA-7xg3-fphp-28hg), [GHSA-5rm8-gv32-r954](https://github.com/nodejs/undici/security/advisories/GHSA-5rm8-gv32-r954), [GHSA-9v6h-8rgp-m69f](https://github.com/nodejs/undici/security/advisories/GHSA-9v6h-8rgp-m69f), [GHSA-3g9m-rv3r-w5w2](https://github.com/nodejs/undici/security/advisories/GHSA-3g9m-rv3r-w5w2), [GHSA-r4pc-4jcp-7pqc](https://github.com/nodejs/undici/security/advisories/GHSA-r4pc-4jcp-7pqc) |
+| SEC-05 / DEP-02 | jsPDF's optional runtime DOMPurify dependency: override 3.4.17 → 3.4.18 (compatible routine override patches also updated `@electron/asar` 4.3.2, `glob` 14.0.6, `minimatch` 11.0.9, `rimraf` 6.1.4, `source-map-js` 1.2.4). | [GHSA-qm7q-q8h9-jg8q](https://github.com/cure53/DOMPurify/security/advisories/GHSA-qm7q-q8h9-jg8q) |
+
 The project health review on **2026-11-02** identified the following dependency
 issues. The remediation changes package versions and build tooling; project file
 schema and archive validation (TD-03) are outside this change.
