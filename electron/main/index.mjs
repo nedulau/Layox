@@ -3,8 +3,20 @@ import { promises as fs } from 'node:fs';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import {
+  assertTargetNotSymlink,
+  createEmptyStorageCache,
+  createProjectPathAuthorizer,
+  getStorageEntry,
+  isValidProjectPath,
+  isValidSavePayload,
+  isValidStorageKey,
+  isValidStorageValue,
+  readRegularProjectFile,
+  RECENT_PROJECTS_STORAGE_KEY,
+  sanitizeStorageRecord,
+} from './security.mjs';
 
-/** @typedef {{ name: string, data: ArrayBuffer, targetPath?: string | null }} SaveProjectPayload */
 /** @typedef {{ failNextAtomicSave: boolean }} E2EState */
 
 const IPC_CHANNELS = {
@@ -22,16 +34,14 @@ const __dirname = path.dirname(__filename);
 
 const WINDOW_WIDTH = 1500;
 const WINDOW_HEIGHT = 980;
-const MAX_PROJECT_ARCHIVE_BYTES = 2 * 1024 * 1024 * 1024;
-const MAX_STORAGE_KEY_LENGTH = 128;
-const MAX_STORAGE_VALUE_BYTES = 1024 * 1024;
 
 /** @type {BrowserWindow | null} */
 let mainWindow = null;
 /** @type {string | null} */
 let storeFilePath = null;
 /** @type {Record<string, string>} */
-let storageCache = {};
+let storageCache = createEmptyStorageCache();
+const pathAuthorizer = createProjectPathAuthorizer();
 
 function getE2EState() {
   return /** @type {typeof globalThis & { __layoxE2E?: E2EState }} */ (globalThis).__layoxE2E;
@@ -41,40 +51,6 @@ if (process.env.LAYOX_E2E) {
   /** @type {typeof globalThis & { __layoxE2E?: E2EState }} */ (globalThis).__layoxE2E = {
     failNextAtomicSave: false,
   };
-}
-
-/** @param {unknown} filePath */
-function isValidProjectPath(filePath) {
-  return typeof filePath === 'string' && path.isAbsolute(filePath) && filePath.toLowerCase().endsWith('.layox');
-}
-
-/**
- * @param {unknown} payload
- * @returns {payload is SaveProjectPayload}
- */
-function isValidSavePayload(payload) {
-  if (!payload || typeof payload !== 'object') return false;
-  const candidate = /** @type {Partial<SaveProjectPayload>} */ (payload);
-  return Boolean(
-    typeof candidate.name === 'string' &&
-      candidate.name.length > 0 &&
-      candidate.name.length <= 255 &&
-      candidate.name.toLowerCase().endsWith('.layox') &&
-      candidate.data instanceof ArrayBuffer &&
-      candidate.data.byteLength > 0 &&
-      candidate.data.byteLength <= MAX_PROJECT_ARCHIVE_BYTES &&
-      (candidate.targetPath === undefined || candidate.targetPath === null || isValidProjectPath(candidate.targetPath)),
-  );
-}
-
-/** @param {unknown} key */
-function isValidStorageKey(key) {
-  return typeof key === 'string' && key.length > 0 && key.length <= MAX_STORAGE_KEY_LENGTH;
-}
-
-/** @param {unknown} value */
-function isValidStorageValue(value) {
-  return typeof value === 'string' && Buffer.byteLength(value, 'utf8') <= MAX_STORAGE_VALUE_BYTES;
 }
 
 /** @param {Electron.IpcMainEvent | Electron.IpcMainInvokeEvent} event */
@@ -117,6 +93,7 @@ function isAllowedRendererUrl(targetUrl, entryUrl) {
 
 /** @param {string} targetPath @param {ArrayBuffer} data */
 async function writeFileAtomically(targetPath, data) {
+  await assertTargetNotSymlink(targetPath);
   const directory = path.dirname(targetPath);
   const temporaryPath = path.join(
     directory,
@@ -137,15 +114,6 @@ async function writeFileAtomically(targetPath, data) {
   }
 }
 
-/** @param {string} filePath */
-async function readProjectFile(filePath) {
-  const fileStats = await fs.stat(filePath);
-  if (!fileStats.isFile() || fileStats.size <= 0 || fileStats.size > MAX_PROJECT_ARCHIVE_BYTES) {
-    throw new Error('The selected Layox project has an invalid file size.');
-  }
-  return fs.readFile(filePath);
-}
-
 /** @param {Buffer} buffer */
 function toArrayBuffer(buffer) {
   return buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
@@ -164,30 +132,21 @@ function ensureStorePath() {
   return storeFilePath;
 }
 
-/** @param {unknown} value @returns {value is Record<string, string>} */
-function isStringRecord(value) {
-  return Boolean(
-    value && typeof value === 'object' && !Array.isArray(value)
-      && Object.values(value).every((entry) => typeof entry === 'string'),
-  );
-}
-
 function loadStorageCache() {
   try {
     const resolvedPath = ensureStorePath();
     if (!existsSync(resolvedPath)) {
-      storageCache = {};
+      storageCache = createEmptyStorageCache();
       return;
     }
     const raw = readFileSync(resolvedPath, 'utf-8');
     const parsed = JSON.parse(raw);
-    if (isStringRecord(parsed)) {
-      storageCache = parsed;
-      return;
-    }
-    storageCache = {};
+    storageCache = sanitizeStorageRecord(parsed);
+    pathAuthorizer.authorizeFromRecentProjects(
+      getStorageEntry(storageCache, RECENT_PROJECTS_STORAGE_KEY),
+    );
   } catch {
-    storageCache = {};
+    storageCache = createEmptyStorageCache();
   }
 }
 
@@ -230,6 +189,9 @@ function createWindow() {
   mainWindow.webContents.session.setPermissionRequestHandler((_webContents, _permission, callback) => {
     callback(false);
   });
+  mainWindow.on('closed', () => {
+    mainWindow = null;
+  });
 
   if (devServerUrl) {
     mainWindow.loadURL(devServerUrl.href);
@@ -254,7 +216,8 @@ function registerIpcHandlers() {
     }
 
     const filePath = result.filePaths[0];
-    const fileData = await readProjectFile(filePath);
+    const fileData = await readRegularProjectFile(filePath);
+    await pathAuthorizer.authorizePath(filePath);
     return {
       name: path.basename(filePath),
       data: toArrayBuffer(fileData),
@@ -265,12 +228,14 @@ function registerIpcHandlers() {
   ipcMain.handle(IPC_CHANNELS.openProjectFromPath, async (_event, filePath) => {
     if (!isTrustedIpcSender(_event)) return null;
     if (!isValidProjectPath(filePath)) return null;
+    const authorizedPath = await pathAuthorizer.resolveAuthorizedPath(filePath);
+    if (!authorizedPath) return null;
     try {
-      const fileData = await readProjectFile(filePath);
+      const fileData = await readRegularProjectFile(authorizedPath);
       return {
-        name: path.basename(filePath),
+        name: path.basename(authorizedPath),
         data: toArrayBuffer(fileData),
-        filePath,
+        filePath: authorizedPath,
       };
     } catch {
       return null;
@@ -281,8 +246,12 @@ function registerIpcHandlers() {
     if (!isTrustedIpcSender(_event)) return null;
     if (!isValidSavePayload(payload)) return null;
 
-    let targetPath = isValidProjectPath(payload.targetPath) ? payload.targetPath : null;
-    if (!targetPath) {
+    /** @type {string | null} */
+    let targetPath;
+    if (payload.targetPath !== undefined && payload.targetPath !== null) {
+      targetPath = await pathAuthorizer.resolveAuthorizedPath(payload.targetPath);
+      if (!targetPath) return null;
+    } else {
       const result = await dialog.showSaveDialog({
         title: 'Save Layox Project',
         defaultPath: payload.name,
@@ -290,6 +259,7 @@ function registerIpcHandlers() {
       });
       if (result.canceled || !result.filePath) return null;
       targetPath = result.filePath;
+      await pathAuthorizer.authorizePath(targetPath);
     }
 
     await writeFileAtomically(targetPath, payload.data);
@@ -308,6 +278,7 @@ function registerIpcHandlers() {
 
     if (result.canceled || !result.filePath) return null;
 
+    await pathAuthorizer.authorizePath(result.filePath);
     await writeFileAtomically(result.filePath, payload.data);
     return { name: path.basename(result.filePath), filePath: result.filePath };
   });
@@ -317,11 +288,15 @@ function registerIpcHandlers() {
       event.returnValue = null;
       return;
     }
-    event.returnValue = storageCache[key] ?? null;
+    event.returnValue = getStorageEntry(storageCache, key);
   });
 
   ipcMain.on(IPC_CHANNELS.storageSet, (event, key, value) => {
     if (!isTrustedIpcSender(event) || !isValidStorageKey(key) || !isValidStorageValue(value)) {
+      event.returnValue = false;
+      return;
+    }
+    if (key === RECENT_PROJECTS_STORAGE_KEY && !pathAuthorizer.canPersistRecentProjects(value)) {
       event.returnValue = false;
       return;
     }
