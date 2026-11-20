@@ -1,5 +1,28 @@
 # Dependency security maintenance
 
+## Application security hardening (2026-11-20)
+
+In addition to runtime and dependency updates (tracked separately), the
+2026-11-20 review hardened two local trust boundaries:
+
+- **SEC-03 (`.layox` archive decompression limits):** `src/utils/projectArchive.ts`
+  now streams `project.json` and every `assets/*` entry via JSZip
+  `internalStream('uint8array')`, enforcing per-entry byte limits, cumulative
+  uncompressed asset budgets (512 MiB), and compression-ratio limits (including
+  on `project.json`) against actual decompressed bytes rather than trusting ZIP
+  Central Directory headers alone. Asset paths in both schema validation and
+  archive handling also reject backslashes, empty segments, and control
+  characters.
+- **SEC-04 (Electron IPC path boundaries & storage isolation):**
+  `electron/main/index.mjs` and `electron/main/security.mjs` restrict
+  `layox:open-project-from-path` and in-place `layox:save-project` overwrites to
+  paths authorized by native dialogs in the current session or loaded from
+  persisted `layox_recentProjects` at startup, reject unauthorized paths in
+  renderer `layox_recentProjects` writes, reject symbolic links on read and
+  overwrite (`lstat` + `O_NOFOLLOW`), enforce pure `.layox` basenames for save
+  payloads, and isolate the settings cache via `Object.create(null)` while
+  blocking prototype keys.
+
 The project health review on **2026-11-02** identified the following dependency
 issues. The remediation changes package versions and build tooling; project file
 schema and archive validation (TD-03) are outside this change.

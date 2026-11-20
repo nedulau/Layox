@@ -24,6 +24,10 @@ Both expose the same channel names as src/infra/electron/ipcContract.ts:
 - Foreign navigation, new windows, and permission requests are denied by default.
 - The preload exposes only the allow-listed project and settings methods, never raw `ipcRenderer`.
 - IPC payloads, paths, file names, and data types are validated in the main process.
+- Project paths opened via `layox:open-project-from-path` or overwritten via `layox:save-project` must be authorized by a native dialog in the current session or loaded from persisted recent projects at startup; renderer-supplied `layox_recentProjects` updates cannot introduce unauthorized paths.
+- File names passed to save dialogs must be pure `.layox` basenames without path separators, traversal segments, or control characters.
+- Project reads and atomic overwrites reject symbolic links and non-regular files (`lstat` + `O_NOFOLLOW`).
+- Settings storage uses a null-prototype cache and rejects prototype keys (`__proto__`, `constructor`, `prototype`).
 - Save/Open supports `.layox` files via native dialogs.
 - Opened/saved paths are returned to the renderer: `Ctrl+S` overwrites in place and `Ctrl+Shift+S` always opens Save As.
 - Saves write a temporary file in the destination directory and atomically rename it. A failed rename leaves the previous project intact and removes the temporary file.
